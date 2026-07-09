@@ -49,7 +49,7 @@ function buildServer(signer: TestSigner): Server {
       // Publish the trusted key registry in the server instructions (a real
       // deployment would expose this via a well-known endpoint or server metadata).
       instructions: JSON.stringify({
-        vitni_keys: { [signer.performerId]: { [signer.kid]: signer.publicJwk } },
+        veritrail_keys: { [signer.performerId]: { [signer.kid]: signer.publicJwk } },
       }),
     }
   );

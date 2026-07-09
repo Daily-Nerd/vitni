@@ -253,8 +253,8 @@ The enum is **closed in the core** so dispute tooling can switch deterministical
 
 The performer's signing key MUST be discoverable through a channel the performer already operates:
 
-- **A2A:** publish Vitni verification key(s) in a **dedicated Vitni field in the AgentCard**. *Correction (0.2): A2A's AgentCard `signatures` field signs the card itself — A2A does NOT define a published JWKS/verification-key set for third-party object verification. So Vitni defines its own key location in the AgentCard (symmetric to MCP's `vitni_keys`), reusing only the JWS/JCS crypto primitives, not a non-existent publishing channel.*
-- **MCP:** publish key(s) in **MCP server metadata** (`vitni_keys` in the server's advertised metadata / `.well-known`).
+- **A2A:** publish Vitni verification key(s) in a **dedicated Vitni field in the AgentCard**. *Correction (0.2): A2A's AgentCard `signatures` field signs the card itself — A2A does NOT define a published JWKS/verification-key set for third-party object verification. So Vitni defines its own key location in the AgentCard (symmetric to MCP's `veritrail_keys`), reusing only the JWS/JCS crypto primitives, not a non-existent publishing channel.*
+- **MCP:** publish key(s) in **MCP server metadata** (`veritrail_keys` in the server's advertised metadata / `.well-known`).
 
 **Key rotation:** keys carry a `kid`; receipts reference `kid` in the JWS header; performers publish current + recent-past keys so in-flight receipts verify across a rotation. **The verification algorithm and curve are selected from the resolved key's published metadata (`kid → key → alg`), never from the JWS header** (§12).
 

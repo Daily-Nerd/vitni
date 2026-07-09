@@ -21,7 +21,7 @@ When an AI agent performs an action — a tool call, a task, a step in a chain �
 It is the difference between *"trust me, here's a summary"* and *"check me — here's a record you can verify."*
 
 ```ts
-import { sign, verify } from "vitni";
+import { sign, verify } from "@daily-nerd/vitni";
 
 // the performer signs what it did
 const receipt = await sign(key, {
@@ -37,7 +37,7 @@ const verdict = await verify(receipt, { keys });   // -> { valid: true, reason: 
 ```
 
 ```sh
-$ vitni verify receipt.jws
+$ vitni-verify verify < receipt.json
   valid: true  reason: ok
 ```
 
@@ -69,14 +69,14 @@ your agent / tool / MCP server / A2A skill
 
 **Go — live:**
 ```sh
-go get github.com/Daily-Nerd/vitni/go@v0.1.1                              # library
-go install github.com/Daily-Nerd/vitni/go/cmd/vitni-verify@v0.1.1     # CLI (binary: vitni-verify)
+go get github.com/Daily-Nerd/vitni/go@latest                              # library (requires go/v0.3.0+ — earlier tags predate the rename)
+go install github.com/Daily-Nerd/vitni/go/cmd/vitni-verify@latest     # CLI (binary: vitni-verify; requires go/v0.3.0+)
 ```
 ```go
 import "github.com/Daily-Nerd/vitni/go"   // package vitni → vitni.Sign(...), vitni.Verify(...)
 ```
 
-**npm — publishing soon** as **`@daily-nerd/vitni`** (package is built and conformant; release is pending the npm org). Once live:
+**npm — live** as **`@daily-nerd/vitni`** from `0.3.0` (published as `@daily-nerd/veritrail` for `0.1.1`–`0.2.2`):
 ```sh
 npm i @daily-nerd/vitni
 ```

@@ -27,7 +27,7 @@ shell script and dies: `syntax error near unexpected token '<'` (from the JSDoc
 Why it stayed hidden through two releases: every test (vectors, mcp/a2a
 roundtrip) either imports the module or invokes `node dist/cli.js` — both bypass
 the bin shim, so the missing shebang never surfaced. It only appears when you run
-the actually-installed binary (`node_modules/.bin/veritrail-verify`).
+the actually-installed binary (`node_modules/.bin/vitni-verify`).
 
 Future editor: do NOT remove the shebang, and do NOT let a build step (banner,
 license header injection, bundler) push another line above it. `ts/test/cli-bin.test.mjs`

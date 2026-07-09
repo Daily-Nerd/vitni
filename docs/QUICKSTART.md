@@ -13,7 +13,7 @@ npm i @daily-nerd/vitni
 Go (>= 1.21):
 
 ```sh
-go get github.com/Daily-Nerd/vitni/go@latest
+go get github.com/Daily-Nerd/vitni/go@latest   # requires go/v0.3.0+ (earlier tags declare the pre-rename module path)
 go install github.com/Daily-Nerd/vitni/go/cmd/vitni-verify@latest   # CLI binary: vitni-verify
 ```
 

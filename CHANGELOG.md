@@ -2,7 +2,7 @@
 
 All notable changes to veritrail are documented here. Format: [Keep a Changelog](https://keepachangelog.com/); versioning: [SemVer](https://semver.org/).
 
-> **One version, one changelog.** veritrail ships the Go module and the npm package (`@daily-nerd/veritrail`) in lockstep under a single version — any change to either implementation bumps it. release-please generates entries here from conventional commits. The `0.2.0`–`0.2.1` entries (the npm-only transition releases) live in `ts/CHANGELOG.md`; unified history resumes from `0.2.2`.
+> **One version, one changelog.** vitni (formerly veritrail) ships the Go module and the npm package (`@daily-nerd/vitni`) in lockstep under a single version — any change to either implementation bumps it. release-please generates entries here from conventional commits. The `0.2.0`–`0.2.1` entries (the npm-only transition releases) live in git history — `git show v0.2.2:ts/CHANGELOG.md`; unified history resumes from `0.2.2`.
 
 ## [0.2.2](https://github.com/Daily-Nerd/veritrail/compare/v0.2.1...v0.2.2) (2026-06-12)
 
