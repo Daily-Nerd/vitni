@@ -21,7 +21,7 @@ go install github.com/Daily-Nerd/vitni/go/cmd/vitni-verify@latest   # CLI binary
 
 In a real MCP server you co-sign each tool result with the `vitniToolResult`
 middleware. It builds the Receipt (binding, method, `inputs_hash`, `outputs_hash`,
-cost) and attaches the signed JWS to `result._meta["dev.veritrail/receipt"]`. A
+cost) and attaches the signed JWS to `result._meta["dev.vitni/receipt"]`. A
 client that ignores `_meta` is entirely unaffected — the receipt is additive.
 
 ```ts
@@ -38,7 +38,7 @@ const result = vitniToolResult({
   params: { a: 2, b: 3 },
   result: { content: [{ type: 'text', text: '5' }] },
 });
-// result._meta['dev.veritrail/receipt'] now holds the compact JWS receipt.
+// result._meta['dev.vitni/receipt'] now holds the compact JWS receipt.
 ```
 
 Verify it independently (offline) with the public key registry:
@@ -46,7 +46,7 @@ Verify it independently (offline) with the public key registry:
 ```ts
 import { verify, registryFromSigner } from '@daily-nerd/vitni';
 
-const jws = result._meta['dev.veritrail/receipt'] as string;
+const jws = result._meta['dev.vitni/receipt'] as string;
 const verdict = verify({
   signed_receipt: jws,
   keys: registryFromSigner(signer),         // { performer_id: { kid: publicJwk } }
@@ -66,7 +66,7 @@ round-trip locally. `sign` takes a 32-byte Ed25519 seed (RFC 8032), base64-encod
 SEED_B64='AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA='
 PUB_X='ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ'
 
-RECEIPT='{"v":"veritrail/0.1","binding":"mcp","action_ref":null,"performer_id":"srv-ed","requester_id":null,"method":"mcp:echo","inputs_hash":"uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA","outputs_hash":"uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA","cost":{"tokens":"10","usd_micros":"0","wall_ms":"3","rail_ref":null},"status":"OK","reason":null,"parent_receipt_hash":null,"log_policy":"best_effort","ts":"2026-05-28T00:00:00Z","nonce":"uEiDjsMRCmPwcFJr79MiZb7kkJ65B5GSbk0yklZkbeFK4VQ"}'
+RECEIPT='{"v":"vitni/0.2","binding":"mcp","action_ref":null,"performer_id":"srv-ed","requester_id":null,"method":"mcp:echo","inputs_hash":"uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA","outputs_hash":"uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA","cost":{"tokens":"10","usd_micros":"0","wall_ms":"3","rail_ref":null},"status":"OK","reason":null,"parent_receipt_hash":null,"log_policy":"best_effort","ts":"2026-05-28T00:00:00Z","nonce":"uEiDjsMRCmPwcFJr79MiZb7kkJ65B5GSbk0yklZkbeFK4VQ"}'
 
 # 1. sign -> a compact JWS, then 2. extract it and verify it.
 JWS=$(printf '{"receipt":%s,"kid":"ed-1","private_key_b64":"%s"}' "$RECEIPT" "$SEED_B64" \

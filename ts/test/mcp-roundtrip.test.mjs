@@ -6,7 +6,7 @@
  * actually binds the output the client received.
  *
  * Flow:
- *   server tool handler -> veritrail middleware attaches JWS at result._meta["dev.vitni/receipt"]
+ *   server tool handler -> vitni middleware attaches JWS at result._meta["dev.vitni/receipt"]
  *   -> client calls tool over InMemoryTransport
  *   -> client extracts the JWS, verifies it with our §7 verify()
  *   -> client independently recomputes outputs_hash from the received result and asserts equality
