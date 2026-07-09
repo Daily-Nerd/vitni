@@ -4,15 +4,16 @@
 Fixed TEST keypairs (NOT secrets — deterministic, committed as fixtures). Builds JWS compact
 receipts and a registry, then hand-sets the expected verdict per vector by construction.
 
-Run: uv run --with cryptography --no-project python vectors/_gen_verify.py
+Run: uv run --with cryptography --with ecdsa --no-project python vectors/_gen_verify.py
 """
 import base64
+import hashlib
 import json
 import pathlib
 
 from cryptography.hazmat.primitives.asymmetric import ed25519, ec
-from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
-from cryptography.hazmat.primitives import hashes
+from ecdsa import SigningKey, NIST256p
+from ecdsa.util import sigencode_string
 
 OUT = pathlib.Path(__file__).parent
 
@@ -40,6 +41,9 @@ ec_priv = ec.derive_private_key(EC_D, ec.SECP256R1())
 ec_nums = ec_priv.public_key().public_numbers()
 ec_x = ec_nums.x.to_bytes(32, "big")
 ec_y = ec_nums.y.to_bytes(32, "big")
+# RFC 6979 deterministic ECDSA signer (same secret exponent) — cryptography's
+# ECDSA nonce is randomized, which would make regenerated vectors non-reproducible.
+ec_sk = SigningKey.from_secret_exponent(EC_D, curve=NIST256p)
 
 
 def jws(header: dict, payload_bytes: bytes, alg: str, priv=None) -> str:
@@ -51,9 +55,9 @@ def jws(header: dict, payload_bytes: bytes, alg: str, priv=None) -> str:
     if alg == "EdDSA":
         sig = (priv or ed_priv).sign(signing_input)
     elif alg == "ES256":
-        der = (priv or ec_priv).sign(signing_input, ec.ECDSA(hashes.SHA256()))
-        r, s = decode_dss_signature(der)
-        sig = r.to_bytes(32, "big") + s.to_bytes(32, "big")   # JWS raw R||S
+        # RFC 6979 deterministic nonce; sigencode_string yields JWS raw R||S (64 bytes)
+        sig = (priv or ec_sk).sign_deterministic(
+            signing_input, hashfunc=hashlib.sha256, sigencode=sigencode_string)
     else:
         raise ValueError(alg)
     return f"{h}.{p}.{b64u(sig)}"
@@ -163,8 +167,8 @@ write("verify-wrong-key.json", "verify/wrong-key",
       jws({"alg": "EdDSA", "kid": "ed-1"}, ed_payload, "EdDSA", priv=ed_priv_other),
       reg(), NO_POLICY, False, "bad_signature")
 
-# ---- sign/ed25519 (previously hand-authored; now generated) ----
-# Deterministic key: bytes 0x01..0x20 == base64 "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+# 12. sign/ed25519 (previously hand-authored; now generated)
+#     Deterministic key: bytes 0x01..0x20 == base64 "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
 SIGN_SEED = bytes(range(1, 33))
 sign_priv = ed25519.Ed25519PrivateKey.from_private_bytes(SIGN_SEED)
 sign_receipt = receipt("srv-ed")
@@ -177,20 +181,20 @@ signed_sign_vector = jws({"alg": "EdDSA", "kid": "ed-1"}, sign_payload, "EdDSA",
     "anchor": {"signed_receipt": signed_sign_vector},
 }) + "\n")
 
-# ---- verify: local binding, valid ----
+# 13. local binding, valid
 r_local = receipt("srv-ed", binding="local", method="local:daimon.serialize")
 local_payload = jcs(r_local).encode()
 write("verify-local-valid.json", "verify/local-valid",
       jws({"alg": "EdDSA", "kid": "ed-1"}, local_payload, "EdDSA"),
       reg(), NO_POLICY, True, "ok")
 
-# 12. local receipt presented as mcp -> context_mismatch
+# 14. local receipt presented as mcp -> context_mismatch
 write("verify-local-context-mismatch.json", "verify/local-context-mismatch",
       jws({"alg": "EdDSA", "kid": "ed-1"}, local_payload, "EdDSA"),
       reg(), {"expected_binding": "mcp", "expected_method": None},
       False, "context_mismatch")
 
-# 13. ext present, still valid (ext never affects verification)
+# 15. ext present, still valid (ext never affects verification)
 r_ext = receipt("srv-ed")
 r_ext["ext"] = {"dev.daimon/prompt_version": "3"}
 ext_payload = jcs(r_ext).encode()
