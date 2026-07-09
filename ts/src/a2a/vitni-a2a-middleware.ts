@@ -7,7 +7,7 @@
  *   - outputs_hash: the §9 artifact-hash over the Task artifact's parts.
  *   - inputs_hash:  the §9 artifact-hash over the request message's parts.
  * Sign it (EdDSA JWS, reusing the §7/MCP signing path) and attach the compact JWS
- * to the artifact at artifact.metadata["dev.veritrail/receipt"].
+ * to the artifact at artifact.metadata["dev.vitni/receipt"].
  *
  * A2A artifact.metadata is a {[k:string]: unknown} passthrough map (SDK type), so
  * a namespaced receipt key is preserved through serialization and ignored by
@@ -96,7 +96,7 @@ export function buildA2AReceiptPayload(opts: BuildA2AReceiptOptions): Record<str
 
 /**
  * Co-sign an A2A artifact in place: build + sign the receipt and attach it at
- * artifact.metadata["dev.veritrail/receipt"]. Returns the same artifact.
+ * artifact.metadata["dev.vitni/receipt"]. Returns the same artifact.
  */
 export function vitniArtifact(
   artifact: A2AArtifactLike,

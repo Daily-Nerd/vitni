@@ -3,4 +3,4 @@
  * Single source of truth, mirroring Go's `vitni.Version` — keep the two in
  * sync when the protocol version changes.
  */
-export const VERSION = 'veritrail/0.1';
+export const VERSION = 'vitni/0.2';

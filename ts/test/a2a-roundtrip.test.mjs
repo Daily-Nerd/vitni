@@ -7,7 +7,7 @@
  *
  * Flow:
  *   agent executor produces an artifact -> A2A vitni middleware attaches the JWS at
- *   artifact.metadata["dev.veritrail/receipt"] -> request handler returns the completed Task
+ *   artifact.metadata["dev.vitni/receipt"] -> request handler returns the completed Task
  *   -> consumer pulls the artifact, extracts the JWS, verifies with §7 verify()
  *   -> consumer independently recomputes the §9 outputs_hash over the artifact parts
  *      it received and asserts equality

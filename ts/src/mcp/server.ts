@@ -2,7 +2,7 @@
  * Real MCP server + client round trip over the official @modelcontextprotocol/sdk
  * InMemoryTransport (no sockets). The server registers an `add` tool whose handler
  * runs the Vitni middleware, attaching a signed receipt at
- * result._meta["dev.veritrail/receipt"].
+ * result._meta["dev.vitni/receipt"].
  *
  * We use the low-level `Server` + `setRequestHandler(CallToolRequestSchema, ...)`
  * rather than the `McpServer` Zod sugar so the handler returns a plain result object
@@ -49,7 +49,7 @@ function buildServer(signer: TestSigner): Server {
       // Publish the trusted key registry in the server instructions (a real
       // deployment would expose this via a well-known endpoint or server metadata).
       instructions: JSON.stringify({
-        veritrail_keys: { [signer.performerId]: { [signer.kid]: signer.publicJwk } },
+        vitni_keys: { [signer.performerId]: { [signer.kid]: signer.publicJwk } },
       }),
     }
   );
