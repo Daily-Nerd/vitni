@@ -56,7 +56,7 @@ jobs:
       # OIDC trusted publishing + provenance needs npm >= 11.5.1;
       # the runner ships an older npm, so upgrade first.
       - name: Upgrade npm (OIDC support)
-        run: npm install -g npm@latest
+        run: npm install -g npm@^11
 
       - name: Build
         run: |
