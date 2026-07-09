@@ -31,7 +31,7 @@ output on every vector:
 ```bash
 mkdir -p bin && (cd go && go build -o ../bin/vitni-verify-go ./cmd/vitni-verify)
 (cd ts && npm run build)
-node conformance/compare.mjs     # expect: 55/55
+node conformance/compare.mjs     # expect: 57/57
 ```
 
 ## Regenerating vectors

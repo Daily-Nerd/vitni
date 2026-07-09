@@ -133,6 +133,23 @@ mn_root_jws, _ = build("srv-ed", "mcp:orchestrate", None, None)
 mn_leaf_jws, _ = build("srv-ec", "mcp:tool", None, None)  # leaf wrongly has null parent
 write("chain-middle-null-parent.json", "chain/middle-null-parent", [mn_leaf_jws, mn_root_jws], False, "malformed_chain")
 
+# 8. empty-string parent identity: leaf CARRIES parent_performer_id="" (present, not null).
+#    Per DESIGN §7 an empty string is a carried claim and cannot match a real performer_id,
+#    so the chain is a parent_identity_mismatch. (Go previously skipped empty-string as
+#    "no constraint" and wrongly returned valid while TS rejected — the #32 divergence.)
+es_root_jws, es_root_id = build("srv-ed", "mcp:orchestrate", None, None)
+es_leaf_jws, _ = build("srv-ec", "mcp:tool", es_root_id, "")
+write("chain-empty-parent-identity.json", "chain/empty-parent-identity",
+      [es_leaf_jws, es_root_jws], False, "parent_identity_mismatch")
+
+# 9. valid chain, NO identity claim: leaf links by hash but omits parent_performer_id (null).
+#    Per DESIGN §7 this is the weaker structural-only lineage — valid, no identity binding.
+#    Exercises the absent/null 'no constraint' branch of the parent-identity check.
+ni_root_jws, ni_root_id = build("srv-ed", "mcp:orchestrate", None, None)
+ni_leaf_jws, _ = build("srv-ec", "mcp:tool", ni_root_id, None)
+write("chain-null-parent-identity.json", "chain/null-parent-identity-valid",
+      [ni_leaf_jws, ni_root_jws], True, "ok")
+
 print("wrote chain vectors:")
 for q in sorted(OUT.glob("chain-*.json")):
     print(" ", q.name)
