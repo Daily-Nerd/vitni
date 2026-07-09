@@ -1,12 +1,12 @@
 /**
  * End-to-end A2A binding test.
  *
- * Proves Veritrail drops into the real @a2a-js/sdk server stack (AgentExecutor +
+ * Proves Vitni drops into the real @a2a-js/sdk server stack (AgentExecutor +
  * DefaultRequestHandler + InMemoryTaskStore + ExecutionEventBus) and that a receipt
  * round-trips through verification AND binds the artifact the consumer received.
  *
  * Flow:
- *   agent executor produces an artifact -> A2A veritrail middleware attaches the JWS at
+ *   agent executor produces an artifact -> A2A vitni middleware attaches the JWS at
  *   artifact.metadata["dev.veritrail/receipt"] -> request handler returns the completed Task
  *   -> consumer pulls the artifact, extracts the JWS, verifies with §7 verify()
  *   -> consumer independently recomputes the §9 outputs_hash over the artifact parts
@@ -23,8 +23,8 @@ const DIST = join(__dirname, '../dist');
 
 const { verify } = await import(`${DIST}/commands/verify.js`);
 const { a2aArtifactHash } = await import(`${DIST}/commands/a2a-artifact-hash.js`);
-const { generateTestSigner, registryFromSigner } = await import(`${DIST}/mcp/veritrail-middleware.js`);
-const { RECEIPT_META_KEY } = await import(`${DIST}/a2a/veritrail-a2a-middleware.js`);
+const { generateTestSigner, registryFromSigner } = await import(`${DIST}/mcp/vitni-middleware.js`);
+const { RECEIPT_META_KEY } = await import(`${DIST}/a2a/vitni-a2a-middleware.js`);
 const { runA2ARoundTrip } = await import(`${DIST}/a2a/server.js`);
 
 function recomputeHash(parts) {

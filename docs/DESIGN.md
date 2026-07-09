@@ -1,31 +1,31 @@
-# Veritrail — Protocol Design Draft 0.2
+# Vitni — Protocol Design Draft 0.2
 ### Performer-co-signed execution receipts for MCP tool calls and A2A tasks
 
 **Status:** ROUGH DRAFT — for understanding, not implementation.
 **Date:** 2026-05-28
-**Scope of this document:** the *functionality and logic* of Veritrail — objects, bytes, flows, algorithms, failure modes. **No market/GTM content** (that lives in the research report §10).
+**Scope of this document:** the *functionality and logic* of Vitni — objects, bytes, flows, algorithms, failure modes. **No market/GTM content** (that lives in the research report §10).
 
 > **Changelog 0.1 → 0.2:** hardened by a 5-lens adversarial review. The §0.1 normative claim "two verifiers produce byte-identical verdicts" did **not** hold — several byte-source definitions were underspecified. 0.2 pins them: multibase hash-string encoding, the SSE/streaming decode unit, the JWS-payload≡JCS invariant, the inputs-vs-outputs hashing split, JOSE alg/kid hardening, cost-as-strings (JCS integer ceiling), and corrects a factual AP2 error. Also closes a value-cap breach (§9 reason codes) and five missing threat rows (§15).
 
 ---
 
-## 0. What Veritrail is and is not (the hard boundary)
+## 0. What Vitni is and is not (the hard boundary)
 
-Veritrail produces a **signed, tamper-evident, content-addressed record of an action, signed by the party that performed it.** That is the entire claim. Every design decision below serves that and refuses to serve anything else.
+Vitni produces a **signed, tamper-evident, content-addressed record of an action, signed by the party that performed it.** That is the entire claim. Every design decision below serves that and refuses to serve anything else.
 
-**Veritrail proves (the value cap):**
+**Vitni proves (the value cap):**
 - **Performer non-repudiation** — the performer cannot later deny it returned *these* output bytes, at *this* time, against *this* request, for *this* cost.
 - **Response-byte integrity** — the recorded output cannot be altered after signing without detection.
 - **Authorization binding (by hash)** — the receipt records *which* authorization token the performer **claims** was on the wire (it does not, and cannot, prove the performer hashed the token it actually used — see §6, §15).
 - **Verifiable cost attribution** — the performer-signed cost fields sum over a *fully-verified* chain (§7) into a ledger the performer cannot later understate.
 
-**Veritrail does NOT prove (and v1 must never claim):**
+**Vitni does NOT prove (and v1 must never claim):**
 - ❌ That the action was *correct*, *truthful*, or *non-hallucinated*. A signed receipt of a wrong answer is still a valid receipt of a wrong answer.
 - ❌ That a **world side-effect** happened (card actually charged, email actually delivered). It proves the performer *returned bytes claiming so*; downstream-system proof requires the downstream system to be the signer (out of scope v1).
-- ❌ **Intent integrity.** A prompt-injected-but-authorized request produces a perfectly valid receipt. Veritrail signs *what was executed*, never *whether it should have been*.
-- ❌ **Authorization enforcement.** Veritrail binds to the token by hash for *audit*; it does not validate the token, check its scope, or refuse out-of-scope calls. That is a capability-token layer's job.
+- ❌ **Intent integrity.** A prompt-injected-but-authorized request produces a perfectly valid receipt. Vitni signs *what was executed*, never *whether it should have been*.
+- ❌ **Authorization enforcement.** Vitni binds to the token by hash for *audit*; it does not validate the token, check its scope, or refuse out-of-scope calls. That is a capability-token layer's job.
 
-**These boundaries are normative.** A conformant implementation that markets beyond them is non-conformant. Where a later section names a code or field that *looks* like it crosses this line (e.g. `MANDATE_EXCEEDED`, `INTENT_MISMATCH` in §9), it is explicitly marked **performer-self-reported** and asserts nothing Veritrail verifies.
+**These boundaries are normative.** A conformant implementation that markets beyond them is non-conformant. Where a later section names a code or field that *looks* like it crosses this line (e.g. `MANDATE_EXCEEDED`, `INTENT_MISMATCH` in §9), it is explicitly marked **performer-self-reported** and asserts nothing Vitni verifies.
 
 ---
 
@@ -35,9 +35,9 @@ The 2026 agent-receipt field is crowded, but it clusters on one side of the acti
 
 - **AP2 Payment Mandates** — W3C Verifiable Credentials (JSON-LD / Data Integrity), signed **ECDSA P-256 + SHA-256**; the Checkout JWT path explicitly requires a **non-deterministic** signature (so Ed25519 is disallowed there). Covers *authorization-and-intent before payment*.
 - **ASQAV / ACTA / agent-delegation-receipts (IETF 2026 drafts)** — sign the *authorization / delegation / decision* side; commit to grants, not to execution output.
-- **Signet** — agent-signs-request / server-signs-response, JCS, MCP `_meta`, offline-verifiable. Closest prior art; Veritrail deliberately keeps **only** the performer-signs-response half (we amputated the requester-signs half — §1).
+- **Signet** — agent-signs-request / server-signs-response, JCS, MCP `_meta`, offline-verifiable. Closest prior art; Vitni deliberately keeps **only** the performer-signs-response half (we amputated the requester-signs half — §1).
 
-**The thesis:** every shipping protocol signs the **authorization / decision / payment** side. **None commit to execution OUTPUT bytes + performer cost.** Veritrail is the complementary half. **Intentional divergences** (must be stated, not silent): multihash-with-pinned-multibase instead of raw-hex SHA-256 (algorithm agility); in-band `_meta` instead of a side-channel log; and **decode-then-hash streaming commitment (§4.3), which is genuinely un-taken prior art** and the riskiest novel part. Veritrail must *ingest* AP2/Signet receipts (via `rail_ref` / `parent_receipt_hash`), never re-implement them.
+**The thesis:** every shipping protocol signs the **authorization / decision / payment** side. **None commit to execution OUTPUT bytes + performer cost.** Vitni is the complementary half. **Intentional divergences** (must be stated, not silent): multihash-with-pinned-multibase instead of raw-hex SHA-256 (algorithm agility); in-band `_meta` instead of a side-channel log; and **decode-then-hash streaming commitment (§4.3), which is genuinely un-taken prior art** and the riskiest novel part. Vitni must *ingest* AP2/Signet receipts (via `rail_ref` / `parent_receipt_hash`), never re-implement them.
 
 ---
 
@@ -52,7 +52,7 @@ The 2026 agent-receipt field is crowded, but it clusters on one side of the acti
 | **Receipt** | The signed object. The atomic unit. |
 | **Chain / DAG** | A set of receipts linked by `parent_receipt_hash` representing a multi-hop execution. |
 
-**Trust model (v1):** the Verifier already knows or can fetch the Performer's public key (via the Performer's published AgentCard Veritrail key field or MCP server metadata — §10). Cross-stranger / internet-scale identity is **out of scope for v1** (depends on unsettled WIMSE/SCIM-for-agents).
+**Trust model (v1):** the Verifier already knows or can fetch the Performer's public key (via the Performer's published AgentCard Vitni key field or MCP server metadata — §10). Cross-stranger / internet-scale identity is **out of scope for v1** (depends on unsettled WIMSE/SCIM-for-agents).
 
 ---
 
@@ -123,7 +123,7 @@ The Receipt is **always JSON**, signed as a **JWS** (RFC 7515).
 
 **Signature algorithms (v1 mandatory-to-implement):**
 - **EdDSA / Ed25519** — preferred for general execution receipts (deterministic, fast, small, no nonce-reuse footgun).
-- **ECDSA / P-256 (ES256)** — required: it is the dominant algorithm across FIDO/WebAuthn, enterprise PKI, and W3C VC tooling, and is what most agent-identity infrastructure already issues. *Note: AP2's Checkout-JWT path mandates a non-deterministic signature and therefore forbids Ed25519 — a performer emitting Veritrail receipts on that path MUST use ES256. The "Ed25519 preferred" default applies to ordinary execution receipts, not the AP2 checkout leg.*
+- **ECDSA / P-256 (ES256)** — required: it is the dominant algorithm across FIDO/WebAuthn, enterprise PKI, and W3C VC tooling, and is what most agent-identity infrastructure already issues. *Note: AP2's Checkout-JWT path mandates a non-deterministic signature and therefore forbids Ed25519 — a performer emitting Vitni receipts on that path MUST use ES256. The "Ed25519 preferred" default applies to ordinary execution receipts, not the AP2 checkout leg.*
 
 ---
 
@@ -134,7 +134,7 @@ This is where receipt protocols die (XML-DSig, JSON-LD). **The slogan "hash-of-b
 ### 4.1 The Receipt envelope and the hash-string encoding
 - Canonicalized with **RFC 8785 JCS** over a **strict I-JSON subset** (RFC 7493): UTF-8, no duplicate keys, sorted keys, **no JSON numbers in the core at all** (every integer magnitude is a decimal string — see §2 `cost`), no insignificant whitespace.
 - **Hash-string encoding (pinned):** every hash-valued field (`action_ref`, `inputs_hash`, `outputs_hash`, `parent_receipt_hash`, `nonce`, and the derived `receipt_id`) is a **multihash** serialized as **multibase `base64url` (no padding), prefix `u`**. Exactly one encoding is legal in the core; alternates may return only under a future profile flag. *Rationale: JCS preserves string values verbatim (RFC 8785 §3.1 — no normalization), so an unpinned encoding (base32 vs base64url vs upper/lower hex) makes two correct implementations produce different signed bytes for the same logical receipt.*
-- **Unicode:** Veritrail performs **no** Unicode normalization (consistent with JCS). String fields commit to the exact code points received. Producers SHOULD emit identifiers in **NFC**. (JCS yields byte-identical output only for strings that are already byte-equivalent after JSON escaping — it is not a semantic normalizer.)
+- **Unicode:** Vitni performs **no** Unicode normalization (consistent with JCS). String fields commit to the exact code points received. Producers SHOULD emit identifiers in **NFC**. (JCS yields byte-identical output only for strings that are already byte-equivalent after JSON escaping — it is not a semantic normalizer.)
 - `receipt_id = "u" + base64url( multihash( JCS(Receipt) ) )`, where `Receipt` excludes `receipt_id` itself (§2).
 
 ### 4.2 Payloads — the hashing rule, split by DIRECTION
@@ -182,11 +182,11 @@ All hash strings: multibase `base64url`-nopad, prefix `u` (§4.1).
 
 ## 6. Authorization binding (binding, not enforcement)
 
-When the inbound request carried an authorization token (AIP / Agentic-JWT / AP2 mandate / OAuth), the performer records `action_ref = multihash( token_octets )` over **the exact octets it received** — Veritrail does **NOT** canonicalize the token. *Consequence: a JSON-LD/VC token (e.g. an AP2 mandate) with no stable serialization may not round-trip; an auditor MUST present the byte-identical token to re-derive `action_ref`.*
+When the inbound request carried an authorization token (AIP / Agentic-JWT / AP2 mandate / OAuth), the performer records `action_ref = multihash( token_octets )` over **the exact octets it received** — Vitni does **NOT** canonicalize the token. *Consequence: a JSON-LD/VC token (e.g. an AP2 mandate) with no stable serialization may not round-trip; an auditor MUST present the byte-identical token to re-derive `action_ref`.*
 
 **What this proves:** an auditor holding the receipt and a byte-identical token can show, offline, that *this execution referenced that exact token*. Combined with a fully-verified chain (§7), it shows authorization lineage.
 
-**What this explicitly does NOT do:** Veritrail does **not** parse, validate, scope-check, or enforce the token (binding ≠ enforcement — that's a Biscuit/macaroon layer). **Nor does it prove the performer hashed the token it actually used** — a lying performer can record `action_ref = hash(innocuous T1)` while executing against broad `T2` (§15, *action_ref substitution*). Hence §0 says "claims," not "proves."
+**What this explicitly does NOT do:** Vitni does **not** parse, validate, scope-check, or enforce the token (binding ≠ enforcement — that's a Biscuit/macaroon layer). **Nor does it prove the performer hashed the token it actually used** — a lying performer can record `action_ref = hash(innocuous T1)` while executing against broad `T2` (§15, *action_ref substitution*). Hence §0 says "claims," not "proves."
 
 **Graft from Caveat (optional `ext`, advisory):** the performer MAY record the token's declared scope in `ext.caveats` for an after-the-fact bounds check — advisory only; the performer is self-reporting the scope it saw.
 
@@ -243,7 +243,7 @@ ReasonCode (closed core enum; REQUIRED when status != OK, else null):
 
 The enum is **closed in the core** so dispute tooling can switch deterministically; vendor-specific reasons go in `ext`, never in `reason`.
 
-> **Value-cap boundary note (normative).** `MANDATE_EXCEEDED`, `MANDATE_EXPIRED`, and `INTENT_MISMATCH` are **performer-self-reported** — they require the performer to have parsed and judged the token/intent, which §0 and §6 say Veritrail does **not** verify or enforce. They have the same status as `ext.caveats`: a Veritrail receipt carrying one asserts **nothing Veritrail verifies**, and their **absence proves nothing** about scope or intent. A dispute tool MUST NOT treat them as cryptographic evidence of authorization or intent adjudication. (They remain in the enum for deterministic switching, fenced by this note.)
+> **Value-cap boundary note (normative).** `MANDATE_EXCEEDED`, `MANDATE_EXPIRED`, and `INTENT_MISMATCH` are **performer-self-reported** — they require the performer to have parsed and judged the token/intent, which §0 and §6 say Vitni does **not** verify or enforce. They have the same status as `ext.caveats`: a Vitni receipt carrying one asserts **nothing Vitni verifies**, and their **absence proves nothing** about scope or intent. A dispute tool MUST NOT treat them as cryptographic evidence of authorization or intent adjudication. (They remain in the enum for deterministic switching, fenced by this note.)
 
 *Decision noted: keep MANDATE_*/INTENT_MISMATCH in the closed enum but fence them as self-reported — moving them to `ext` loses deterministic switching for dispute tooling; the normative fence preserves the §0 value cap without sacrificing it. Reversal cost: low.*
 
@@ -253,7 +253,7 @@ The enum is **closed in the core** so dispute tooling can switch deterministical
 
 The performer's signing key MUST be discoverable through a channel the performer already operates:
 
-- **A2A:** publish Veritrail verification key(s) in a **dedicated Veritrail field in the AgentCard**. *Correction (0.2): A2A's AgentCard `signatures` field signs the card itself — A2A does NOT define a published JWKS/verification-key set for third-party object verification. So Veritrail defines its own key location in the AgentCard (symmetric to MCP's `veritrail_keys`), reusing only the JWS/JCS crypto primitives, not a non-existent publishing channel.*
+- **A2A:** publish Vitni verification key(s) in a **dedicated Vitni field in the AgentCard**. *Correction (0.2): A2A's AgentCard `signatures` field signs the card itself — A2A does NOT define a published JWKS/verification-key set for third-party object verification. So Vitni defines its own key location in the AgentCard (symmetric to MCP's `veritrail_keys`), reusing only the JWS/JCS crypto primitives, not a non-existent publishing channel.*
 - **MCP:** publish key(s) in **MCP server metadata** (`veritrail_keys` in the server's advertised metadata / `.well-known`).
 
 **Key rotation:** keys carry a `kid`; receipts reference `kid` in the JWS header; performers publish current + recent-past keys so in-flight receipts verify across a rotation. **The verification algorithm and curve are selected from the resolved key's published metadata (`kid → key → alg`), never from the JWS header** (§12).
@@ -331,7 +331,7 @@ Given a `SignedReceipt` R, optionally a transport-observed payload, optionally a
   - `FilePart` by URI → record `{uri, declared_digest}` per §4.4.
   - The **parts array** is committed via `JCS` over a canonical **descriptor list** (deterministic ordering + serialization): `text`→`{kind,text}`, `data`→`{kind,data}`, inline `file`→`{kind,"file",digest:multihash(bytes),mimeType,name}` (bytes hashed, never embedded), by-uri `file`→`{kind,"file",uri,declared_digest,mimeType,name}` (never dereferenced). `outputs_hash = multihash(JCS({parts:[descriptors]}))`. Exact rule + conformance vectors in `harness/CONTRACT.md §9`.
 - Multi-hop A2A delegation populates `parent_receipt_hash`, building the DAG (§7) across agent boundaries.
-- *Q5 (open default):* define artifact canonicalization Veritrail-local **now** (we must), AND open a spec contribution to A2A in parallel — standards leverage (report §10.4) without blocking v1 on a committee.
+- *Q5 (open default):* define artifact canonicalization Vitni-local **now** (we must), AND open a spec contribution to A2A in parallel — standards leverage (report §10.4) without blocking v1 on a committee.
 
 > **Empirically validated (2026-05-28) against `@a2a-js/sdk` v0.3.13** via an end-to-end demo (`ts/src/a2a/`, real `AgentExecutor` + `DefaultRequestHandler` + `InMemoryTaskStore` + `ExecutionEventBus`):
 > - The receipt lives at **`artifact.metadata["dev.veritrail/receipt"]`** (reverse-DNS namespaced). `Artifact.metadata` is typed `{ [k: string]: unknown }` (passthrough), so the receipt **survives intact** through the handler → task-store → event-bus path; confirmed by reading `task.artifacts[0].metadata` on the consumer side.
@@ -362,7 +362,7 @@ Given a `SignedReceipt` R, optionally a transport-observed payload, optionally a
 | Over-2^53 integer to manufacture verifier disagreement | **Defeated** — cost magnitudes are strings; no JSON-number path to diverge on (§4.1). |
 | Hash-string encoding divergence (base32 vs base64url) | **Defeated** — single pinned multibase (§4.1). |
 
-**Honest summary:** Veritrail converts disputes from *unreconstructable* to *adjudicable* and pushes the trust boundary one hop (to the performer, who has identity and accountability). It does not manufacture trust where none exists, and it does not touch the field's deepest wound (intent integrity).
+**Honest summary:** Vitni converts disputes from *unreconstructable* to *adjudicable* and pushes the trust boundary one hop (to the performer, who has identity and accountability). It does not manufacture trust where none exists, and it does not touch the field's deepest wound (intent integrity).
 
 ### 15.1 Conformance vectors (the artifact that makes "conformant" falsifiable)
 At minimum: valid receipt; tampered receipt; `none`-alg and header-key-material attacks; non-canonical payload; multihash-string round-trip (exact string asserted); over-2^53 cost; **SSE streaming set — CRLF vs LF vs lone-CR framing, leading BOM, comment line, split `data:` lines, JSON-RPC-over-SSE inner-result — all MUST hash identically**; chain (valid lineage + spliced/dangling parent); L1 vs L2 verdicts; MCP `result`-minus-`_meta` output hashing; A2A mixed-`Part` artifact. Two *independent* verifier implementations MUST agree byte-for-byte on every vector.
@@ -374,7 +374,7 @@ At minimum: valid receipt; tampered receipt; `none`-alg and header-key-material 
 **Resolved (0.1):** Q1 JWS-only · Q2 decode-then-hash · Q3 short-lived-keys+Log · Q4 Log optional (L1/L2).
 **Resolved (0.2, from review):** hash-string multibase pinned · SSE decode unit specified · JWS≡JCS invariant · inputs/outputs hashing split · JOSE hardening · cost-as-strings · AP2 corrected · `binding`+`method` discriminator · `log_policy` · §9 value-cap fence · A2A key-location defined · full-chain mandatory for aggregation.
 **Still open (default applied):**
-- **Q5 — A2A artifact canonicalization:** define Veritrail-local now + contribute to A2A in parallel (§14).
+- **Q5 — A2A artifact canonicalization:** define Vitni-local now + contribute to A2A in parallel (§14).
 - **Q6 — `requester_id`:** advisory string only until the v2 cross-stranger layer (§1, §10).
 
 ---

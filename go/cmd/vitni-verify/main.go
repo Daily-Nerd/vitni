@@ -1,5 +1,5 @@
-// veritrail-verify is the Veritrail conformance verifier CLI.
-// Usage: veritrail-verify <command> < input.json
+// vitni-verify is the Vitni conformance verifier CLI.
+// Usage: vitni-verify <command> < input.json
 // Output: a single line of JCS-canonical JSON to stdout, exit 0.
 // On error: {"error":"<code>"} to stdout, exit 0.
 package main
@@ -14,7 +14,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/Daily-Nerd/veritrail/go"
+	"github.com/Daily-Nerd/vitni/go"
 	"github.com/gowebpki/jcs"
 )
 
@@ -95,13 +95,13 @@ func writeError(code string) {
 }
 
 func errorCode(err error) string {
-	if errors.Is(err, veritrail.ErrCostMustBeStringInt) {
+	if errors.Is(err, vitni.ErrCostMustBeStringInt) {
 		return "cost_must_be_string_int"
 	}
-	if errors.Is(err, veritrail.ErrReceiptIDMustBeAbsent) {
+	if errors.Is(err, vitni.ErrReceiptIDMustBeAbsent) {
 		return "receipt_id_must_be_absent"
 	}
-	if errors.Is(err, veritrail.ErrUnsupportedPart) {
+	if errors.Is(err, vitni.ErrUnsupportedPart) {
 		return "unsupported_part"
 	}
 	if errors.Is(err, errInvalidPrivateKey) {
@@ -124,7 +124,7 @@ func runJCS(stdin []byte) (json.RawMessage, error) {
 	if err := json.Unmarshal(stdin, &inp); err != nil {
 		return nil, err
 	}
-	canon, err := veritrail.JCS(inp.Value)
+	canon, err := vitni.JCS(inp.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func runHashString(stdin []byte) (json.RawMessage, error) {
 	if inp.Algo != "sha2-256" {
 		return nil, errors.New("unsupported algo: " + inp.Algo)
 	}
-	hashStr, err := veritrail.HashString(inp.DigestHex)
+	hashStr, err := vitni.HashString(inp.DigestHex)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func runDigest(stdin []byte) (json.RawMessage, error) {
 			return nil, err
 		}
 	}
-	hashStr, err := veritrail.Digest(raw)
+	hashStr, err := vitni.Digest(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func runReceiptID(stdin []byte) (json.RawMessage, error) {
 	if err := json.Unmarshal(stdin, &inp); err != nil {
 		return nil, err
 	}
-	canonHex, receiptID, err := veritrail.ReceiptID(inp.Receipt)
+	canonHex, receiptID, err := vitni.ReceiptID(inp.Receipt)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func runSSEOutputsHash(stdin []byte) (json.RawMessage, error) {
 			return nil, err
 		}
 	}
-	decodedHex, outputsHash, err := veritrail.SSEOutputsHash(rawBytes, inp.Mode)
+	decodedHex, outputsHash, err := vitni.SSEOutputsHash(rawBytes, inp.Mode)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func runCostCanon(stdin []byte) (json.RawMessage, error) {
 	if err := json.Unmarshal(stdin, &inp); err != nil {
 		return nil, err
 	}
-	canon, err := veritrail.CostCanon(inp.Cost)
+	canon, err := vitni.CostCanon(inp.Cost)
 	if err != nil {
 		return nil, err
 	}
@@ -252,11 +252,11 @@ func runCostCanon(stdin []byte) (json.RawMessage, error) {
 }
 
 func runVerify(stdin []byte) (json.RawMessage, error) {
-	var inp veritrail.VerifyInput
+	var inp vitni.VerifyInput
 	if err := json.Unmarshal(stdin, &inp); err != nil {
 		return nil, err
 	}
-	valid, reason := veritrail.Verify(inp)
+	valid, reason := vitni.Verify(inp)
 	out := struct {
 		Valid  bool   `json:"valid"`
 		Reason string `json:"reason"`
@@ -268,11 +268,11 @@ func runVerify(stdin []byte) (json.RawMessage, error) {
 }
 
 func runVerifyChain(stdin []byte) (json.RawMessage, error) {
-	var inp veritrail.VerifyChainInput
+	var inp vitni.VerifyChainInput
 	if err := json.Unmarshal(stdin, &inp); err != nil {
 		return nil, err
 	}
-	valid, reason, chainLen := veritrail.VerifyChain(inp)
+	valid, reason, chainLen := vitni.VerifyChain(inp)
 	out := struct {
 		Valid    bool   `json:"valid"`
 		Reason   string `json:"reason"`
@@ -292,7 +292,7 @@ func runA2AArtifactHash(stdin []byte) (json.RawMessage, error) {
 	if err := json.Unmarshal(stdin, &inp); err != nil {
 		return nil, err
 	}
-	descriptorBytes, outputsHash, err := veritrail.A2AArtifactHash(inp.Artifact)
+	descriptorBytes, outputsHash, err := vitni.A2AArtifactHash(inp.Artifact)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +309,7 @@ func runA2AArtifactHash(stdin []byte) (json.RawMessage, error) {
 // runSign produces a deterministic EdDSA JWS signed receipt from a 32-byte Ed25519
 // seed. private_key_b64 is the RFC 8032 seed (NOT the 64-byte expanded key) — the
 // only runtime-portable form. We expand it via ed25519.NewKeyFromSeed and reuse the
-// existing veritrail.Sign primitive so framing matches Verify exactly.
+// existing vitni.Sign primitive so framing matches Verify exactly.
 func runSign(stdin []byte) (json.RawMessage, error) {
 	var inp struct {
 		Receipt       json.RawMessage `json:"receipt"`
@@ -331,7 +331,7 @@ func runSign(stdin []byte) (json.RawMessage, error) {
 
 	// receipt_id must be absent (reuse the existing contract).
 	if _, present := receiptObj["receipt_id"]; present {
-		return nil, veritrail.ErrReceiptIDMustBeAbsent
+		return nil, vitni.ErrReceiptIDMustBeAbsent
 	}
 
 	// kid required.
@@ -353,11 +353,11 @@ func runSign(stdin []byte) (json.RawMessage, error) {
 	priv := ed25519.NewKeyFromSeed(seed)
 
 	// Decode the receipt body into the typed Receipt and sign it.
-	var receipt veritrail.Receipt
+	var receipt vitni.Receipt
 	if err := json.Unmarshal(inp.Receipt, &receipt); err != nil {
 		return nil, err
 	}
-	signed, err := veritrail.Sign(receipt, inp.Kid, priv)
+	signed, err := vitni.Sign(receipt, inp.Kid, priv)
 	if err != nil {
 		return nil, err
 	}

@@ -1,9 +1,9 @@
-<h1 align="center">veritrail</h1>
-<p align="center"><em>The verifiable trail of agent actions.</em></p>
+<h1 align="center">vitni</h1>
+<p align="center"><em>The witness to agent actions.</em> (Old Norse: <em>vitni</em>, witness — formerly <strong>veritrail</strong>.)</p>
 <p align="center">Signed, tamper-evident execution receipts for AI agents — under MCP and beside A2A.</p>
 
 <p align="center">
-  <a href="https://github.com/Daily-Nerd/veritrail/actions/workflows/conformance.yml"><img src="https://github.com/Daily-Nerd/veritrail/actions/workflows/conformance.yml/badge.svg" alt="conformance"></a>
+  <a href="https://github.com/Daily-Nerd/vitni/actions/workflows/conformance.yml"><img src="https://github.com/Daily-Nerd/vitni/actions/workflows/conformance.yml/badge.svg" alt="conformance"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/conformance-42%2F42-brightgreen" alt="conformance 42/42">
 </p>
@@ -11,15 +11,17 @@
 ---
 
 > **Status: early / design-validated.** The protocol and a two-language reference (Go + TypeScript) are validated byte-for-byte against a conformance suite. APIs will change before `v1`. See [ROADMAP](ROADMAP.md).
+>
+> **Note on the wire string:** receipts currently carry `v: "veritrail/0.1"` (the protocol's original name). The wire string flips to `vitni/0.2` in the next protocol revision, together with a full conformance-vector regeneration — the two names are never mixed within one protocol version.
 
 ## What it is
 
-When an AI agent performs an action — a tool call, a task, a step in a chain — **veritrail** lets the party that *performed* it emit a small, signed, content-addressed **receipt** of what it did, what it returned, and what it cost. Anyone can later **verify** that receipt independently, walk a multi-hop **chain** of them, and **replay** the attested timeline.
+When an AI agent performs an action — a tool call, a task, a step in a chain — **vitni** lets the party that *performed* it emit a small, signed, content-addressed **receipt** of what it did, what it returned, and what it cost. Anyone can later **verify** that receipt independently, walk a multi-hop **chain** of them, and **replay** the attested timeline.
 
 It is the difference between *"trust me, here's a summary"* and *"check me — here's a record you can verify."*
 
 ```ts
-import { sign, verify } from "veritrail";
+import { sign, verify } from "@daily-nerd/vitni";
 
 // the performer signs what it did
 const receipt = await sign(key, {
@@ -35,13 +37,13 @@ const verdict = await verify(receipt, { keys });   // -> { valid: true, reason: 
 ```
 
 ```sh
-$ veritrail verify receipt.jws
+$ vitni-verify verify < receipt.json
   valid: true  reason: ok
 ```
 
 ## Why depend on it instead of rolling your own
 
-Getting receipts *right* is deceptively hard — deterministic canonicalization, signature verification that resists the classic JOSE attacks, chain integrity that resists splicing. veritrail ships that, proven:
+Getting receipts *right* is deceptively hard — deterministic canonicalization, signature verification that resists the classic JOSE attacks, chain integrity that resists splicing. vitni ships that, proven:
 
 - **Deterministic by construction** — RFC 8785 JCS canonicalization, proven **byte-identical across two independent implementations** (Go + TS) on a public conformance suite. Two verifiers always agree.
 - **Hardened verification** — Ed25519 + ES256 (JWS), with the dangerous paths closed: rejects `alg:none`, algorithm substitution, `jwk`/`jku`/`x5*` header key-injection, non-canonical payloads, unknown/revoked keys.
@@ -52,7 +54,7 @@ Getting receipts *right* is deceptively hard — deterministic canonicalization,
 
 **Proves:** performer non-repudiation, response-byte integrity, which authorization token was referenced (by hash), and verifiable cost. A receipt cannot be altered after signing without detection, and a multi-hop chain shows who-did-what-under-whom.
 
-**Does NOT prove:** that the action was *correct* or *non-hallucinated*; that a world side-effect actually happened; *intent integrity* (a prompt-injected-but-authorized request still produces a valid receipt). veritrail attests *what the performer did and returned* — it is **check-me, not trust-me**, not a proof the outcome was right. We will never market it beyond that line.
+**Does NOT prove:** that the action was *correct* or *non-hallucinated*; that a world side-effect actually happened; *intent integrity* (a prompt-injected-but-authorized request still produces a valid receipt). vitni attests *what the performer did and returned* — it is **check-me, not trust-me**, not a proof the outcome was right. We will never market it beyond that line.
 
 ## Layers
 
@@ -60,23 +62,23 @@ Getting receipts *right* is deceptively hard — deterministic canonicalization,
 your agent / tool / MCP server / A2A skill
         │  emits a signed receipt on each action
         ▼
-   veritrail receipt  ──►  verify (offline)  ──►  chain / replay  ──►  [optional] transparency log
+   vitni receipt  ──►  verify (offline)  ──►  chain / replay  ──►  [optional] transparency log
 ```
 
 ## Install
 
 **Go — live:**
 ```sh
-go get github.com/Daily-Nerd/veritrail/go@v0.1.1                              # library
-go install github.com/Daily-Nerd/veritrail/go/cmd/veritrail-verify@v0.1.1     # CLI (binary: veritrail-verify)
+go get github.com/Daily-Nerd/vitni/go@latest                              # library (requires go/v0.3.0+ — earlier tags predate the rename)
+go install github.com/Daily-Nerd/vitni/go/cmd/vitni-verify@latest     # CLI (binary: vitni-verify; requires go/v0.3.0+)
 ```
 ```go
-import "github.com/Daily-Nerd/veritrail/go"   // package veritrail → veritrail.Sign(...), veritrail.Verify(...)
+import "github.com/Daily-Nerd/vitni/go"   // package vitni → vitni.Sign(...), vitni.Verify(...)
 ```
 
-**npm — publishing soon** as **`@daily-nerd/veritrail`** (package is built and conformant; release is pending the npm org). Once live:
+**npm — live** as **`@daily-nerd/vitni`** from `0.3.0` (published as `@daily-nerd/veritrail` for `0.1.1`–`0.2.2`):
 ```sh
-npm i @daily-nerd/veritrail
+npm i @daily-nerd/vitni
 ```
 
 ## Quickstart

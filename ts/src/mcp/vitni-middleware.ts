@@ -1,7 +1,7 @@
 /**
- * Veritrail co-signing middleware for MCP (design §13).
+ * Vitni co-signing middleware for MCP (design §13).
  *
- * Given an MCP tool call (toolName, params, result), build a Veritrail Receipt:
+ * Given an MCP tool call (toolName, params, result), build a Vitni Receipt:
  *   - binding: "mcp"
  *   - method:  "mcp:<toolName>"
  *   - inputs_hash  = "u" + multihash(sha256(JCS(params)))
@@ -115,7 +115,7 @@ export interface BuildReceiptOptions {
 }
 
 /**
- * Build the Veritrail Receipt payload object (without receipt_id — that is a content
+ * Build the Vitni Receipt payload object (without receipt_id — that is a content
  * address derived from this object). Field order is irrelevant; JCS sorts on signing.
  */
 export function buildReceiptPayload(opts: BuildReceiptOptions): Record<string, unknown> {
@@ -167,7 +167,7 @@ export function signReceipt(payload: Record<string, unknown>, signer: TestSigner
  * receipt and attach it to result._meta["dev.veritrail/receipt"]. Returns the same
  * result object (mutated) for convenience.
  */
-export function veritrailToolResult(opts: BuildReceiptOptions): McpResultLike {
+export function vitniToolResult(opts: BuildReceiptOptions): McpResultLike {
   const payload = buildReceiptPayload(opts);
   const jws = signReceipt(payload, opts.signer);
   const result = opts.result;

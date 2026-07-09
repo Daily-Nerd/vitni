@@ -1,4 +1,4 @@
-package veritrail
+package vitni
 
 import (
 	"crypto/ed25519"
@@ -9,10 +9,10 @@ import (
 	"github.com/gowebpki/jcs"
 )
 
-// Version is the Veritrail protocol version string stamped into receipts.
+// Version is the Vitni protocol version string stamped into receipts.
 const Version = "veritrail/0.1"
 
-// MCPMetaKey is the MCP `_meta` key under which a Veritrail receipt is carried.
+// MCPMetaKey is the MCP `_meta` key under which a Vitni receipt is carried.
 const MCPMetaKey = "dev.veritrail/receipt"
 
 // Cost is the cost block of a receipt. Magnitudes are decimal STRINGS (the 2^53
@@ -24,7 +24,7 @@ type Cost struct {
 	RailRef   *string `json:"rail_ref"`
 }
 
-// Receipt is a Veritrail receipt payload (without receipt_id; that is the content
+// Receipt is a Vitni receipt payload (without receipt_id; that is the content
 // address derived from JCS(receipt)). All nullable fields use pointers so they
 // serialize as JSON null when unset.
 type Receipt struct {

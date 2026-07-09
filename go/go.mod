@@ -1,4 +1,4 @@
-module github.com/Daily-Nerd/veritrail/go
+module github.com/Daily-Nerd/vitni/go
 
 go 1.21
 

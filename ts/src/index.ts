@@ -1,7 +1,7 @@
 /**
- * Veritrail — public library API.
+ * Vitni — public library API.
  *
- * A portable, dependency-free (node:crypto only) toolkit for the Veritrail
+ * A portable, dependency-free (node:crypto only) toolkit for the Vitni
  * byte-source layer: JCS canonicalization, multihash/multibase hash-strings,
  * receipt content-addressing, JWS signing + verification (Ed25519 / ES256),
  * full lineage-chain verification, and the MCP / A2A co-signing middleware.
@@ -65,20 +65,20 @@ export {
   stripMeta,
   computeOutputsHash,
   RECEIPT_META_KEY,
-} from './mcp/veritrail-middleware.js';
-export type { TestSigner, McpResultLike, BuildReceiptOptions } from './mcp/veritrail-middleware.js';
+} from './mcp/vitni-middleware.js';
+export type { TestSigner, McpResultLike, BuildReceiptOptions } from './mcp/vitni-middleware.js';
 
 // --- MCP co-signing middleware (SDK-free) ---
-export { veritrailToolResult } from './mcp/veritrail-middleware.js';
+export { vitniToolResult } from './mcp/vitni-middleware.js';
 
 // --- A2A co-signing middleware (SDK-free) ---
 export {
-  veritrailArtifact,
+  vitniArtifact,
   computeArtifactHash,
   buildA2AReceiptPayload,
-} from './a2a/veritrail-a2a-middleware.js';
+} from './a2a/vitni-a2a-middleware.js';
 export type {
   A2APartLike,
   A2AArtifactLike,
   BuildA2AReceiptOptions,
-} from './a2a/veritrail-a2a-middleware.js';
+} from './a2a/vitni-a2a-middleware.js';

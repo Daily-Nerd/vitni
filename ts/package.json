@@ -1,12 +1,12 @@
 {
-  "name": "@daily-nerd/veritrail",
+  "name": "@daily-nerd/vitni",
   "version": "0.2.2",
-  "description": "The verifiable trail of agent actions — signed, tamper-evident execution receipts for AI agents (MCP & A2A): JWS signing/verification, JCS canonicalization, lineage chains, and co-signing middleware.",
+  "description": "The witness to agent actions (formerly veritrail) — signed, tamper-evident execution receipts for AI agents (MCP & A2A): JWS signing/verification, JCS canonicalization, lineage chains, and co-signing middleware.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "veritrail-verify": "dist/cli.js"
+    "vitni-verify": "dist/cli.js"
   },
   "exports": {
     ".": {
@@ -35,11 +35,11 @@
   "author": "Daily-Nerd",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Daily-Nerd/veritrail.git",
+    "url": "git+https://github.com/Daily-Nerd/vitni.git",
     "directory": "ts"
   },
-  "homepage": "https://github.com/Daily-Nerd/veritrail#readme",
-  "bugs": "https://github.com/Daily-Nerd/veritrail/issues",
+  "homepage": "https://github.com/Daily-Nerd/vitni#readme",
+  "bugs": "https://github.com/Daily-Nerd/vitni/issues",
   "keywords": [
     "ai-agents",
     "mcp",

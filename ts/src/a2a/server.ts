@@ -17,8 +17,8 @@ import {
   type ExecutionEventBus,
 } from '@a2a-js/sdk/server';
 import type { AgentCard, Message, Task, Artifact } from '@a2a-js/sdk';
-import { TestSigner, generateTestSigner } from '../mcp/veritrail-middleware.js';
-import { veritrailArtifact, A2APartLike } from './veritrail-a2a-middleware.js';
+import { TestSigner, generateTestSigner } from '../mcp/vitni-middleware.js';
+import { vitniArtifact, A2APartLike } from './vitni-a2a-middleware.js';
 
 export interface A2ARoundTripOptions {
   signer?: TestSigner;
@@ -38,8 +38,8 @@ export interface A2ARoundTripResult {
 function buildAgentCard(skill: string): AgentCard {
   return {
     protocolVersion: '0.3.0',
-    name: 'veritrail-a2a-demo',
-    description: 'A2A agent that emits Veritrail receipts on its artifacts.',
+    name: 'vitni-a2a-demo',
+    description: 'A2A agent that emits Vitni receipts on its artifacts.',
     url: 'http://localhost/a2a',
     version: '0.1.0',
     capabilities: { streaming: false },
@@ -85,7 +85,7 @@ function buildExecutor(signer: TestSigner, skill: string): AgentExecutor {
       const wallMs = String(Math.max(0, Math.round(performance.now() - t0)));
 
       // Co-signing middleware: build + sign the receipt, attach at artifact.metadata.
-      veritrailArtifact(artifact as unknown as Parameters<typeof veritrailArtifact>[0], {
+      vitniArtifact(artifact as unknown as Parameters<typeof vitniArtifact>[0], {
         signer,
         skill,
         requestParts,

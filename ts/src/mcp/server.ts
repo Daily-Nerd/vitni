@@ -1,7 +1,7 @@
 /**
  * Real MCP server + client round trip over the official @modelcontextprotocol/sdk
  * InMemoryTransport (no sockets). The server registers an `add` tool whose handler
- * runs the Veritrail middleware, attaching a signed receipt at
+ * runs the Vitni middleware, attaching a signed receipt at
  * result._meta["dev.veritrail/receipt"].
  *
  * We use the low-level `Server` + `setRequestHandler(CallToolRequestSchema, ...)`
@@ -17,11 +17,11 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import {
-  veritrailToolResult,
+  vitniToolResult,
   TestSigner,
   generateTestSigner,
   McpResultLike,
-} from './veritrail-middleware.js';
+} from './vitni-middleware.js';
 
 export interface RoundTripOptions {
   signer?: TestSigner;
@@ -43,7 +43,7 @@ export interface RoundTripResult {
  */
 function buildServer(signer: TestSigner): Server {
   const server = new Server(
-    { name: 'veritrail-demo-server', version: '0.1.0' },
+    { name: 'vitni-demo-server', version: '0.1.0' },
     {
       capabilities: { tools: {} },
       // Publish the trusted key registry in the server instructions (a real
@@ -58,7 +58,7 @@ function buildServer(signer: TestSigner): Server {
     tools: [
       {
         name: 'add',
-        description: 'Add two numbers; emits a Veritrail receipt in _meta.',
+        description: 'Add two numbers; emits a Vitni receipt in _meta.',
         inputSchema: {
           type: 'object',
           properties: { a: { type: 'number' }, b: { type: 'number' } },
@@ -81,7 +81,7 @@ function buildServer(signer: TestSigner): Server {
     const b = Number((params as { b: number }).b);
     const sum = a + b;
 
-    // The raw tool result (what a non-Veritrail client would see).
+    // The raw tool result (what a non-Vitni client would see).
     const result: McpResultLike = {
       content: [{ type: 'text', text: String(sum) }],
       structuredContent: { sum },
@@ -90,7 +90,7 @@ function buildServer(signer: TestSigner): Server {
     const wallMs = String(Math.max(0, Math.round(performance.now() - t0)));
 
     // Co-signing middleware: build + sign the receipt, attach at _meta.
-    veritrailToolResult({ signer, toolName, params, result, wallMs });
+    vitniToolResult({ signer, toolName, params, result, wallMs });
 
     return result;
   });
@@ -108,7 +108,7 @@ export async function runRoundTrip(opts: RoundTripOptions): Promise<RoundTripRes
 
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
-  const client = new Client({ name: 'veritrail-demo-client', version: '0.1.0' }, { capabilities: {} });
+  const client = new Client({ name: 'vitni-demo-client', version: '0.1.0' }, { capabilities: {} });
 
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 

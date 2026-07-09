@@ -6,6 +6,8 @@
   "packages": {
     ".": {
       "release-type": "simple",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
       "extra-files": [
         { "type": "json", "path": "ts/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "ts/package-lock.json", "jsonpath": "$.version" },

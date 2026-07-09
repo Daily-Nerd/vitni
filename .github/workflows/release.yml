@@ -100,4 +100,4 @@ jobs:
           git push origin "$tag"
           gh release create "$tag" \
             --title "$tag" \
-            --notes "Go module release tracking @daily-nerd/veritrail@${VERSION}. Changelog: CHANGELOG.md."
+            --notes "Go module release tracking @daily-nerd/vitni@${VERSION}. Changelog: CHANGELOG.md."

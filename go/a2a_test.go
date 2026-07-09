@@ -1,11 +1,11 @@
-package veritrail_test
+package vitni_test
 
 import (
 	"encoding/hex"
 	"encoding/json"
 	"testing"
 
-	"github.com/Daily-Nerd/veritrail/go"
+	"github.com/Daily-Nerd/vitni/go"
 )
 
 // TestVectors_A2AArtifactHash drives the a2a-artifact-hash command against every a2a-*.json vector.
@@ -30,7 +30,7 @@ func TestVectors_A2AArtifactHash(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			descriptorBytes, outputsHash, err := veritrail.A2AArtifactHash(inp.Artifact)
+			descriptorBytes, outputsHash, err := vitni.A2AArtifactHash(inp.Artifact)
 
 			if _, wantErr := anchor["error"]; wantErr {
 				if err == nil {
@@ -65,7 +65,7 @@ func TestVectors_A2AArtifactHash(t *testing.T) {
 // TestA2A_UnsupportedNoBytesNoUri checks the unsupported_part error.
 func TestA2A_UnsupportedNoBytesNoUri(t *testing.T) {
 	artifact := json.RawMessage(`{"parts":[{"kind":"file","file":{"mimeType":"x/y"}}]}`)
-	_, _, err := veritrail.A2AArtifactHash(artifact)
+	_, _, err := vitni.A2AArtifactHash(artifact)
 	if err == nil {
 		t.Fatal("expected error for file part with neither bytes nor uri")
 	}
@@ -74,7 +74,7 @@ func TestA2A_UnsupportedNoBytesNoUri(t *testing.T) {
 // TestA2A_UnknownKind checks unknown kind → error.
 func TestA2A_UnknownKind(t *testing.T) {
 	artifact := json.RawMessage(`{"parts":[{"kind":"video","src":"x"}]}`)
-	_, _, err := veritrail.A2AArtifactHash(artifact)
+	_, _, err := vitni.A2AArtifactHash(artifact)
 	if err == nil {
 		t.Fatal("expected error for unknown kind")
 	}

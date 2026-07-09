@@ -1,7 +1,7 @@
 /**
  * CLI bin executability tests.
  *
- * The npm `bin` (veritrail-verify -> dist/cli.js) is invoked directly by the
+ * The npm `bin` (vitni-verify -> dist/cli.js) is invoked directly by the
  * OS, not via `node dist/cli.js`. Without a `#!/usr/bin/env node` shebang the
  * shell tries to run the JS as a shell script and fails. This regressed
  * silently because the vector tests import the module and never exec the bin.
@@ -29,7 +29,7 @@ test('dist/cli.js starts with a node shebang', () => {
 
 test('the bin runs directly (executable via shebang), not just via `node`', () => {
   // Make it executable like npm does on install, then run it WITHOUT a `node`
-  // prefix — this is what `veritrail-verify <cmd>` does for an installed user.
+  // prefix — this is what `vitni-verify <cmd>` does for an installed user.
   chmodSync(CLI, 0o755);
   const out = execFileSync(CLI, ['jcs'], {
     input: JSON.stringify({ value: { b: 1, a: 2 } }),

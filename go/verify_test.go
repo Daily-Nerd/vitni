@@ -1,10 +1,10 @@
-package veritrail_test
+package vitni_test
 
 import (
 	"encoding/json"
 	"testing"
 
-	"github.com/Daily-Nerd/veritrail/go"
+	"github.com/Daily-Nerd/vitni/go"
 )
 
 // TestVectors_Verify drives the verify command against every verify-*.json vector.
@@ -17,11 +17,11 @@ func TestVectors_Verify(t *testing.T) {
 		count++
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
-			var inp veritrail.VerifyInput
+			var inp vitni.VerifyInput
 			if err := json.Unmarshal(v.Input, &inp); err != nil {
 				t.Fatalf("unmarshal input: %v", err)
 			}
-			valid, reason := veritrail.Verify(inp)
+			valid, reason := vitni.Verify(inp)
 
 			var anchor struct {
 				Valid  bool   `json:"valid"`
@@ -45,11 +45,11 @@ func TestVectors_Verify(t *testing.T) {
 
 // TestVerify_MalformedNotThreeSegments checks the first-failing-check (malformed).
 func TestVerify_MalformedNotThreeSegments(t *testing.T) {
-	inp := veritrail.VerifyInput{
+	inp := vitni.VerifyInput{
 		SignedReceipt: "onlyonesegment",
-		Keys:          map[string]map[string]veritrail.RegistryKey{},
+		Keys:          map[string]map[string]vitni.RegistryKey{},
 	}
-	valid, reason := veritrail.Verify(inp)
+	valid, reason := vitni.Verify(inp)
 	if valid || reason != "malformed" {
 		t.Errorf("got (%v, %q), want (false, malformed)", valid, reason)
 	}
@@ -58,12 +58,12 @@ func TestVerify_MalformedNotThreeSegments(t *testing.T) {
 // TestVerify_MalformedBadJSONHeader checks malformed when header is not JSON.
 func TestVerify_MalformedBadJSONHeader(t *testing.T) {
 	// "notjson" base64url => header decodes to bytes that are not JSON
-	inp := veritrail.VerifyInput{
+	inp := vitni.VerifyInput{
 		// b64url("xx").b64url("{}").sig
 		SignedReceipt: "eHg.e30.AAAA",
-		Keys:          map[string]map[string]veritrail.RegistryKey{},
+		Keys:          map[string]map[string]vitni.RegistryKey{},
 	}
-	valid, reason := veritrail.Verify(inp)
+	valid, reason := vitni.Verify(inp)
 	if valid || reason != "malformed" {
 		t.Errorf("got (%v, %q), want (false, malformed)", valid, reason)
 	}
