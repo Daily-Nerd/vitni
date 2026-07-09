@@ -32,34 +32,23 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-async function main() {
-  const command = process.argv[2];
-  if (!command) {
-    process.stdout.write(JSON.stringify({ error: 'missing_command' }) + '\n');
-    return;
-  }
-
-  let raw: string;
-  try {
-    raw = await readStdin();
-  } catch {
-    process.stdout.write(JSON.stringify({ error: 'stdin_read_error' }) + '\n');
-    return;
-  }
-
+/**
+ * Run one command over its raw stdin bytes and return the JCS-canonical output
+ * string (no trailing newline). Pure and side-effect-free so it is unit-testable
+ * independently of stdin/argv wiring.
+ */
+export function dispatch(command: string, raw: string): string {
   let input: unknown;
   try {
     input = JSON.parse(raw);
   } catch {
-    process.stdout.write(JSON.stringify({ error: 'invalid_json' }) + '\n');
-    return;
+    return jcsString({ error: 'invalid_json' });
   }
 
   // §4.1 (strict I-JSON): reject duplicate keys for the JCS-canonicalizing
   // commands, matching the Go reference (JSON.parse above silently kept last).
   if (rejectsForDuplicateKeys(command, raw)) {
-    process.stdout.write(jcsString({ error: 'invalid_input' }) + '\n');
-    return;
+    return jcsString({ error: 'invalid_input' });
   }
 
   let result: unknown;
@@ -98,13 +87,28 @@ async function main() {
       default:
         result = { error: 'unknown_command' };
     }
-  } catch (err) {
-    process.stderr.write(`Error: ${err}\n`);
+  } catch {
     result = { error: 'internal_error' };
   }
 
-  // Output must be JCS-canonical (sorted keys) — use jcsString for output
-  process.stdout.write(jcsString(result) + '\n');
+  // Output must be JCS-canonical (sorted keys).
+  return jcsString(result);
+}
+
+async function main() {
+  const command = process.argv[2];
+  if (!command) {
+    process.stdout.write(JSON.stringify({ error: 'missing_command' }) + '\n');
+    return;
+  }
+  let raw: string;
+  try {
+    raw = await readStdin();
+  } catch {
+    process.stdout.write(JSON.stringify({ error: 'stdin_read_error' }) + '\n');
+    return;
+  }
+  process.stdout.write(dispatch(command, raw) + '\n');
 }
 
 main().catch(() => {
