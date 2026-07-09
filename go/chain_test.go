@@ -1,10 +1,10 @@
-package veritrail_test
+package vitni_test
 
 import (
 	"encoding/json"
 	"testing"
 
-	"github.com/Daily-Nerd/veritrail/go"
+	"github.com/Daily-Nerd/vitni/go"
 )
 
 // TestVectors_VerifyChain drives the verify-chain command against every chain-*.json vector.
@@ -17,11 +17,11 @@ func TestVectors_VerifyChain(t *testing.T) {
 		count++
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
-			var inp veritrail.VerifyChainInput
+			var inp vitni.VerifyChainInput
 			if err := json.Unmarshal(v.Input, &inp); err != nil {
 				t.Fatalf("unmarshal input: %v", err)
 			}
-			valid, reason, chainLen := veritrail.VerifyChain(inp)
+			valid, reason, chainLen := vitni.VerifyChain(inp)
 
 			var anchor struct {
 				Valid    bool   `json:"valid"`
@@ -49,11 +49,11 @@ func TestVectors_VerifyChain(t *testing.T) {
 
 // TestVerifyChain_Empty checks the first step (empty_chain).
 func TestVerifyChain_Empty(t *testing.T) {
-	inp := veritrail.VerifyChainInput{
+	inp := vitni.VerifyChainInput{
 		Receipts: []string{},
-		Keys:     map[string]map[string]veritrail.RegistryKey{},
+		Keys:     map[string]map[string]vitni.RegistryKey{},
 	}
-	valid, reason, n := veritrail.VerifyChain(inp)
+	valid, reason, n := vitni.VerifyChain(inp)
 	if valid || reason != "empty_chain" || n != 0 {
 		t.Errorf("got (%v, %q, %d), want (false, empty_chain, 0)", valid, reason, n)
 	}

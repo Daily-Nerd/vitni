@@ -104,7 +104,7 @@ export function sign(input: SignInput): SignOutput | { error: string } {
     return { error: 'invalid_private_key' };
   }
 
-  // --- stamp protocol version (mirrors veritrail.Sign / the middleware) ---
+  // --- stamp protocol version (mirrors vitni.Sign / the middleware) ---
   const payload = { ...receipt, v: VERSION };
 
   // --- frame: canonical header + JCS-canonical payload, EdDSA over the signing input ---

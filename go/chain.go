@@ -1,4 +1,4 @@
-package veritrail
+package vitni
 
 import (
 	"encoding/base64"

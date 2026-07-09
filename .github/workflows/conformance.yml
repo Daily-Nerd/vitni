@@ -19,7 +19,7 @@ jobs:
       - name: Build + test Go reference
         run: |
           cd go
-          go build -o ../bin/veritrail-verify-go ./cmd/veritrail-verify
+          go build -o ../bin/vitni-verify-go ./cmd/vitni-verify
           go test ./...
 
       - name: Set up Node

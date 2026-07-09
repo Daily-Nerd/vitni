@@ -1,11 +1,11 @@
-# Veritrail Conformance Harness — Verifier Contract v0.1
+# Vitni Conformance Harness — Verifier Contract v0.1
 
 Both the **Go** and **TypeScript** verifiers MUST implement this identical CLI contract.
 The harness (`harness/compare.mjs`) runs each vector through **both** binaries and asserts their
 stdout is **byte-identical**. Agreement across two independent language runtimes is the proof of
 the Draft 0.2 §12 normative guarantee. Divergence is a finding (spec leak or impl bug), not a nuisance.
 
-This harness validates the **byte-source layer** of Veritrail (§3–§5, §4.3 of the design draft). It does
+This harness validates the **byte-source layer** of Vitni (§3–§5, §4.3 of the design draft). It does
 NOT yet exercise full signature verification, chains, or the Log — those come once the byte layer is proven.
 
 ---
@@ -13,7 +13,7 @@ NOT yet exercise full signature verification, chains, or the Log — those come 
 ## CLI shape
 
 ```
-veritrail-verify <command> < input.json        # input JSON on stdin
+vitni-verify <command> < input.json        # input JSON on stdin
 # emits exactly one line of compact JSON to stdout (no trailing newline beyond one \n), exit 0
 # on malformed input or unsupported command: emit {"error":"<machine-code>"} to stdout, exit 0
 ```
@@ -172,7 +172,7 @@ Output:
 Any failure → `{ "valid": false, "reason": "<code>", "chain_len": n }`. Output JSON MUST be JCS-canonical.
 
 ### 9. `a2a-artifact-hash` — A2A artifact canonicalization → outputs_hash (design §14)
-A2A does not define artifact-level canonicalization, so Veritrail defines it. Input:
+A2A does not define artifact-level canonicalization, so Vitni defines it. Input:
 ```json
 { "artifact": { "parts": [ <A2A Part>, ... ] } }
 ```

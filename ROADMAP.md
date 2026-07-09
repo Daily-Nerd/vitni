@@ -1,6 +1,6 @@
 # Roadmap
 
-veritrail is an **OSS dependency** play: the goal is to be the trustworthy, hardened, multi-language primitive other tools and frameworks *depend on* for signing and verifying agent execution receipts — not a product you buy. Success = real integrations, not stars.
+vitni is an **OSS dependency** play: the goal is to be the trustworthy, hardened, multi-language primitive other tools and frameworks *depend on* for signing and verifying agent execution receipts — not a product you buy. Success = real integrations, not stars.
 
 ## Validated (design + reference, pre-extraction)
 
@@ -14,11 +14,11 @@ The protocol and a two-language reference were built and validated cold against 
 
 ## Now: make it a real dependency
 
-- [ ] Extract a clean `veritrail` library API (separate from harness/demo code), Go + TS
-- [ ] Publish packages: npm (`veritrail`), Go module (`github.com/Daily-Nerd/veritrail/go`)
+- [ ] Extract a clean `vitni` library API (separate from harness/demo code), Go + TS
+- [ ] Publish packages: npm (`vitni`), Go module (`github.com/Daily-Nerd/vitni/go`)
 - [ ] Port the conformance vector suite into `conformance/` (regenerated at `veritrail/0.1`)
 - [ ] CI: cross-impl conformance must pass on every commit
-- [ ] `veritrail` CLI: `sign`, `verify`, `verify-chain`
+- [ ] `vitni` CLI: `sign`, `verify`, `verify-chain`
 - [ ] One-line adoption surface: middleware decorators for MCP servers / A2A providers
 - [ ] Quickstart + DX docs
 
@@ -28,7 +28,7 @@ The hard truth: a free dependency with weak organic demand wins by being *carrie
 
 - [ ] Get carried by an agent framework / MCP-or-A2A SDK as the reference receipt layer
 - [ ] Align with the in-flight IETF agent-receipt / audit-trail drafts — be the reference implementation, not a competitor
-- [ ] PyPI (`veritrail`) third reference implementation
+- [ ] PyPI (`vitni`) third reference implementation
 
 ## Later (optional, only if it earns ubiquity)
 
@@ -38,4 +38,4 @@ The hard truth: a free dependency with weak organic demand wins by being *carrie
 ## Honest watch-items
 
 - **Absorption:** native receipt fields in MCP/A2A, or an incumbent governance toolkit, could commoditize the primitive. Be the obvious dependency *before* that — and stay the best-engineered, most-conformant one.
-- **Scope discipline:** veritrail signs and verifies *what a performer did*. It is not an observability platform, an AI code reviewer, or a governance suite. Stay a primitive. 
+- **Scope discipline:** vitni signs and verifies *what a performer did*. It is not an observability platform, an AI code reviewer, or a governance suite. Stay a primitive. 

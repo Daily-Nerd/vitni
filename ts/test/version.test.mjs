@@ -1,6 +1,6 @@
 /**
  * The protocol version string must come from ONE shared constant, mirroring
- * Go's `veritrail.Version`. It was previously hardcoded in three places
+ * Go's `vitni.Version`. It was previously hardcoded in three places
  * (sign command + MCP/A2A middleware), which could silently drift when the
  * protocol version bumps.
  *
@@ -30,7 +30,7 @@ test('VERSION is re-exported from the package index', async () => {
 test('the protocol version is not hardcoded outside version.ts', () => {
   // Any source file that stamps a receipt must import VERSION, not inline the
   // literal — this guards against re-introducing the drift.
-  for (const rel of ['commands/sign.ts', 'mcp/veritrail-middleware.ts', 'a2a/veritrail-a2a-middleware.ts']) {
+  for (const rel of ['commands/sign.ts', 'mcp/vitni-middleware.ts', 'a2a/vitni-a2a-middleware.ts']) {
     const text = readFileSync(join(SRC, rel), 'utf8');
     assert.ok(
       !/['"]veritrail\/0\.1['"]/.test(text),

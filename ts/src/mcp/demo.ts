@@ -1,5 +1,5 @@
 /**
- * Runnable Veritrail + MCP integration demo.
+ * Runnable Vitni + MCP integration demo.
  *
  *   node ts/dist/mcp/demo.js
  *
@@ -12,7 +12,7 @@ import {
   registryFromSigner,
   computeOutputsHash,
   RECEIPT_META_KEY,
-} from './veritrail-middleware.js';
+} from './vitni-middleware.js';
 import { runRoundTrip } from './server.js';
 
 function log(label: string, value?: unknown): void {
@@ -24,7 +24,7 @@ function log(label: string, value?: unknown): void {
 }
 
 async function main(): Promise<void> {
-  log('=== Veritrail × MCP integration demo ===\n');
+  log('=== Vitni × MCP integration demo ===\n');
 
   const signer = generateTestSigner();
   log('1. Tool call: add(a=2, b=3) over the official MCP SDK (InMemoryTransport)');

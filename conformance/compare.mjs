@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// veritrail conformance harness — runs every vector through BOTH reference verifiers
+// vitni conformance harness — runs every vector through BOTH reference verifiers
 // (Go + TypeScript) and asserts byte-identical output + match to the external anchor.
 // Agreement across two independent runtimes is the interoperability guarantee.
 //
-//   GO_VERIFY="./bin/veritrail-verify-go" TS_VERIFY="node ts/dist/cli.js" node conformance/compare.mjs
+//   GO_VERIFY="./bin/vitni-verify-go" TS_VERIFY="node ts/dist/cli.js" node conformance/compare.mjs
 import { readFileSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -13,7 +13,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));   // conformance/
 const ROOT = join(HERE, "..");                          // repo root
 const VECTORS = join(HERE, "vectors");
 
-const GO = (process.env.GO_VERIFY ?? "./bin/veritrail-verify-go").trim();
+const GO = (process.env.GO_VERIFY ?? "./bin/vitni-verify-go").trim();
 const TS = (process.env.TS_VERIFY ?? "node ts/dist/cli.js").trim();
 
 function run(cmdStr, subcommand, inputObj) {

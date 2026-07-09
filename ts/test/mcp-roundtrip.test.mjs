@@ -1,7 +1,7 @@
 /**
  * End-to-end MCP binding test.
  *
- * Proves Veritrail drops into a real MCP server (the official @modelcontextprotocol/sdk
+ * Proves Vitni drops into a real MCP server (the official @modelcontextprotocol/sdk
  * over InMemoryTransport) and that a receipt round-trips through verification AND
  * actually binds the output the client received.
  *
@@ -26,7 +26,7 @@ const {
   computeOutputsHash,
   RECEIPT_META_KEY,
   registryFromSigner,
-} = await import(`${DIST}/mcp/veritrail-middleware.js`);
+} = await import(`${DIST}/mcp/vitni-middleware.js`);
 const { runRoundTrip } = await import(`${DIST}/mcp/server.js`);
 
 test('mcp/roundtrip: receipt verifies and binds the received output', async () => {

@@ -1,4 +1,4 @@
-package veritrail_test
+package vitni_test
 
 import (
 	"crypto/ed25519"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Daily-Nerd/veritrail/go"
+	"github.com/Daily-Nerd/vitni/go"
 )
 
 // TestSign_RoundTripsWithVerify proves the public Sign API produces a JWS that
@@ -21,13 +21,13 @@ func TestSign_RoundTripsWithVerify(t *testing.T) {
 	priv := ed25519.NewKeyFromSeed(seed)
 	pub := priv.Public().(ed25519.PublicKey)
 
-	r := veritrail.Receipt{
+	r := vitni.Receipt{
 		Binding:     "mcp",
 		PerformerID: "srv-test",
 		Method:      "mcp:echo",
 		InputsHash:  "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
 		OutputsHash: "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
-		Cost: veritrail.Cost{
+		Cost: vitni.Cost{
 			Tokens: "10", USDMicros: "0", WallMs: "3",
 		},
 		Status:    "OK",
@@ -36,7 +36,7 @@ func TestSign_RoundTripsWithVerify(t *testing.T) {
 		Nonce:     "uEiDjsMRCmPwcFJr79MiZb7kkJ65B5GSbk0yklZkbeFK4VQ",
 	}
 
-	jws, err := veritrail.Sign(r, "ed-1", priv)
+	jws, err := vitni.Sign(r, "ed-1", priv)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)
 	}
@@ -56,20 +56,20 @@ func TestSign_RoundTripsWithVerify(t *testing.T) {
 	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
 		t.Fatalf("payload not JSON: %v", err)
 	}
-	if payload["v"] != veritrail.Version {
-		t.Errorf("payload v = %v, want %s", payload["v"], veritrail.Version)
+	if payload["v"] != vitni.Version {
+		t.Errorf("payload v = %v, want %s", payload["v"], vitni.Version)
 	}
-	if veritrail.Version != "veritrail/0.1" {
-		t.Errorf("Version const = %q, want veritrail/0.1", veritrail.Version)
+	if vitni.Version != "veritrail/0.1" {
+		t.Errorf("Version const = %q, want veritrail/0.1", vitni.Version)
 	}
-	if veritrail.MCPMetaKey != "dev.veritrail/receipt" {
-		t.Errorf("MCPMetaKey const = %q, want dev.veritrail/receipt", veritrail.MCPMetaKey)
+	if vitni.MCPMetaKey != "dev.veritrail/receipt" {
+		t.Errorf("MCPMetaKey const = %q, want dev.veritrail/receipt", vitni.MCPMetaKey)
 	}
 
 	// Verify must accept it.
-	in := veritrail.VerifyInput{
+	in := vitni.VerifyInput{
 		SignedReceipt: jws,
-		Keys: map[string]map[string]veritrail.RegistryKey{
+		Keys: map[string]map[string]vitni.RegistryKey{
 			"srv-test": {
 				"ed-1": {
 					Kty:    "OKP",
@@ -81,7 +81,7 @@ func TestSign_RoundTripsWithVerify(t *testing.T) {
 			},
 		},
 	}
-	valid, reason := veritrail.Verify(in)
+	valid, reason := vitni.Verify(in)
 	if !valid || reason != "ok" {
 		t.Errorf("Verify(signed) = (%v, %q), want (true, ok)", valid, reason)
 	}

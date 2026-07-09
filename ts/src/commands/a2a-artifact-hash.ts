@@ -1,7 +1,7 @@
 /**
  * a2a-artifact-hash command — A2A artifact canonicalization → outputs_hash (design §14).
  *
- * A2A does not define artifact-level canonicalization, so Veritrail defines it.
+ * A2A does not define artifact-level canonicalization, so Vitni defines it.
  * Each Part (preserving array order) maps to a canonical descriptor:
  *   - text → { kind:"text", text }
  *   - data → { kind:"data", data }

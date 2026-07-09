@@ -1,5 +1,5 @@
 /**
- * Runnable Veritrail + A2A integration demo.
+ * Runnable Vitni + A2A integration demo.
  *
  *   node ts/dist/a2a/demo.js
  *
@@ -9,8 +9,8 @@
  */
 import { verify } from '../commands/verify.js';
 import { a2aArtifactHash } from '../commands/a2a-artifact-hash.js';
-import { generateTestSigner, registryFromSigner } from '../mcp/veritrail-middleware.js';
-import { RECEIPT_META_KEY } from './veritrail-a2a-middleware.js';
+import { generateTestSigner, registryFromSigner } from '../mcp/vitni-middleware.js';
+import { RECEIPT_META_KEY } from './vitni-a2a-middleware.js';
 import { runA2ARoundTrip } from './server.js';
 
 function log(label: string, value?: unknown): void {
@@ -25,7 +25,7 @@ function hashOfParts(parts: unknown[]): string {
 }
 
 async function main(): Promise<void> {
-  log('=== Veritrail × A2A integration demo ===\n');
+  log('=== Vitni × A2A integration demo ===\n');
 
   const signer = generateTestSigner();
   log('1. A2A task: skill "summarize" over the official @a2a-js/sdk server stack');

@@ -1,7 +1,7 @@
 /**
- * Veritrail co-signing middleware for A2A (design §14).
+ * Vitni co-signing middleware for A2A (design §14).
  *
- * On Task completion, build a Veritrail Receipt with:
+ * On Task completion, build a Vitni Receipt with:
  *   - binding: "a2a"
  *   - method:  "a2a:<skill>"
  *   - outputs_hash: the §9 artifact-hash over the Task artifact's parts.
@@ -11,14 +11,14 @@
  *
  * A2A artifact.metadata is a {[k:string]: unknown} passthrough map (SDK type), so
  * a namespaced receipt key is preserved through serialization and ignored by
- * consumers that don't know about Veritrail.
+ * consumers that don't know about Vitni.
  */
 import { randomBytes } from 'node:crypto';
 import {
   TestSigner,
   signReceipt,
   RECEIPT_META_KEY,
-} from '../mcp/veritrail-middleware.js';
+} from '../mcp/vitni-middleware.js';
 import { a2aArtifactHash } from '../commands/a2a-artifact-hash.js';
 import { VERSION } from '../version.js';
 
@@ -67,7 +67,7 @@ export interface BuildA2AReceiptOptions {
   wallMs?: string;
 }
 
-/** Build the Veritrail Receipt payload for an A2A task. */
+/** Build the Vitni Receipt payload for an A2A task. */
 export function buildA2AReceiptPayload(opts: BuildA2AReceiptOptions): Record<string, unknown> {
   return {
     v: VERSION,
@@ -98,7 +98,7 @@ export function buildA2AReceiptPayload(opts: BuildA2AReceiptOptions): Record<str
  * Co-sign an A2A artifact in place: build + sign the receipt and attach it at
  * artifact.metadata["dev.veritrail/receipt"]. Returns the same artifact.
  */
-export function veritrailArtifact(
+export function vitniArtifact(
   artifact: A2AArtifactLike,
   opts: { signer: TestSigner; skill: string; requestParts: A2APartLike[]; ts?: string; wallMs?: string }
 ): A2AArtifactLike {

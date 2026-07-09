@@ -1,4 +1,4 @@
-package veritrail_test
+package vitni_test
 
 import (
 	"crypto/ed25519"
@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Daily-Nerd/veritrail/go"
+	"github.com/Daily-Nerd/vitni/go"
 )
 
 // vectorFile represents a test vector loaded from disk.
@@ -54,7 +54,7 @@ func loadVectors(t *testing.T) []vectorFile {
 
 func TestJCS_SortedKeys(t *testing.T) {
 	input := json.RawMessage(`{"b":1,"a":2}`)
-	got, err := veritrail.JCS(input)
+	got, err := vitni.JCS(input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestJCS_SortedKeys(t *testing.T) {
 func TestJCS_NestedAndUnicode(t *testing.T) {
 	// "é" is U+00E9, encoded in UTF-8 as 0xC3 0xA9
 	input := json.RawMessage(`{"z":"é","a":[3,1,2]}`)
-	got, err := veritrail.JCS(input)
+	got, err := vitni.JCS(input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestJCS_NestedAndUnicode(t *testing.T) {
 func TestHashString_KnownDigest(t *testing.T) {
 	// sha256 of "hello" is well-known
 	digestHex := "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
-	got, err := veritrail.HashString(digestHex)
+	got, err := vitni.HashString(digestHex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestHashString_KnownDigest(t *testing.T) {
 // -------------------------------------------------------------------
 
 func TestDigest_Empty(t *testing.T) {
-	got, err := veritrail.Digest([]byte{})
+	got, err := vitni.Digest([]byte{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestDigest_Empty(t *testing.T) {
 }
 
 func TestDigest_Hello(t *testing.T) {
-	got, err := veritrail.Digest([]byte("hello"))
+	got, err := vitni.Digest([]byte("hello"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestDigest_Hello(t *testing.T) {
 func TestSSEDecode_TwoDataOneEvent(t *testing.T) {
 	// data: hello\ndata: world\n\n  -> "hello\nworld"
 	raw := []byte("data: hello\ndata: world\n\n")
-	msgs, err := veritrail.SSEDecode(raw)
+	msgs, err := vitni.SSEDecode(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestSSEDecode_TwoDataOneEvent(t *testing.T) {
 
 func TestSSEDecode_TwoEvents(t *testing.T) {
 	raw := []byte("data: a\n\ndata: b\n\n")
-	msgs, err := veritrail.SSEDecode(raw)
+	msgs, err := vitni.SSEDecode(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestSSEDecode_TwoEvents(t *testing.T) {
 func TestSSEDecode_BOMNoSpace(t *testing.T) {
 	// BOM + data:x (no space) + \n\n
 	raw := []byte("\xef\xbb\xbfdata:x\n\n")
-	msgs, err := veritrail.SSEDecode(raw)
+	msgs, err := vitni.SSEDecode(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestSSEDecode_BOMNoSpace(t *testing.T) {
 func TestSSEDecode_CRLFCommentEvent(t *testing.T) {
 	// event: msg\r\n: comment\r\nid: 7\r\ndata: hello\r\ndata: world\r\n\r\n
 	raw := []byte("event: msg\r\n: a comment line\r\nid: 7\r\ndata: hello\r\ndata: world\r\n\r\n")
-	msgs, err := veritrail.SSEDecode(raw)
+	msgs, err := vitni.SSEDecode(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestSSEDecode_CRLFCommentEvent(t *testing.T) {
 func TestSSEDecode_EmptyDataNotDispatched(t *testing.T) {
 	// event with no data lines -> empty data -> not dispatched
 	raw := []byte("event: ping\n\n")
-	msgs, err := veritrail.SSEDecode(raw)
+	msgs, err := vitni.SSEDecode(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestSSEDecode_EmptyDataNotDispatched(t *testing.T) {
 
 func TestCostCanon_ValidStringInts(t *testing.T) {
 	input := json.RawMessage(`{"tokens":"1500","usd_micros":"10000000000","wall_ms":"845","rail_ref":null}`)
-	got, err := veritrail.CostCanon(input)
+	got, err := vitni.CostCanon(input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestCostCanon_ValidStringInts(t *testing.T) {
 
 func TestCostCanon_NumberError(t *testing.T) {
 	input := json.RawMessage(`{"tokens":1500,"usd_micros":"10","wall_ms":"5","rail_ref":null}`)
-	_, err := veritrail.CostCanon(input)
+	_, err := vitni.CostCanon(input)
 	if err == nil {
 		t.Fatal("expected error for numeric tokens, got nil")
 	}
@@ -239,7 +239,7 @@ func TestVectors_JCS(t *testing.T) {
 			if err := json.Unmarshal(v.Input, &inp); err != nil {
 				t.Fatal(err)
 			}
-			got, err := veritrail.JCS(inp.Value)
+			got, err := vitni.JCS(inp.Value)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -286,7 +286,7 @@ func TestVectors_Digest(t *testing.T) {
 					t.Fatalf("base64 decode: %v", err)
 				}
 			}
-			got, err := veritrail.Digest(raw)
+			got, err := vitni.Digest(raw)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -316,7 +316,7 @@ func TestVectors_ReceiptID(t *testing.T) {
 			if err := json.Unmarshal(v.Input, &inp); err != nil {
 				t.Fatal(err)
 			}
-			canonHex, receiptID, err := veritrail.ReceiptID(inp.Receipt)
+			canonHex, receiptID, err := vitni.ReceiptID(inp.Receipt)
 			if err != nil {
 				t.Fatalf("ReceiptID error: %v", err)
 			}
@@ -358,7 +358,7 @@ func TestVectors_SSEOutputsHash(t *testing.T) {
 					t.Fatalf("base64 decode: %v", err)
 				}
 			}
-			decodedHex, outputsHash, err := veritrail.SSEOutputsHash(rawBytes, inp.Mode)
+			decodedHex, outputsHash, err := vitni.SSEOutputsHash(rawBytes, inp.Mode)
 			if err != nil {
 				t.Fatalf("SSEOutputsHash error: %v", err)
 			}
@@ -412,11 +412,11 @@ func TestVectors_Sign(t *testing.T) {
 			}
 			priv := ed25519.NewKeyFromSeed(seed)
 
-			var receipt veritrail.Receipt
+			var receipt vitni.Receipt
 			if err := json.Unmarshal(inp.Receipt, &receipt); err != nil {
 				t.Fatal(err)
 			}
-			signed, err := veritrail.Sign(receipt, inp.Kid, priv)
+			signed, err := vitni.Sign(receipt, inp.Kid, priv)
 			if err != nil {
 				t.Fatalf("Sign error: %v", err)
 			}
@@ -435,9 +435,9 @@ func TestVectors_Sign(t *testing.T) {
 			// public key derived from the same seed. Proves sign↔verify interop.
 			pub := priv.Public().(ed25519.PublicKey)
 			x := base64.RawURLEncoding.EncodeToString(pub)
-			valid, reason := veritrail.Verify(veritrail.VerifyInput{
+			valid, reason := vitni.Verify(vitni.VerifyInput{
 				SignedReceipt: signed,
-				Keys: map[string]map[string]veritrail.RegistryKey{
+				Keys: map[string]map[string]vitni.RegistryKey{
 					receipt.PerformerID: {
 						inp.Kid: {Kty: "OKP", Crv: "Ed25519", X: x, Alg: "EdDSA", Status: "active"},
 					},
@@ -452,13 +452,13 @@ func TestVectors_Sign(t *testing.T) {
 
 func TestSign_Errors(t *testing.T) {
 	goodSeed := ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
-	r := veritrail.Receipt{
+	r := vitni.Receipt{
 		Binding:     "mcp",
 		PerformerID: "srv-ed",
 		Method:      "mcp:echo",
 		InputsHash:  "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
 		OutputsHash: "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
-		Cost:        veritrail.Cost{Tokens: "10", USDMicros: "0", WallMs: "3"},
+		Cost:        vitni.Cost{Tokens: "10", USDMicros: "0", WallMs: "3"},
 		Status:      "OK",
 		LogPolicy:   "best_effort",
 		Ts:          "2026-05-28T00:00:00Z",
@@ -466,11 +466,11 @@ func TestSign_Errors(t *testing.T) {
 	}
 
 	// empty kid → error
-	if _, err := veritrail.Sign(r, "", goodSeed); err == nil {
+	if _, err := vitni.Sign(r, "", goodSeed); err == nil {
 		t.Error("Sign with empty kid: expected error, got nil")
 	}
 	// wrong-size key → error
-	if _, err := veritrail.Sign(r, "ed-1", ed25519.PrivateKey(make([]byte, 16))); err == nil {
+	if _, err := vitni.Sign(r, "ed-1", ed25519.PrivateKey(make([]byte, 16))); err == nil {
 		t.Error("Sign with short key: expected error, got nil")
 	}
 }
@@ -496,12 +496,12 @@ func TestVectors_CostCanon(t *testing.T) {
 
 			if _, hasErr := anchor["error"]; hasErr {
 				// Expect error
-				_, err := veritrail.CostCanon(inp.Cost)
+				_, err := vitni.CostCanon(inp.Cost)
 				if err == nil {
 					t.Fatal("expected error, got nil")
 				}
 			} else {
-				got, err := veritrail.CostCanon(inp.Cost)
+				got, err := vitni.CostCanon(inp.Cost)
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}

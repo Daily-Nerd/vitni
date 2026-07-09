@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Veritrail conformance verifier CLI — TypeScript implementation.
+ * Vitni conformance verifier CLI — TypeScript implementation.
  *
  * Usage: node dist/cli.js <command> < input.json
  *
