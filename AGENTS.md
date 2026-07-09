@@ -26,7 +26,7 @@ between them. The spec is `docs/DESIGN.md`.
 
 - Go tests: `cd go && go test ./...`
 - TS tests: `cd ts && npm install && npm run build && npm test`
-- Cross-impl harness: build both, then `node conformance/compare.mjs` (56/56)
+- Cross-impl harness: build both, then `node conformance/compare.mjs` (57/57)
 - Vector regeneration: `uv run` only — see CONTRIBUTING.md (never pip/bare python)
 
 ## Repository Rules

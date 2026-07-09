@@ -142,6 +142,14 @@ es_leaf_jws, _ = build("srv-ec", "mcp:tool", es_root_id, "")
 write("chain-empty-parent-identity.json", "chain/empty-parent-identity",
       [es_leaf_jws, es_root_jws], False, "parent_identity_mismatch")
 
+# 9. valid chain, NO identity claim: leaf links by hash but omits parent_performer_id (null).
+#    Per DESIGN §7 this is the weaker structural-only lineage — valid, no identity binding.
+#    Exercises the absent/null 'no constraint' branch of the parent-identity check.
+ni_root_jws, ni_root_id = build("srv-ed", "mcp:orchestrate", None, None)
+ni_leaf_jws, _ = build("srv-ec", "mcp:tool", ni_root_id, None)
+write("chain-null-parent-identity.json", "chain/null-parent-identity-valid",
+      [ni_leaf_jws, ni_root_jws], True, "ok")
+
 print("wrote chain vectors:")
 for q in sorted(OUT.glob("chain-*.json")):
     print(" ", q.name)
