@@ -1,0 +1,44 @@
+name: Feature request
+description: A capability vitni should have, or a pain it should remove
+title: "feat: "
+labels: ["enhancement", "type:feat"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: The pain point, as concretely as you can. What happens today that shouldn't, or can't happen that should?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How it would work from your side — API, CLI, receipt fields, verdict behavior. Rough is fine. Wire-visible changes need Go≡TS conformance vectors, so say if the wire format is touched.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you use today, or other shapes this could take.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where would you use it?
+      options:
+        - TypeScript library
+        - Go library
+        - CLI (vitni-verify)
+        - MCP middleware
+        - A2A middleware
+        - local binding
+        - Spec / protocol level
+        - Everywhere / surface-independent
+    validations:
+      required: false
