@@ -59,11 +59,11 @@ func TestSign_RoundTripsWithVerify(t *testing.T) {
 	if payload["v"] != vitni.Version {
 		t.Errorf("payload v = %v, want %s", payload["v"], vitni.Version)
 	}
-	if vitni.Version != "veritrail/0.1" {
-		t.Errorf("Version const = %q, want veritrail/0.1", vitni.Version)
+	if vitni.Version != "vitni/0.2" {
+		t.Errorf("Version const = %q, want vitni/0.2", vitni.Version)
 	}
-	if vitni.MCPMetaKey != "dev.veritrail/receipt" {
-		t.Errorf("MCPMetaKey const = %q, want dev.veritrail/receipt", vitni.MCPMetaKey)
+	if vitni.MCPMetaKey != "dev.vitni/receipt" {
+		t.Errorf("MCPMetaKey const = %q, want dev.vitni/receipt", vitni.MCPMetaKey)
 	}
 
 	// Verify must accept it.

@@ -10,10 +10,10 @@ import (
 )
 
 // Version is the Vitni protocol version string stamped into receipts.
-const Version = "veritrail/0.1"
+const Version = "vitni/0.2"
 
 // MCPMetaKey is the MCP `_meta` key under which a Vitni receipt is carried.
-const MCPMetaKey = "dev.veritrail/receipt"
+const MCPMetaKey = "dev.vitni/receipt"
 
 // Cost is the cost block of a receipt. Magnitudes are decimal STRINGS (the 2^53
 // defense — never JSON numbers). RailRef is an optional reference string.
