@@ -4,6 +4,24 @@ All notable changes to veritrail are documented here. Format: [Keep a Changelog]
 
 > **One version, one changelog.** vitni (formerly veritrail) ships the Go module and the npm package (`@daily-nerd/vitni`) in lockstep under a single version — any change to either implementation bumps it. release-please generates entries here from conventional commits. The `0.2.0`–`0.2.1` entries (the npm-only transition releases) live in git history — `git show v0.2.2:ts/CHANGELOG.md`; unified history resumes from `0.2.2`.
 
+## [0.4.0](https://github.com/Daily-Nerd/vitni/compare/v0.3.0...v0.4.0) (2026-07-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* protocol vitni/0.2 — local binding, ext field, wire-literal flip, 47 vectors ([#25](https://github.com/Daily-Nerd/vitni/issues/25))
+
+### Features
+
+* protocol vitni/0.2 — local binding, ext field, wire-literal flip, 47 vectors ([#25](https://github.com/Daily-Nerd/vitni/issues/25)) ([6b1708e](https://github.com/Daily-Nerd/vitni/commit/6b1708eb9407c7275f9a2751d64aef147b3de84a))
+
+
+### Bug Fixes
+
+* **go:** empty-string parent_performer_id is a carried lineage claim ([#38](https://github.com/Daily-Nerd/vitni/issues/38)) ([e1cb638](https://github.com/Daily-Nerd/vitni/commit/e1cb638b8461d6ffabd18650b4876c0801771eeb))
+* reject unknown top-level keys + non-string cost at sign; reject duplicate keys (§4.1) ([#39](https://github.com/Daily-Nerd/vitni/issues/39)) ([b4ef643](https://github.com/Daily-Nerd/vitni/commit/b4ef643a68cf7b86233bedc6256be267e701ed44)), closes [#34](https://github.com/Daily-Nerd/vitni/issues/34)
+* **ts:** strict input decode to match Go + spec §4.1 ([#35](https://github.com/Daily-Nerd/vitni/issues/35)) ([0d8e713](https://github.com/Daily-Nerd/vitni/commit/0d8e713fe8cc5f79f63fe433ef9ac66cb72880ad))
+
 ## [0.3.0](https://github.com/Daily-Nerd/vitni/compare/v0.2.2...v0.3.0) (2026-07-09)
 
 
