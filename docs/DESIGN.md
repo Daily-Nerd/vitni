@@ -79,7 +79,7 @@ Receipt {
   status:          <StatusCode>            // outcome (§9)
   reason:          <ReasonCode> | null      // REQUIRED when status != OK, else null (§9)
   parent_receipt_hash: <hashstr> | null     // the receipt_id of the action that CAUSED this one (§7); null at chain root
-  parent_performer_id: <string> | null      // OPTIONAL (signed): the performer_id the child EXPECTS its parent to have — binds lineage identity, defeats foreign-parent splice (§7, §16)
+  parent_performer_id: <string> | null      // OPTIONAL (signed): the performer_id the child EXPECTS its parent to have — binds lineage identity, defeats foreign-parent splice (§7, §16). "Carried" = present and non-null; an empty string is carried (and, being unequal to any real performer_id, forces parent_identity_mismatch). Only absence or explicit null means "no claim".
   log_policy:      "logged_required" | "best_effort"   // performer's logging commitment (signed) — §11
   ts:              <rfc3339-utc>           // performer's claimed signing time (advisory; the Log is the time-of-record authority)
   nonce:           <hashstr>                // >= 128 bits from a CSPRNG (§2.1); uniqueness + anti-grinding

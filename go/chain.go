@@ -81,14 +81,14 @@ func VerifyChain(in VerifyChainInput) (bool, string, int) {
 	// --- Step 6: parent_identity_mismatch ---
 	for i := 0; i < n-1; i++ {
 		if claimIsNull(payloads[i], "parent_performer_id") {
-			continue
+			continue // absent or explicit null → no lineage-identity claim (§7)
 		}
-		ppid := stringClaim(payloads[i], "parent_performer_id")
-		if ppid == "" {
-			// present but not a string / absent — treat as no constraint.
-			continue
-		}
-		if ppid != stringClaim(payloads[i+1], "performer_id") {
+		// A present (non-null) parent_performer_id is a CARRIED claim (DESIGN §7
+		// point 4) and MUST equal the parent's performer_id. An empty string or a
+		// non-string is still carried — stringClaim renders both as "", which
+		// cannot match a real performer_id, so the splice is rejected. (Treating
+		// an empty string as "no constraint" would let a spliced parent pass.)
+		if stringClaim(payloads[i], "parent_performer_id") != stringClaim(payloads[i+1], "performer_id") {
 			return false, "parent_identity_mismatch", n
 		}
 	}
