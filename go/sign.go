@@ -10,10 +10,10 @@ import (
 )
 
 // Version is the Vitni protocol version string stamped into receipts.
-const Version = "veritrail/0.1"
+const Version = "vitni/0.2"
 
 // MCPMetaKey is the MCP `_meta` key under which a Vitni receipt is carried.
-const MCPMetaKey = "dev.veritrail/receipt"
+const MCPMetaKey = "dev.vitni/receipt"
 
 // Cost is the cost block of a receipt. Magnitudes are decimal STRINGS (the 2^53
 // defense — never JSON numbers). RailRef is an optional reference string.
@@ -44,6 +44,9 @@ type Receipt struct {
 	LogPolicy         string  `json:"log_policy"`
 	Ts                string  `json:"ts"`
 	Nonce             string  `json:"nonce"`
+	// Ext carries OPTIONAL namespaced extensions (design §"ext"); it never
+	// affects core verification and is absent from the wire when nil.
+	Ext map[string]any `json:"ext,omitempty"`
 }
 
 // Sign produces a JWS-compact signed receipt (header.payload.signature) over the

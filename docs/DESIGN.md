@@ -5,7 +5,7 @@
 **Date:** 2026-05-28
 **Scope of this document:** the *functionality and logic* of Vitni — objects, bytes, flows, algorithms, failure modes. **No market/GTM content** (that lives in the research report §10).
 
-> **Changelog 0.1 → 0.2:** hardened by a 5-lens adversarial review. The §0.1 normative claim "two verifiers produce byte-identical verdicts" did **not** hold — several byte-source definitions were underspecified. 0.2 pins them: multibase hash-string encoding, the SSE/streaming decode unit, the JWS-payload≡JCS invariant, the inputs-vs-outputs hashing split, JOSE alg/kid hardening, cost-as-strings (JCS integer ceiling), and corrects a factual AP2 error. Also closes a value-cap breach (§9 reason codes) and five missing threat rows (§15).
+> **Changelog 0.1 → 0.2:** hardened by a 5-lens adversarial review. The §0.1 normative claim "two verifiers produce byte-identical verdicts" did **not** hold — several byte-source definitions were underspecified. 0.2 pins them: multibase hash-string encoding, the SSE/streaming decode unit, the JWS-payload≡JCS invariant, the inputs-vs-outputs hashing split, JOSE alg/kid hardening, cost-as-strings (JCS integer ceiling), and corrects a factual AP2 error. Also closes a value-cap breach (§9 reason codes) and five missing threat rows (§16).
 
 ---
 
@@ -16,7 +16,7 @@ Vitni produces a **signed, tamper-evident, content-addressed record of an action
 **Vitni proves (the value cap):**
 - **Performer non-repudiation** — the performer cannot later deny it returned *these* output bytes, at *this* time, against *this* request, for *this* cost.
 - **Response-byte integrity** — the recorded output cannot be altered after signing without detection.
-- **Authorization binding (by hash)** — the receipt records *which* authorization token the performer **claims** was on the wire (it does not, and cannot, prove the performer hashed the token it actually used — see §6, §15).
+- **Authorization binding (by hash)** — the receipt records *which* authorization token the performer **claims** was on the wire (it does not, and cannot, prove the performer hashed the token it actually used — see §6, §16).
 - **Verifiable cost attribution** — the performer-signed cost fields sum over a *fully-verified* chain (§7) into a ledger the performer cannot later understate.
 
 **Vitni does NOT prove (and v1 must never claim):**
@@ -62,12 +62,12 @@ The canonical logical structure (encoding rules in §3–4).
 
 ```
 Receipt {
-  v:               "veritrail/0.1"            // spec version (string, required)
-  binding:         "mcp" | "a2a"           // execution context discriminator (required, signed) — §13/§14
+  v:               "vitni/0.2"            // spec version (string, required)
+  binding:         "mcp" | "a2a" | "local"  // execution context discriminator (required, signed) — §13/§14/§15
   action_ref:      <hashstr> | null         // multihash of the auth token the performer CLAIMS was used (§6); null if none
   performer_id:    <string>                // stable identifier of the performer; resolves to a key (§10)
   requester_id:    <string> | null         // identifier of the invoking agent, as known to the performer (ADVISORY; not verifiable in v1)
-  method:          <string>                // namespaced by binding: "mcp:<tool>" | "a2a:<skill>"  (§13/§14)
+  method:          <string>                // namespaced by binding: "mcp:<tool>" | "a2a:<skill>" | "local:<tool>"  (§13/§14/§15)
   inputs_hash:     <hashstr>                // commitment to the request (§4.2, §5) — JCS(params) for MCP inputs
   outputs_hash:    <hashstr>                // commitment to the response payload (§4.2–4.3, §5)
   cost: {                                   // performer-attested cost (§8); all fields required
@@ -79,7 +79,7 @@ Receipt {
   status:          <StatusCode>            // outcome (§9)
   reason:          <ReasonCode> | null      // REQUIRED when status != OK, else null (§9)
   parent_receipt_hash: <hashstr> | null     // the receipt_id of the action that CAUSED this one (§7); null at chain root
-  parent_performer_id: <string> | null      // OPTIONAL (signed): the performer_id the child EXPECTS its parent to have — binds lineage identity, defeats foreign-parent splice (§7, §15)
+  parent_performer_id: <string> | null      // OPTIONAL (signed): the performer_id the child EXPECTS its parent to have — binds lineage identity, defeats foreign-parent splice (§7, §16)
   log_policy:      "logged_required" | "best_effort"   // performer's logging commitment (signed) — §11
   ts:              <rfc3339-utc>           // performer's claimed signing time (advisory; the Log is the time-of-record authority)
   nonce:           <hashstr>                // >= 128 bits from a CSPRNG (§2.1); uniqueness + anti-grinding
@@ -96,11 +96,11 @@ SignedReceipt = JWS(performer_key, payload = JCS(Receipt))      // §3, §4.1
 
 *Decision noted: cost magnitudes are STRING-encoded integers, not JSON numbers — RFC 8785/JCS serializes numbers via ECMAScript rules and loses precision above 2^53-1; §8 summation pushes values large; strings sidestep all cross-language number divergence. Reversal cost: medium (changes the signed shape). **Empirically confirmed by the conformance harness:** a JSON integer `9007199254740993` (2^53+1) is silently rounded to `9007199254740992` by BOTH the Go and TS verifiers — identical corruption, no divergence to detect. For money, that silent rounding is the whole danger; string-encoding eliminates the JSON-number path entirely.*
 *Decision noted: multihash-prefixed hashes + ONE pinned multibase (§4.1) — algorithm agility without a format break, and a single deterministic string form so two verifiers compute identical signed bytes. Reversal cost: low.*
-*Decision noted: explicit `binding` discriminator + binding-namespaced `method` — without it an MCP receipt can be lifted and presented as an A2A receipt, or "refund" replayed where "charge" was expected (§15). Reversal cost: low.*
+*Decision noted: explicit `binding` discriminator + binding-namespaced `method` — without it an MCP receipt can be lifted and presented as an A2A receipt, or "refund" replayed where "charge" was expected (§16). Reversal cost: low.*
 
 ### 2.1 Field rationale (the non-obvious ones)
 - **`receipt_id` is derived, not assigned** (above) — impossible to forge an id; two verifiers always compute the same id; this is what makes receipts content-addressable and chainable.
-- **`nonce` MUST be ≥128 bits from a CSPRNG.** It guarantees `receipt_id` uniqueness for genuinely-identical actions *and* prevents `receipt_id` grinding. It is **not** a replay defense on its own (see §15 — replay defense comes from verifier request-binding + Log ordering).
+- **`nonce` MUST be ≥128 bits from a CSPRNG.** It guarantees `receipt_id` uniqueness for genuinely-identical actions *and* prevents `receipt_id` grinding. It is **not** a replay defense on its own (see §16 — replay defense comes from verifier request-binding + Log ordering).
 - **`action_ref` is a hash, not the token** — never embed a bearer credential in an audit artifact. It commits to *which* token the performer claims it used, without carrying it (§6).
 - **`parent_receipt_hash` points at the *cause*, not the *child*** — a receipt is written *after* its action, so it can only reference what already happened. The DAG is built bottom-up and is immutable (§7).
 
@@ -157,7 +157,7 @@ Streaming/chunked responses have no single "the bytes" *as framed*, so v1 commit
 
 **Accepted cost (stated honestly):** **not incrementally verifiable** — the verifier MUST buffer the full response before computing `outputs_hash`. Bounded by response size; URI-large content is scoped out (§4.4). Incremental verification, if ever needed, returns as an additive mode under a profile flag, never by weakening this default.
 
-*Decision noted (Q2): decode-then-hash the WHATWG-parsed message content, framing discarded — robustness to proxy re-chunking over incremental verification. This is novel prior art and the highest-risk part; it MUST be proven with the §15 streaming conformance vectors. Reversal cost: medium.*
+*Decision noted (Q2): decode-then-hash the WHATWG-parsed message content, framing discarded — robustness to proxy re-chunking over incremental verification. This is novel prior art and the highest-risk part; it MUST be proven with the §16.1 streaming conformance vectors. Reversal cost: medium.*
 
 ### 4.4 URI-referenced parts are scoped OUT
 If a result references content by URI, the receipt records `{uri, declared_digest}` (the digest as a pinned-multibase hash string), **not** the dereferenced remote bytes (remote content can change, is off the hot path, and reintroduces a fetch dependency into verification). Verifying remote bytes match `declared_digest` is a *separate, optional* verifier step.
@@ -175,6 +175,8 @@ If a result references content by URI, the receipt records `{uri, declared_diges
 | **Outputs** (streamed) | `multihash` of the WHATWG-decoded, reassembled message content, §4.3 |
 | URI-referenced content | `{uri, declared_digest}`; remote bytes NOT fetched at verify time |
 | Authorization token | `action_ref = multihash` of the token octets the performer **claims** it used (§6) |
+| **Inputs** (local) | `multihash` of raw input octets as read — no re-canonicalization (performer sees raw bytes) |
+| **Outputs** (local) | `multihash(JCS(output object minus receipt key))` — formatting-independent, receipt cycle broken |
 
 All hash strings: multibase `base64url`-nopad, prefix `u` (§4.1).
 
@@ -186,7 +188,7 @@ When the inbound request carried an authorization token (AIP / Agentic-JWT / AP2
 
 **What this proves:** an auditor holding the receipt and a byte-identical token can show, offline, that *this execution referenced that exact token*. Combined with a fully-verified chain (§7), it shows authorization lineage.
 
-**What this explicitly does NOT do:** Vitni does **not** parse, validate, scope-check, or enforce the token (binding ≠ enforcement — that's a Biscuit/macaroon layer). **Nor does it prove the performer hashed the token it actually used** — a lying performer can record `action_ref = hash(innocuous T1)` while executing against broad `T2` (§15, *action_ref substitution*). Hence §0 says "claims," not "proves."
+**What this explicitly does NOT do:** Vitni does **not** parse, validate, scope-check, or enforce the token (binding ≠ enforcement — that's a Biscuit/macaroon layer). **Nor does it prove the performer hashed the token it actually used** — a lying performer can record `action_ref = hash(innocuous T1)` while executing against broad `T2` (§16, *action_ref substitution*). Hence §0 says "claims," not "proves."
 
 **Graft from Caveat (optional `ext`, advisory):** the performer MAY record the token's declared scope in `ext.caveats` for an after-the-fact bounds check — advisory only; the performer is self-reporting the scope it saw.
 
@@ -207,7 +209,7 @@ Multi-hop execution (Requester → Orchestrator → Specialist → Tool) produce
 - Each receipt sets `parent_receipt_hash = receipt_id` of the receipt for the action **that caused it**.
 - **Immutable & append-only by construction:** a receipt commits to its parent's content hash, so altering any ancestor invalidates every descendant's linkage.
 - **Fan-out** (one orchestrator calls 3 tools) → 3 receipts sharing one `parent_receipt_hash` — a tree, hence DAG.
-- **Full-chain verification is MANDATORY for any cost-aggregation (§8) or authorization-lineage (§6) claim** — leaf-only verification does **not** validate lineage and is vulnerable to chain-splicing (§15). Full-chain verification (1) per-receipt verifies every hop (§12 steps 1–8) under each hop's own performer key, (2) checks `child.parent_receipt_hash == receipt_id(parent)` for every link, (3) requires the root hop's `parent_receipt_hash == null` and every non-root hop's `parent_receipt_hash != null`, and (4) when a hop carries `parent_performer_id`, requires it to equal the provided parent's `performer_id` (closes the foreign-parent splice — a validly-signed receipt from the *wrong* performer cannot be re-parented in).
+- **Full-chain verification is MANDATORY for any cost-aggregation (§8) or authorization-lineage (§6) claim** — leaf-only verification does **not** validate lineage and is vulnerable to chain-splicing (§16). Full-chain verification (1) per-receipt verifies every hop (§12 steps 1–8) under each hop's own performer key, (2) checks `child.parent_receipt_hash == receipt_id(parent)` for every link, (3) requires the root hop's `parent_receipt_hash == null` and every non-root hop's `parent_receipt_hash != null`, and (4) when a hop carries `parent_performer_id`, requires it to equal the provided parent's `performer_id` (closes the foreign-parent splice — a validly-signed receipt from the *wrong* performer cannot be re-parented in).
 - **Residual (honest):** without `parent_performer_id`, a validly-signed receipt from any performer can be spliced as a parent (structural checks pass). The optional field is the defense; chains that omit it get structural integrity only, not lineage-identity binding.
 
 **What the chain proves:** "this leaf occurred within this lineage of caused-by relationships, each step signed by its performer." **Not** that the orchestrator faithfully represented the parent's intent to the child (intent integrity — out of scope).
@@ -253,12 +255,12 @@ The enum is **closed in the core** so dispute tooling can switch deterministical
 
 The performer's signing key MUST be discoverable through a channel the performer already operates:
 
-- **A2A:** publish Vitni verification key(s) in a **dedicated Vitni field in the AgentCard**. *Correction (0.2): A2A's AgentCard `signatures` field signs the card itself — A2A does NOT define a published JWKS/verification-key set for third-party object verification. So Vitni defines its own key location in the AgentCard (symmetric to MCP's `veritrail_keys`), reusing only the JWS/JCS crypto primitives, not a non-existent publishing channel.*
-- **MCP:** publish key(s) in **MCP server metadata** (`veritrail_keys` in the server's advertised metadata / `.well-known`).
+- **A2A:** publish Vitni verification key(s) in a **dedicated Vitni field in the AgentCard**. *Correction (0.2): A2A's AgentCard `signatures` field signs the card itself — A2A does NOT define a published JWKS/verification-key set for third-party object verification. So Vitni defines its own key location in the AgentCard (symmetric to MCP's `vitni_keys`), reusing only the JWS/JCS crypto primitives, not a non-existent publishing channel.*
+- **MCP:** publish key(s) in **MCP server metadata** (`vitni_keys` in the server's advertised metadata / `.well-known`).
 
 **Key rotation:** keys carry a `kid`; receipts reference `kid` in the JWS header; performers publish current + recent-past keys so in-flight receipts verify across a rotation. **The verification algorithm and curve are selected from the resolved key's published metadata (`kid → key → alg`), never from the JWS header** (§12).
 
-**Revocation [short-lived keys + Log freshness anchor]:** v1 = short-lived published key sets + the Log as freshness anchor (a `receipt_id` logged under an STH *before* a key's revocation timestamp is valid-as-of-witnessing; one logged after is rejected). Full CRL/OCSP/StatusList **deferred and flagged as a known gap.** **Honest residual (0.2):** within a stolen key's validity window the attacker can log a forged receipt *before* the revocation STH and it stays valid forever (STH timestamps are monotonic; the Log cannot retroactively exclude it); **L1 (offline) verifiers get no revocation at all.** Mitigation: minimal key lifetimes; verifiers SHOULD treat receipts near a revocation boundary with suspicion. **This is the weakest link (§15).**
+**Revocation [short-lived keys + Log freshness anchor]:** v1 = short-lived published key sets + the Log as freshness anchor (a `receipt_id` logged under an STH *before* a key's revocation timestamp is valid-as-of-witnessing; one logged after is rejected). Full CRL/OCSP/StatusList **deferred and flagged as a known gap.** **Honest residual (0.2):** within a stolen key's validity window the attacker can log a forged receipt *before* the revocation STH and it stays valid forever (STH timestamps are monotonic; the Log cannot retroactively exclude it); **L1 (offline) verifiers get no revocation at all.** Mitigation: minimal key lifetimes; verifiers SHOULD treat receipts near a revocation boundary with suspicion. **This is the weakest link (§16).**
 
 **Cross-stranger (no prior relationship): out of scope v1** (depends on WIMSE/SCIM-for-agents/DIDs, unsettled in 2026). v2 layer.
 
@@ -272,7 +274,7 @@ A receipt is non-repudiable on its own. The Log adds **defense against backdatin
 - **Inclusion proof:** Merkle audit path proving a `receipt_id` is in the log as of an STH.
 - **Witnessing:** STH MAY be co-signed by **external witnesses** so the operator cannot rewrite history alone.
 - **Optional tier:** receipts are **fully valid offline (L1)**; the Log is an **opt-in upgrade (L2)**. **L1** = signature + integrity + binding + cost. **L2** = L1 + inclusion proof + revocation freshness. A verifier states which level it checked (§12 step 9).
-- **Downgrade defense (0.2):** the signed `log_policy` field expresses the performer's commitment. `log_policy = "logged_required"` ⇒ a verifier **MUST** obtain an inclusion proof or **reject** (no silent L1 fallback). Verifiers MAY set a local minimum-level policy. Without this, a malicious presenter withholds the proof and silently forces L2→L1, discarding equivocation + revocation defenses (§15).
+- **Downgrade defense (0.2):** the signed `log_policy` field expresses the performer's commitment. `log_policy = "logged_required"` ⇒ a verifier **MUST** obtain an inclusion proof or **reject** (no silent L1 fallback). Verifiers MAY set a local minimum-level policy. Without this, a malicious presenter withholds the proof and silently forces L2→L1, discarding equivocation + revocation defenses (§16).
 
 *(Full Log wire-format — STH signature scheme, tree-hash algorithm, cross-impl inclusion-proof vectors — is specified when L2 is built; L2 is opt-in, not a v1 baseline blocker.)*
 
@@ -303,20 +305,20 @@ Given a `SignedReceipt` R, optionally a transport-observed payload, optionally a
 11. VERDICT      emit { valid, level: "L1"|"L2", checks_performed, self_reported_fields, caveats }.
 ```
 
-**Normative requirement:** two independent conformant verifiers MUST produce **byte-identical** verdicts and identical recomputed hashes on every conformance vector (§15.1). This is the property the whole protocol's credibility rests on — and the reason §3/§4 pin every byte source.
+**Normative requirement:** two independent conformant verifiers MUST produce **byte-identical** verdicts and identical recomputed hashes on every conformance vector (§16.1). This is the property the whole protocol's credibility rests on — and the reason §3/§4 pin every byte source.
 
 ---
 
 ## 13. MCP binding
 
-- A receipt rides in the MCP **tool-call result** under a **reverse-DNS `_meta` key: `dev.veritrail/receipt`** (single-label and `mcp`/`modelcontextprotocol` second-labels are reserved; reverse-DNS avoids collision). Pin to a targeted MCP spec version in the conformance suite.
+- A receipt rides in the MCP **tool-call result** under a **reverse-DNS `_meta` key: `dev.vitni/receipt`** (single-label and `mcp`/`modelcontextprotocol` second-labels are reserved; reverse-DNS avoids collision). Pin to a targeted MCP spec version in the conformance suite.
 - **Rationale (corrected 0.2):** `_meta` is the sanctioned, forward-compatible Result-extension namespace. It is **not** an `outputSchema` workaround — `outputSchema` validates only `structuredContent`, so a sibling field would not be rejected anyway. (Shipping the old false rationale would invite an implementer to move the receipt top-level, which *would* then collide.)
 - **`inputs_hash`** = `multihash(JCS(params))` (§4.2 — the server gets parsed params, not octets).
 - **`outputs_hash`** (pinned): `multihash` over `JCS(result object excluding _meta)` — this naturally excludes the embedded receipt and resolves the content-vs-structuredContent ambiguity (MCP structured tools SHOULD return the data in both; hashing the whole result-minus-`_meta` covers both deterministically).
-- Zero new transport, zero extra round-trip; a client that doesn't understand `dev.veritrail/receipt` ignores it (forward-compatible).
+- Zero new transport, zero extra round-trip; a client that doesn't understand `dev.vitni/receipt` ignores it (forward-compatible).
 
 > **Empirically validated (2026-05-28) against `@modelcontextprotocol/sdk` v1.29.0** via an end-to-end demo (`ts/src/mcp/`, official `Server`/`Client` over `InMemoryTransport`):
-> - The `_meta["dev.veritrail/receipt"]` JWS **survives JSON-RPC serialization and the client's `CallToolResultSchema` parse intact** — the Result `_meta` schema is `$loose` (passthrough), so reverse-DNS-namespaced keys are preserved, not stripped or reordered.
+> - The `_meta["dev.vitni/receipt"]` JWS **survives JSON-RPC serialization and the client's `CallToolResultSchema` parse intact** — the Result `_meta` schema is `$loose` (passthrough), so reverse-DNS-namespaced keys are preserved, not stripped or reordered.
 > - **`outputSchema` validation is orthogonal:** `McpServer` validates only `result.structuredContent` against the declared schema and never inspects `_meta`. A tool may declare an `outputSchema` and still carry a receipt — co-signing is compatible with structured-output tools.
 > - Cleanest injection point is the low-level `Server` + `setRequestHandler(CallToolRequestSchema, …)` (returns a plain result envelope to attach `_meta` to); wrapping `registerTool`'s callback also works.
 > - The middleware MUST sign over the **JCS-canonical** payload octets, or §7 verification correctly rejects the receipt as `non_canonical_payload`. Round-trip + tamper-rejection both confirmed.
@@ -334,13 +336,40 @@ Given a `SignedReceipt` R, optionally a transport-observed payload, optionally a
 - *Q5 (open default):* define artifact canonicalization Vitni-local **now** (we must), AND open a spec contribution to A2A in parallel — standards leverage (report §10.4) without blocking v1 on a committee.
 
 > **Empirically validated (2026-05-28) against `@a2a-js/sdk` v0.3.13** via an end-to-end demo (`ts/src/a2a/`, real `AgentExecutor` + `DefaultRequestHandler` + `InMemoryTaskStore` + `ExecutionEventBus`):
-> - The receipt lives at **`artifact.metadata["dev.veritrail/receipt"]`** (reverse-DNS namespaced). `Artifact.metadata` is typed `{ [k: string]: unknown }` (passthrough), so the receipt **survives intact** through the handler → task-store → event-bus path; confirmed by reading `task.artifacts[0].metadata` on the consumer side.
+> - The receipt lives at **`artifact.metadata["dev.vitni/receipt"]`** (reverse-DNS namespaced). `Artifact.metadata` is typed `{ [k: string]: unknown }` (passthrough), so the receipt **survives intact** through the handler → task-store → event-bus path; confirmed by reading `task.artifacts[0].metadata` on the consumer side.
 > - `outputs_hash` is the **§9 artifact-hash over `artifact.parts` in array order**; by-URI file parts are **never dereferenced** (only `declared_digest` is bound, §4.4).
 > - The hashed **descriptor (§9) is deliberately decoupled from A2A's raw `Part` schema** — a thin adapter maps SDK `Part` shapes into the descriptor, so an evolving A2A `Part` schema does not break receipt stability. Round-trip + tamper-rejection both confirmed.
 
 ---
 
-## 15. Threat model
+## 15. `local` binding — non-transport actions
+
+For actions that do not cross MCP or A2A — a local tool transforming input
+bytes into an output object (e.g. a serializer, a compiler, a batch job) —
+receipts use `binding: "local"` and `method: "local:<tool>"` (e.g.
+`local:daimon.serialize`). Overloading `binding: "mcp"` for a non-MCP action
+is exactly the cross-binding lifting the discriminator exists to defeat (§2
+rationale) and is non-conformant.
+
+Byte sources (the local hashing profile):
+
+- **`inputs_hash`** = `multihash(raw input bytes)` — the exact octet sequence
+  of the input file/stream as read, NO re-canonicalization. Unlike MCP (§13),
+  a local performer sees raw octets, so §4.2's OUTPUTS rule ("hash the exact
+  octets") applies to its input side too. Re-canonicalization is justified
+  only when the signer never sees raw octets.
+- **`outputs_hash`** = `multihash(JCS(output object with the receipt-carrying
+  key removed))` — formatting-independent, so a pretty-printed local copy and
+  a re-dumped mirror verify identically; excluding the receipt key breaks the
+  self-reference cycle (same construction as MCP's `_meta` exclusion, §13).
+
+The receipt itself travels wherever the output travels — as a top-level key
+of the output document, in a sidecar, or both. `local` receipts carry no
+transport metadata key; `dev.vitni/receipt` (§13) is MCP/A2A-specific.
+
+---
+
+## 16. Threat model
 
 | Attack | Outcome |
 |--------|---------|
@@ -364,12 +393,12 @@ Given a `SignedReceipt` R, optionally a transport-observed payload, optionally a
 
 **Honest summary:** Vitni converts disputes from *unreconstructable* to *adjudicable* and pushes the trust boundary one hop (to the performer, who has identity and accountability). It does not manufacture trust where none exists, and it does not touch the field's deepest wound (intent integrity).
 
-### 15.1 Conformance vectors (the artifact that makes "conformant" falsifiable)
+### 16.1 Conformance vectors (the artifact that makes "conformant" falsifiable)
 At minimum: valid receipt; tampered receipt; `none`-alg and header-key-material attacks; non-canonical payload; multihash-string round-trip (exact string asserted); over-2^53 cost; **SSE streaming set — CRLF vs LF vs lone-CR framing, leading BOM, comment line, split `data:` lines, JSON-RPC-over-SSE inner-result — all MUST hash identically**; chain (valid lineage + spliced/dangling parent); L1 vs L2 verdicts; MCP `result`-minus-`_meta` output hashing; A2A mixed-`Part` artifact. Two *independent* verifier implementations MUST agree byte-for-byte on every vector.
 
 ---
 
-## 16. Design questions — status
+## 17. Design questions — status
 
 **Resolved (0.1):** Q1 JWS-only · Q2 decode-then-hash · Q3 short-lived-keys+Log · Q4 Log optional (L1/L2).
 **Resolved (0.2, from review):** hash-string multibase pinned · SSE decode unit specified · JWS≡JCS invariant · inputs/outputs hashing split · JOSE hardening · cost-as-strings · AP2 corrected · `binding`+`method` discriminator · `log_policy` · §9 value-cap fence · A2A key-location defined · full-chain mandatory for aggregation.
@@ -379,16 +408,16 @@ At minimum: valid receipt; tampered receipt; `none`-alg and header-key-material 
 
 ---
 
-## 17. What a v0.1 reference implementation would contain (for grounding, not built yet)
+## 18. What a v0.1 reference implementation would contain (for grounding, not built yet)
 1. **Receipt library** (Py + TS): build/sign/serialize a Receipt (JWS over JCS; pinned multibase; string-int cost).
-2. **Co-signing middleware** (Py + TS): wrap an MCP server / A2A provider; emit `dev.veritrail/receipt`. **Co-signed-only; no self-signed mode in the codebase.**
-3. **Two *independent* verifiers** (different languages) — to enforce the §12 byte-identical-verdict requirement against §15.1.
-4. **Conformance vector suite** (§15.1) — the falsifiability artifact.
+2. **Co-signing middleware** (Py + TS): wrap an MCP server / A2A provider; emit `dev.vitni/receipt`. **Co-signed-only; no self-signed mode in the codebase.**
+3. **Two *independent* verifiers** (different languages) — to enforce the §12 byte-identical-verdict requirement against §16.1.
+4. **Conformance vector suite** (§16.1) — the falsifiability artifact.
 5. **(Later) Log service** — RFC 6962-style Merkle log + STH + inclusion proofs + witness co-signing.
 
 ---
 
-## 18. Known gaps / roadmap
+## 19. Known gaps / roadmap
 - **Revocation** beyond short-lived-keys+Log (CRL/OCSP/StatusList) — weakest link (§10).
 - **Cross-stranger identity** (WIMSE/SCIM/DIDs) — the v2 root-of-trust layer.
 - **COSE/binary profile** — additive post-v1 (§3).

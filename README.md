@@ -5,14 +5,14 @@
 <p align="center">
   <a href="https://github.com/Daily-Nerd/vitni/actions/workflows/conformance.yml"><img src="https://github.com/Daily-Nerd/vitni/actions/workflows/conformance.yml/badge.svg" alt="conformance"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
-  <img src="https://img.shields.io/badge/conformance-42%2F42-brightgreen" alt="conformance 42/42">
+  <img src="https://img.shields.io/badge/conformance-47%2F47-brightgreen" alt="conformance 47/47">
 </p>
 
 ---
 
 > **Status: early / design-validated.** The protocol and a two-language reference (Go + TypeScript) are validated byte-for-byte against a conformance suite. APIs will change before `v1`. See [ROADMAP](ROADMAP.md).
 >
-> **Note on the wire string:** receipts currently carry `v: "veritrail/0.1"` (the protocol's original name). The wire string flips to `vitni/0.2` in the next protocol revision, together with a full conformance-vector regeneration — the two names are never mixed within one protocol version.
+> **Wire string:** receipts carry `v: "vitni/0.2"` as of protocol revision 0.2. Receipts signed under the pre-rename `veritrail/0.1` remain verifiable — verification never inspects `v` — but new receipts always stamp the current string.
 
 ## What it is
 

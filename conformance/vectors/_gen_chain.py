@@ -4,7 +4,7 @@
 Reuses the same fixed TEST keypairs as _gen_verify.py. Builds real multi-hop signed
 receipt chains and sets the expected verdict per vector by construction.
 
-Run: uv run --with cryptography --no-project python vectors/_gen_chain.py
+Run: uv run --with cryptography --with ecdsa --no-project python vectors/_gen_chain.py
 """
 import base64
 import hashlib
@@ -12,8 +12,8 @@ import json
 import pathlib
 
 from cryptography.hazmat.primitives.asymmetric import ed25519, ec
-from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
-from cryptography.hazmat.primitives import hashes
+from ecdsa import SigningKey, NIST256p
+from ecdsa.util import sigencode_string
 
 OUT = pathlib.Path(__file__).parent
 
@@ -37,6 +37,9 @@ EC_D = 0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF
 ec_priv = ec.derive_private_key(EC_D, ec.SECP256R1())
 _n = ec_priv.public_key().public_numbers()
 ec_x, ec_y = _n.x.to_bytes(32, "big"), _n.y.to_bytes(32, "big")
+# RFC 6979 deterministic ECDSA signer (same secret exponent) — cryptography's
+# ECDSA nonce is randomized, which would make regenerated vectors non-reproducible.
+ec_sk = SigningKey.from_secret_exponent(EC_D, curve=NIST256p)
 
 REGISTRY = {
     "srv-ed": {"ed-1": {"kty": "OKP", "crv": "Ed25519", "x": b64u(ed_pub), "alg": "EdDSA", "status": "active"}},
@@ -54,15 +57,14 @@ def sign(performer_id, payload_bytes):
     if alg == "EdDSA":
         sig = ed_priv.sign(si)
     else:
-        der = ec_priv.sign(si, ec.ECDSA(hashes.SHA256()))
-        r, s = decode_dss_signature(der)
-        sig = r.to_bytes(32, "big") + s.to_bytes(32, "big")
+        # RFC 6979 deterministic nonce; sigencode_string yields JWS raw R||S (64 bytes)
+        sig = ec_sk.sign_deterministic(si, hashfunc=hashlib.sha256, sigencode=sigencode_string)
     return f"{h}.{p}.{b64u(sig)}", sig
 
 
 def receipt(performer_id, method, parent_hash, parent_perf):
     return {
-        "v": "veritrail/0.1", "binding": "mcp", "action_ref": None,
+        "v": "vitni/0.2", "binding": "mcp", "action_ref": None,
         "performer_id": performer_id, "requester_id": None, "method": method,
         "inputs_hash": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
         "outputs_hash": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",

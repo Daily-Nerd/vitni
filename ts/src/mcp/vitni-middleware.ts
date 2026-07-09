@@ -10,7 +10,7 @@
  *
  * The receipt is signed (Ed25519 / EdDSA JWS, payload = JCS-canonical octets so it
  * round-trips through §7 verify with no non_canonical_payload failure) and attached
- * to the MCP result at result._meta["dev.veritrail/receipt"].
+ * to the MCP result at result._meta["dev.vitni/receipt"].
  *
  * A client that ignores _meta is entirely unaffected — the receipt is additive.
  */
@@ -26,7 +26,7 @@ import type { RegistryJwk } from '../commands/verify.js';
 import { VERSION } from '../version.js';
 
 /** The _meta key the receipt JWS is published under (design §13). */
-export const RECEIPT_META_KEY = 'dev.veritrail/receipt';
+export const RECEIPT_META_KEY = 'dev.vitni/receipt';
 
 /** A test signer: an Ed25519 private key plus its registry identity. */
 export interface TestSigner {
@@ -164,7 +164,7 @@ export function signReceipt(payload: Record<string, unknown>, signer: TestSigner
 
 /**
  * The full middleware step: given a tool call and its result, build + sign the
- * receipt and attach it to result._meta["dev.veritrail/receipt"]. Returns the same
+ * receipt and attach it to result._meta["dev.vitni/receipt"]. Returns the same
  * result object (mutated) for convenience.
  */
 export function vitniToolResult(opts: BuildReceiptOptions): McpResultLike {

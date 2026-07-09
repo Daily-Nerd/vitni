@@ -14,7 +14,7 @@ import (
 // the public Verify API accepts under the matching registry key.
 func TestSign_RoundTripsWithVerify(t *testing.T) {
 	// Deterministic Ed25519 keypair from a fixed 32-byte seed.
-	seed := []byte("veritrail-test-ed25519-seed-32by")
+	seed := []byte("vitni-test-ed25519-seed-32bytes!")
 	if len(seed) != ed25519.SeedSize {
 		t.Fatalf("seed size = %d, want %d", len(seed), ed25519.SeedSize)
 	}
@@ -59,11 +59,11 @@ func TestSign_RoundTripsWithVerify(t *testing.T) {
 	if payload["v"] != vitni.Version {
 		t.Errorf("payload v = %v, want %s", payload["v"], vitni.Version)
 	}
-	if vitni.Version != "veritrail/0.1" {
-		t.Errorf("Version const = %q, want veritrail/0.1", vitni.Version)
+	if vitni.Version != "vitni/0.2" {
+		t.Errorf("Version const = %q, want vitni/0.2", vitni.Version)
 	}
-	if vitni.MCPMetaKey != "dev.veritrail/receipt" {
-		t.Errorf("MCPMetaKey const = %q, want dev.veritrail/receipt", vitni.MCPMetaKey)
+	if vitni.MCPMetaKey != "dev.vitni/receipt" {
+		t.Errorf("MCPMetaKey const = %q, want dev.vitni/receipt", vitni.MCPMetaKey)
 	}
 
 	// Verify must accept it.

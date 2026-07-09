@@ -16,7 +16,7 @@ The protocol and a two-language reference were built and validated cold against 
 
 - [ ] Extract a clean `vitni` library API (separate from harness/demo code), Go + TS
 - [ ] Publish packages: npm (`vitni`), Go module (`github.com/Daily-Nerd/vitni/go`)
-- [ ] Port the conformance vector suite into `conformance/` (regenerated at `veritrail/0.1`)
+- [ ] Port the conformance vector suite into `conformance/` (regenerated at `vitni/0.2`)
 - [ ] CI: cross-impl conformance must pass on every commit
 - [ ] `vitni` CLI: `sign`, `verify`, `verify-chain`
 - [ ] One-line adoption surface: middleware decorators for MCP servers / A2A providers

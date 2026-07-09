@@ -1,6 +1,7 @@
 package vitni_test
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/hex"
@@ -516,5 +517,37 @@ func TestVectors_CostCanon(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestExtField(t *testing.T) {
+	base := vitni.Receipt{
+		V: "vitni/0.2", Binding: "local", PerformerID: "daimon:kibukx",
+		Method: "local:daimon.serialize",
+		InputsHash:  "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
+		OutputsHash: "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
+		Cost:      vitni.Cost{Tokens: "10", USDMicros: "0", WallMs: "3"},
+		Status:    "OK", LogPolicy: "best_effort",
+		Ts: "2026-05-28T00:00:00Z", Nonce: "uEiDjsMRCmPwcFJr79MiZb7kkJ65B5GSbk0yklZkbeFK4VQ",
+	}
+
+	// nil Ext must serialize WITHOUT an "ext" key ("| absent" in the spec)
+	noExt, err := json.Marshal(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(noExt, []byte(`"ext"`)) {
+		t.Errorf("nil Ext must be absent from JSON, got %s", noExt)
+	}
+
+	// set Ext must serialize as a JSON object under "ext"
+	withExt := base
+	withExt.Ext = map[string]any{"dev.daimon/prompt_version": "3"}
+	got, err := json.Marshal(withExt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(got, []byte(`"ext":{"dev.daimon/prompt_version":"3"}`)) {
+		t.Errorf("Ext not serialized, got %s", got)
 	}
 }

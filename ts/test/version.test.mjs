@@ -19,12 +19,12 @@ const SRC = join(__dirname, '../src');
 const { VERSION } = await import(`${DIST}/version.js`);
 
 test('VERSION is the pinned protocol version string', () => {
-  assert.equal(VERSION, 'veritrail/0.1');
+  assert.equal(VERSION, 'vitni/0.2');
 });
 
 test('VERSION is re-exported from the package index', async () => {
   const idx = await import(`${DIST}/index.js`);
-  assert.equal(idx.VERSION, 'veritrail/0.1');
+  assert.equal(idx.VERSION, 'vitni/0.2');
 });
 
 test('the protocol version is not hardcoded outside version.ts', () => {
@@ -33,7 +33,7 @@ test('the protocol version is not hardcoded outside version.ts', () => {
   for (const rel of ['commands/sign.ts', 'mcp/vitni-middleware.ts', 'a2a/vitni-a2a-middleware.ts']) {
     const text = readFileSync(join(SRC, rel), 'utf8');
     assert.ok(
-      !/['"]veritrail\/0\.1['"]/.test(text),
+      !/['"](?:vitni\/0\.2|veritrail\/0\.1)['"]/.test(text),
       `${rel} hardcodes the protocol version string; import VERSION from version.ts instead`
     );
   }
