@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Veritrail conformance vectors with externally-computed anchors.
+"""Generate Vitni conformance vectors with externally-computed anchors.
 
 Anchors come from Python's hashlib/base64 (independent of the Go and TS verifier
 impls under test), so a passing anchor means both impls match a third source.
