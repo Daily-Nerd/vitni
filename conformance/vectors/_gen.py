@@ -210,3 +210,25 @@ write("neg-cost-bool-magnitude.json", {"name":"cost-canon/bool-magnitude","comma
 write("neg-cost-null-magnitude.json", {"name":"cost-canon/null-magnitude","command":"cost-canon","input":{"cost":{"tokens":None,"usd_micros":"0","wall_ms":"3","rail_ref":None}},"anchor":{"error":"cost_must_be_string_int"}})
 write("neg-sse-malformed-b64.json", {"name":"sse-outputs-hash/malformed-base64","command":"sse-outputs-hash","input":{"mode":"sse","raw_b64":"aa!!!garbage"},"anchor":{"error":"invalid_input"}})
 write("neg-a2a-malformed-inline-b64.json", {"name":"a2a-artifact-hash/malformed-inline-base64","command":"a2a-artifact-hash","input":{"artifact":{"parts":[{"kind":"file","file":{"bytes":"aa!!!@@@"}}]}},"anchor":{"error":"invalid_input"}})
+
+# --- duplicate-key vectors (§4.1 no-duplicate-keys; #34). input_raw pins the exact
+# stdin bytes so the dup keys survive the harness's own JSON.parse. Go rejects at
+# jcs.Transform for exactly these three commands (others keep-last), so TS matches. ---
+write("neg-dup-jcs.json", {"name":"jcs/duplicate-key","command":"jcs",
+      "input_raw":'{"value":{"a":1,"a":2}}',"anchor":{"error":"invalid_input"}})
+write("neg-dup-jcs-nested.json", {"name":"jcs/duplicate-key-nested","command":"jcs",
+      "input_raw":'{"value":{"outer":{"b":1,"b":2}}}',"anchor":{"error":"invalid_input"}})
+write("neg-dup-receipt-id.json", {"name":"receipt-id/duplicate-key","command":"receipt-id",
+      "input_raw":'{"receipt":{"v":"vitni/0.2","v":"x"}}',"anchor":{"error":"invalid_input"}})
+write("neg-dup-cost-canon.json", {"name":"cost-canon/duplicate-key","command":"cost-canon",
+      "input_raw":'{"cost":{"tokens":"1","tokens":"2","usd_micros":"0","wall_ms":"0","rail_ref":null}}',"anchor":{"error":"invalid_input"}})
+
+# --- sign negative vectors (#34): unknown top-level key and non-string cost are
+# rejected at sign (§2 / §4.1). Full receipt supplied; both impls error before signing. ---
+_sign_key = {"kid":"ed-1","private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}
+_base_receipt = dict(receipt)  # the happy-path receipt built earlier (v vitni/0.2, string cost)
+write("neg-sign-unknown-key.json", {"name":"sign/unknown-top-level-key","command":"sign",
+      "input":{"receipt":dict(_base_receipt, FOO="x"), **_sign_key},"anchor":{"error":"invalid_input"}})
+write("neg-sign-numeric-cost.json", {"name":"sign/numeric-cost-magnitude","command":"sign",
+      "input":{"receipt":dict(_base_receipt, cost={"tokens":10,"usd_micros":"0","wall_ms":"3","rail_ref":None}),**_sign_key},
+      "anchor":{"error":"invalid_input"}})

@@ -15,10 +15,21 @@ import (
 
 // vectorFile represents a test vector loaded from disk.
 type vectorFile struct {
-	Name    string          `json:"name"`
-	Command string          `json:"command"`
-	Input   json.RawMessage `json:"input"`
-	Anchor  json.RawMessage `json:"anchor"`
+	Name     string          `json:"name"`
+	Command  string          `json:"command"`
+	Input    json.RawMessage `json:"input"`
+	InputRaw string          `json:"input_raw"`
+	Anchor   json.RawMessage `json:"anchor"`
+}
+
+// isErrorVectorRaw reports whether a vector's anchor asserts an error.
+func isErrorVectorRaw(anchor json.RawMessage) bool {
+	var a map[string]json.RawMessage
+	if json.Unmarshal(anchor, &a) != nil {
+		return false
+	}
+	_, ok := a["error"]
+	return ok
 }
 
 // loadVectors loads all *.json files from the vectors directory relative to the module root.
@@ -259,6 +270,9 @@ func TestVectors_JCS(t *testing.T) {
 		}
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
+			if v.InputRaw != "" {
+				t.Skip("input_raw duplicate-key vector; CLI-layer, covered by compare.mjs")
+			}
 			var inp struct {
 				Value json.RawMessage `json:"value"`
 			}
@@ -344,6 +358,9 @@ func TestVectors_ReceiptID(t *testing.T) {
 		}
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
+			if v.InputRaw != "" {
+				t.Skip("input_raw duplicate-key vector; CLI-layer, covered by compare.mjs")
+			}
 			var inp struct {
 				Receipt json.RawMessage `json:"receipt"`
 			}
@@ -429,6 +446,9 @@ func TestVectors_Sign(t *testing.T) {
 		}
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
+			if isErrorVectorRaw(v.Anchor) {
+				t.Skip("CLI-layer sign rejection (unknown key / non-string cost); covered by compare.mjs")
+			}
 			var inp struct {
 				Receipt       json.RawMessage `json:"receipt"`
 				Kid           string          `json:"kid"`
@@ -521,6 +541,9 @@ func TestVectors_CostCanon(t *testing.T) {
 		}
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
+			if v.InputRaw != "" {
+				t.Skip("input_raw duplicate-key vector; CLI-layer, covered by compare.mjs")
+			}
 			var inp struct {
 				Cost json.RawMessage `json:"cost"`
 			}

@@ -1,0 +1,1 @@
+{"name": "jcs/duplicate-key-nested", "command": "jcs", "input_raw": "{\"value\":{\"outer\":{\"b\":1,\"b\":2}}}", "anchor": {"error": "invalid_input"}}

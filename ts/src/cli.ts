@@ -20,6 +20,7 @@ import { verifyChain } from './commands/verify-chain.js';
 import { a2aArtifactHash } from './commands/a2a-artifact-hash.js';
 import { sign } from './commands/sign.js';
 import { jcsString } from './commands/jcs.js';
+import { rejectsForDuplicateKeys } from './commands/strict-json.js';
 
 async function readStdin(): Promise<string> {
   // Robust across platforms: async-iterate the stream. Avoids the
@@ -51,6 +52,13 @@ async function main() {
     input = JSON.parse(raw);
   } catch {
     process.stdout.write(JSON.stringify({ error: 'invalid_json' }) + '\n');
+    return;
+  }
+
+  // §4.1 (strict I-JSON): reject duplicate keys for the JCS-canonicalizing
+  // commands, matching the Go reference (JSON.parse above silently kept last).
+  if (rejectsForDuplicateKeys(command, raw)) {
+    process.stdout.write(jcsString({ error: 'invalid_input' }) + '\n');
     return;
   }
 

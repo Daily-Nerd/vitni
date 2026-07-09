@@ -310,6 +310,16 @@ func runA2AArtifactHash(stdin []byte) (json.RawMessage, error) {
 // seed. private_key_b64 is the RFC 8032 seed (NOT the 64-byte expanded key) — the
 // only runtime-portable form. We expand it via ed25519.NewKeyFromSeed and reuse the
 // existing vitni.Sign primitive so framing matches Verify exactly.
+// knownReceiptKeys is the closed set of top-level Receipt fields (§2). Anything
+// else is rejected at sign time; extensions belong in `ext`.
+var knownReceiptKeys = map[string]bool{
+	"v": true, "binding": true, "action_ref": true, "performer_id": true,
+	"requester_id": true, "method": true, "inputs_hash": true, "outputs_hash": true,
+	"cost": true, "status": true, "reason": true, "parent_receipt_hash": true,
+	"parent_performer_id": true, "log_policy": true, "ts": true, "nonce": true,
+	"ext": true,
+}
+
 func runSign(stdin []byte) (json.RawMessage, error) {
 	var inp struct {
 		Receipt       json.RawMessage `json:"receipt"`
@@ -332,6 +342,16 @@ func runSign(stdin []byte) (json.RawMessage, error) {
 	// receipt_id must be absent (reuse the existing contract).
 	if _, present := receiptObj["receipt_id"]; present {
 		return nil, vitni.ErrReceiptIDMustBeAbsent
+	}
+
+	// Reject unknown top-level keys: the Receipt is a defined object and
+	// forward-compatible extensions belong in `ext`. Signing over an unknown
+	// key (or silently dropping it) would let un-schema'd data affect — or
+	// vanish from — the signed bytes and receipt_id. (§2)
+	for k := range receiptObj {
+		if !knownReceiptKeys[k] {
+			return nil, fmt.Errorf("invalid_input: unknown receipt field %q", k)
+		}
 	}
 
 	// kid required.

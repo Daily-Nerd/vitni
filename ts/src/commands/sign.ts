@@ -33,6 +33,13 @@ export interface SignOutput {
 /** The fixed 16-byte ASN.1/PKCS8 prefix for a raw Ed25519 private seed (RFC 8410). */
 const PKCS8_ED25519_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex');
 
+/** Closed set of top-level Receipt fields (§2); anything else is rejected at sign. */
+const KNOWN_RECEIPT_KEYS = new Set([
+  'v', 'binding', 'action_ref', 'performer_id', 'requester_id', 'method',
+  'inputs_hash', 'outputs_hash', 'cost', 'status', 'reason',
+  'parent_receipt_hash', 'parent_performer_id', 'log_policy', 'ts', 'nonce', 'ext',
+]);
+
 function b64url(buf: Buffer): string {
   return buf.toString('base64url');
 }
@@ -83,6 +90,27 @@ export function sign(input: SignInput): SignOutput | { error: string } {
   // --- receipt_id must be absent (reuse the existing contract) ---
   if (Object.prototype.hasOwnProperty.call(receipt, 'receipt_id')) {
     return { error: 'receipt_id_must_be_absent' };
+  }
+
+  // --- reject unknown top-level keys (§2): the Receipt is a defined object;
+  // forward-compatible extensions belong in `ext`. Signing over an unknown key
+  // would let un-schema'd data into the signed bytes and receipt_id. ---
+  for (const k of Object.keys(receipt)) {
+    if (!KNOWN_RECEIPT_KEYS.has(k)) {
+      return { error: 'invalid_input' };
+    }
+  }
+
+  // --- cost magnitudes MUST be decimal strings (§4.1): reject a numeric (or
+  // any non-string) magnitude, matching Go's typed-struct rejection. ---
+  const cost = receipt.cost;
+  if (cost !== null && typeof cost === 'object' && !Array.isArray(cost)) {
+    for (const field of ['tokens', 'usd_micros', 'wall_ms'] as const) {
+      const val = (cost as Record<string, unknown>)[field];
+      if (val !== undefined && typeof val !== 'string') {
+        return { error: 'invalid_input' };
+      }
+    }
   }
 
   // --- kid required ---
