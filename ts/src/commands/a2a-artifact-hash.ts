@@ -19,6 +19,7 @@
  */
 import { jcsBytes } from './jcs.js';
 import { digestBytes } from './digest.js';
+import { decodeStdBase64 } from './decode.js';
 
 interface A2AFile {
   bytes?: string;
@@ -72,7 +73,10 @@ function partToDescriptor(part: A2APart): Record<string, unknown> | ErrorResult 
     }
     if (typeof file.bytes === 'string') {
       // inline: hash the bytes, never embed them
-      const decoded = Buffer.from(file.bytes, 'base64');
+      const decoded = decodeStdBase64(file.bytes);
+      if (decoded === null) {
+        return { error: 'invalid_input' };
+      }
       return {
         kind: 'file',
         digest: digestBytes(decoded),

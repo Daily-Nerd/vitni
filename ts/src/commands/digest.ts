@@ -3,6 +3,7 @@
  */
 import { createHash } from 'node:crypto';
 import { encodeHashstring } from './hashstring.js';
+import { decodeStdBase64 } from './decode.js';
 
 export interface DigestInput {
   bytes_b64: string;
@@ -17,7 +18,8 @@ export function digestBytes(rawBytes: Buffer): string {
   return encodeHashstring(sha);
 }
 
-export function digest(input: DigestInput): DigestOutput {
-  const raw = Buffer.from(input.bytes_b64, 'base64');
+export function digest(input: DigestInput): DigestOutput | { error: string } {
+  const raw = decodeStdBase64(input.bytes_b64);
+  if (raw === null) return { error: 'invalid_input' };
   return { hashstr: digestBytes(raw) };
 }
