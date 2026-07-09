@@ -44,6 +44,9 @@ type Receipt struct {
 	LogPolicy         string  `json:"log_policy"`
 	Ts                string  `json:"ts"`
 	Nonce             string  `json:"nonce"`
+	// Ext carries OPTIONAL namespaced extensions (design §"ext"); it never
+	// affects core verification and is absent from the wire when nil.
+	Ext map[string]any `json:"ext,omitempty"`
 }
 
 // Sign produces a JWS-compact signed receipt (header.payload.signature) over the
