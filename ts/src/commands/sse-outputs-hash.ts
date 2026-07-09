@@ -19,6 +19,7 @@
  */
 import { digestBytes } from './digest.js';
 import { jcsBytes } from './jcs.js';
+import { decodeStdBase64 } from './decode.js';
 
 export interface SseInput {
   raw_b64: string;
@@ -133,7 +134,8 @@ export function sseOutputsHash(input: SseInput): SseOutput | { error: string } {
     return { error: 'unsupported_mode' };
   }
 
-  const raw = Buffer.from(input.raw_b64, 'base64');
+  const raw = decodeStdBase64(input.raw_b64);
+  if (raw === null) return { error: 'invalid_input' };
   const messages = parseSse(raw);
 
   let committed: Buffer;

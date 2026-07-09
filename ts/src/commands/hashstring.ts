@@ -8,6 +8,7 @@
  *
  * Only supports algo "sha2-256" (code 0x12, length 0x20 = 32).
  */
+import { decodeHex } from './decode.js';
 
 export interface HashstringInput {
   algo: string;
@@ -34,6 +35,7 @@ export function hashstring(input: HashstringInput): HashstringOutput | { error: 
   if (input.algo !== 'sha2-256') {
     return { error: 'unsupported_algo' };
   }
-  const digestBytes = Buffer.from(input.digest_hex, 'hex');
+  const digestBytes = decodeHex(input.digest_hex);
+  if (digestBytes === null) return { error: 'invalid_input' };
   return { hashstr: encodeHashstring(digestBytes) };
 }

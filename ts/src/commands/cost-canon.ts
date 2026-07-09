@@ -28,10 +28,13 @@ export interface CostOutput {
 export function costCanon(input: CostInput): CostOutput | { error: string } {
   const { cost } = input;
 
-  // Validate: tokens, usd_micros, wall_ms must be strings, not numbers
+  // §4.1: every magnitude is a decimal string — no JSON numbers, and no
+  // bool/null/array/object either. Go rejects anything whose raw JSON value
+  // does not start with '"'; mirror that by requiring a string type for every
+  // present magnitude field (absent is left alone, as in Go).
   const magnitudeFields: Array<keyof CostBlock> = ['tokens', 'usd_micros', 'wall_ms'];
   for (const field of magnitudeFields) {
-    if (typeof cost[field] === 'number') {
+    if (cost[field] !== undefined && typeof cost[field] !== 'string') {
       return { error: 'cost_must_be_string_int' };
     }
   }
