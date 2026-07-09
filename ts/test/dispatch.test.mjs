@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const DIST = new URL('../dist', import.meta.url).pathname;
-const { dispatch } = await import(`${DIST}/cli.js`);
+const { dispatch, main, writeFatal } = await import(`${DIST}/cli.js`);
 
 const parse = (s) => JSON.parse(s);
 
@@ -30,6 +30,7 @@ test('dispatch: every command routes and produces output', () => {
     verify: '{"signed_receipt":"a.b.c","keys":{},"policy":null}',
     'verify-chain': '{"receipts":[],"keys":{},"policy":null}',
     'a2a-artifact-hash': '{"artifact":{"parts":[{"kind":"text","text":"hi"}]}}',
+    sign: '{"receipt":{"v":"vitni/0.2","binding":"mcp","action_ref":null,"performer_id":"srv","requester_id":null,"method":"mcp:x","inputs_hash":"uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA","outputs_hash":"uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA","cost":{"tokens":"10","usd_micros":"0","wall_ms":"3","rail_ref":null},"status":"OK","reason":null,"parent_receipt_hash":null,"log_policy":"best_effort","ts":"2026-05-28T00:00:00Z","nonce":"uEiDjsMRCmPwcFJr79MiZb7kkJ65B5GSbk0yklZkbeFK4VQ"},"kid":"ed-1","private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}',
   };
   for (const [cmd, raw] of Object.entries(cases)) {
     const out = dispatch(cmd, raw);
@@ -45,4 +46,27 @@ test('dispatch: internal_error when a command throws', () => {
   // sse-outputs-hash with a non-string raw_b64 makes the decoder throw internally.
   const out = parse(dispatch('sse-outputs-hash', '{"mode":"sse","raw_b64":123}'));
   assert.ok('error' in out);
+});
+
+test('main: missing command', async () => {
+  let out = '';
+  await main(['node', 'cli'], async () => '', (s) => { out += s; });
+  assert.deepEqual(JSON.parse(out), { error: 'missing_command' });
+});
+test('main: stdin read error', async () => {
+  let out = '';
+  await main(['node', 'cli', 'jcs'], async () => { throw new Error('pipe'); }, (s) => { out += s; });
+  assert.deepEqual(JSON.parse(out), { error: 'stdin_read_error' });
+});
+test('main: happy path writes the command output', async () => {
+  let out = '';
+  await main(['node', 'cli', 'jcs'], async () => '{"value":{"a":1}}', (s) => { out += s; });
+  assert.ok(JSON.parse(out).canonical_hex);
+});
+test('writeFatal emits internal_error', () => {
+  const orig = process.stdout.write;
+  let out = '';
+  process.stdout.write = (s) => { out += s; return true; };
+  try { writeFatal(); } finally { process.stdout.write = orig; }
+  assert.deepEqual(JSON.parse(out), { error: 'internal_error' });
 });

@@ -95,22 +95,33 @@ export function dispatch(command: string, raw: string): string {
   return jcsString(result);
 }
 
-async function main() {
-  const command = process.argv[2];
+/**
+ * Entry logic with injectable I/O so it is unit-testable independently of the
+ * real process streams. Defaults wire the actual argv/stdin/stdout.
+ */
+export async function main(
+  argv: readonly string[] = process.argv,
+  read: () => Promise<string> = readStdin,
+  write: (s: string) => void = (s) => { process.stdout.write(s); },
+): Promise<void> {
+  const command = argv[2];
   if (!command) {
-    process.stdout.write(JSON.stringify({ error: 'missing_command' }) + '\n');
+    write(JSON.stringify({ error: 'missing_command' }) + '\n');
     return;
   }
   let raw: string;
   try {
-    raw = await readStdin();
+    raw = await read();
   } catch {
-    process.stdout.write(JSON.stringify({ error: 'stdin_read_error' }) + '\n');
+    write(JSON.stringify({ error: 'stdin_read_error' }) + '\n');
     return;
   }
-  process.stdout.write(dispatch(command, raw) + '\n');
+  write(dispatch(command, raw) + '\n');
 }
 
-main().catch(() => {
+/** Last-resort handler if main() itself rejects (should not happen in practice). */
+export function writeFatal(): void {
   process.stdout.write(JSON.stringify({ error: 'internal_error' }) + '\n');
-});
+}
+
+main().catch(writeFatal);
