@@ -26,6 +26,7 @@ test('decodeStdBase64 rejects out-of-alphabet, base64url, junk, bad length', () 
   assert.equal(decodeStdBase64('aGVs bG8='), null);      // whitespace
   assert.equal(decodeStdBase64('aa-_'), null);           // base64url chars
   assert.equal(decodeStdBase64('a'), null);              // impossible length (mod 4 == 1)
+  assert.equal(decodeStdBase64('YQ='), null);            // padded but not a whole 4-char quantum
 });
 
 test('decodeHex rejects odd length and non-hex', () => {
