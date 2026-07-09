@@ -62,12 +62,12 @@ The canonical logical structure (encoding rules in §3–4).
 
 ```
 Receipt {
-  v:               "veritrail/0.1"            // spec version (string, required)
-  binding:         "mcp" | "a2a"           // execution context discriminator (required, signed) — §13/§14
+  v:               "vitni/0.2"            // spec version (string, required)
+  binding:         "mcp" | "a2a" | "local"  // execution context discriminator (required, signed) — §13/§14/§15
   action_ref:      <hashstr> | null         // multihash of the auth token the performer CLAIMS was used (§6); null if none
   performer_id:    <string>                // stable identifier of the performer; resolves to a key (§10)
   requester_id:    <string> | null         // identifier of the invoking agent, as known to the performer (ADVISORY; not verifiable in v1)
-  method:          <string>                // namespaced by binding: "mcp:<tool>" | "a2a:<skill>"  (§13/§14)
+  method:          <string>                // namespaced by binding: "mcp:<tool>" | "a2a:<skill>" | "local:<tool>"  (§13/§14/§15)
   inputs_hash:     <hashstr>                // commitment to the request (§4.2, §5) — JCS(params) for MCP inputs
   outputs_hash:    <hashstr>                // commitment to the response payload (§4.2–4.3, §5)
   cost: {                                   // performer-attested cost (§8); all fields required
@@ -175,6 +175,8 @@ If a result references content by URI, the receipt records `{uri, declared_diges
 | **Outputs** (streamed) | `multihash` of the WHATWG-decoded, reassembled message content, §4.3 |
 | URI-referenced content | `{uri, declared_digest}`; remote bytes NOT fetched at verify time |
 | Authorization token | `action_ref = multihash` of the token octets the performer **claims** it used (§6) |
+| **Inputs** (local) | `multihash` of raw input octets as read — no re-canonicalization (performer sees raw bytes) |
+| **Outputs** (local) | `multihash(JCS(output object minus receipt key))` — formatting-independent, receipt cycle broken |
 
 All hash strings: multibase `base64url`-nopad, prefix `u` (§4.1).
 
@@ -253,8 +255,8 @@ The enum is **closed in the core** so dispute tooling can switch deterministical
 
 The performer's signing key MUST be discoverable through a channel the performer already operates:
 
-- **A2A:** publish Vitni verification key(s) in a **dedicated Vitni field in the AgentCard**. *Correction (0.2): A2A's AgentCard `signatures` field signs the card itself — A2A does NOT define a published JWKS/verification-key set for third-party object verification. So Vitni defines its own key location in the AgentCard (symmetric to MCP's `veritrail_keys`), reusing only the JWS/JCS crypto primitives, not a non-existent publishing channel.*
-- **MCP:** publish key(s) in **MCP server metadata** (`veritrail_keys` in the server's advertised metadata / `.well-known`).
+- **A2A:** publish Vitni verification key(s) in a **dedicated Vitni field in the AgentCard**. *Correction (0.2): A2A's AgentCard `signatures` field signs the card itself — A2A does NOT define a published JWKS/verification-key set for third-party object verification. So Vitni defines its own key location in the AgentCard (symmetric to MCP's `vitni_keys`), reusing only the JWS/JCS crypto primitives, not a non-existent publishing channel.*
+- **MCP:** publish key(s) in **MCP server metadata** (`vitni_keys` in the server's advertised metadata / `.well-known`).
 
 **Key rotation:** keys carry a `kid`; receipts reference `kid` in the JWS header; performers publish current + recent-past keys so in-flight receipts verify across a rotation. **The verification algorithm and curve are selected from the resolved key's published metadata (`kid → key → alg`), never from the JWS header** (§12).
 
@@ -309,14 +311,14 @@ Given a `SignedReceipt` R, optionally a transport-observed payload, optionally a
 
 ## 13. MCP binding
 
-- A receipt rides in the MCP **tool-call result** under a **reverse-DNS `_meta` key: `dev.veritrail/receipt`** (single-label and `mcp`/`modelcontextprotocol` second-labels are reserved; reverse-DNS avoids collision). Pin to a targeted MCP spec version in the conformance suite.
+- A receipt rides in the MCP **tool-call result** under a **reverse-DNS `_meta` key: `dev.vitni/receipt`** (single-label and `mcp`/`modelcontextprotocol` second-labels are reserved; reverse-DNS avoids collision). Pin to a targeted MCP spec version in the conformance suite.
 - **Rationale (corrected 0.2):** `_meta` is the sanctioned, forward-compatible Result-extension namespace. It is **not** an `outputSchema` workaround — `outputSchema` validates only `structuredContent`, so a sibling field would not be rejected anyway. (Shipping the old false rationale would invite an implementer to move the receipt top-level, which *would* then collide.)
 - **`inputs_hash`** = `multihash(JCS(params))` (§4.2 — the server gets parsed params, not octets).
 - **`outputs_hash`** (pinned): `multihash` over `JCS(result object excluding _meta)` — this naturally excludes the embedded receipt and resolves the content-vs-structuredContent ambiguity (MCP structured tools SHOULD return the data in both; hashing the whole result-minus-`_meta` covers both deterministically).
-- Zero new transport, zero extra round-trip; a client that doesn't understand `dev.veritrail/receipt` ignores it (forward-compatible).
+- Zero new transport, zero extra round-trip; a client that doesn't understand `dev.vitni/receipt` ignores it (forward-compatible).
 
 > **Empirically validated (2026-05-28) against `@modelcontextprotocol/sdk` v1.29.0** via an end-to-end demo (`ts/src/mcp/`, official `Server`/`Client` over `InMemoryTransport`):
-> - The `_meta["dev.veritrail/receipt"]` JWS **survives JSON-RPC serialization and the client's `CallToolResultSchema` parse intact** — the Result `_meta` schema is `$loose` (passthrough), so reverse-DNS-namespaced keys are preserved, not stripped or reordered.
+> - The `_meta["dev.vitni/receipt"]` JWS **survives JSON-RPC serialization and the client's `CallToolResultSchema` parse intact** — the Result `_meta` schema is `$loose` (passthrough), so reverse-DNS-namespaced keys are preserved, not stripped or reordered.
 > - **`outputSchema` validation is orthogonal:** `McpServer` validates only `result.structuredContent` against the declared schema and never inspects `_meta`. A tool may declare an `outputSchema` and still carry a receipt — co-signing is compatible with structured-output tools.
 > - Cleanest injection point is the low-level `Server` + `setRequestHandler(CallToolRequestSchema, …)` (returns a plain result envelope to attach `_meta` to); wrapping `registerTool`'s callback also works.
 > - The middleware MUST sign over the **JCS-canonical** payload octets, or §7 verification correctly rejects the receipt as `non_canonical_payload`. Round-trip + tamper-rejection both confirmed.
@@ -334,13 +336,40 @@ Given a `SignedReceipt` R, optionally a transport-observed payload, optionally a
 - *Q5 (open default):* define artifact canonicalization Vitni-local **now** (we must), AND open a spec contribution to A2A in parallel — standards leverage (report §10.4) without blocking v1 on a committee.
 
 > **Empirically validated (2026-05-28) against `@a2a-js/sdk` v0.3.13** via an end-to-end demo (`ts/src/a2a/`, real `AgentExecutor` + `DefaultRequestHandler` + `InMemoryTaskStore` + `ExecutionEventBus`):
-> - The receipt lives at **`artifact.metadata["dev.veritrail/receipt"]`** (reverse-DNS namespaced). `Artifact.metadata` is typed `{ [k: string]: unknown }` (passthrough), so the receipt **survives intact** through the handler → task-store → event-bus path; confirmed by reading `task.artifacts[0].metadata` on the consumer side.
+> - The receipt lives at **`artifact.metadata["dev.vitni/receipt"]`** (reverse-DNS namespaced). `Artifact.metadata` is typed `{ [k: string]: unknown }` (passthrough), so the receipt **survives intact** through the handler → task-store → event-bus path; confirmed by reading `task.artifacts[0].metadata` on the consumer side.
 > - `outputs_hash` is the **§9 artifact-hash over `artifact.parts` in array order**; by-URI file parts are **never dereferenced** (only `declared_digest` is bound, §4.4).
 > - The hashed **descriptor (§9) is deliberately decoupled from A2A's raw `Part` schema** — a thin adapter maps SDK `Part` shapes into the descriptor, so an evolving A2A `Part` schema does not break receipt stability. Round-trip + tamper-rejection both confirmed.
 
 ---
 
-## 15. Threat model
+## 15. `local` binding — non-transport actions
+
+For actions that do not cross MCP or A2A — a local tool transforming input
+bytes into an output object (e.g. a serializer, a compiler, a batch job) —
+receipts use `binding: "local"` and `method: "local:<tool>"` (e.g.
+`local:daimon.serialize`). Overloading `binding: "mcp"` for a non-MCP action
+is exactly the cross-binding lifting the discriminator exists to defeat (§99
+rationale) and is non-conformant.
+
+Byte sources (the local hashing profile):
+
+- **`inputs_hash`** = `multihash(raw input bytes)` — the exact octet sequence
+  of the input file/stream as read, NO re-canonicalization. Unlike MCP (§13),
+  a local performer sees raw octets, so §4.2's OUTPUTS rule ("hash the exact
+  octets") applies to its input side too. Re-canonicalization is justified
+  only when the signer never sees raw octets.
+- **`outputs_hash`** = `multihash(JCS(output object with the receipt-carrying
+  key removed))` — formatting-independent, so a pretty-printed local copy and
+  a re-dumped mirror verify identically; excluding the receipt key breaks the
+  self-reference cycle (same construction as MCP's `_meta` exclusion, §13).
+
+The receipt itself travels wherever the output travels — as a top-level key
+of the output document, in a sidecar, or both. `local` receipts carry no
+transport metadata key; `dev.vitni/receipt` (§13) is MCP/A2A-specific.
+
+---
+
+## 16. Threat model
 
 | Attack | Outcome |
 |--------|---------|
@@ -369,7 +398,7 @@ At minimum: valid receipt; tampered receipt; `none`-alg and header-key-material 
 
 ---
 
-## 16. Design questions — status
+## 17. Design questions — status
 
 **Resolved (0.1):** Q1 JWS-only · Q2 decode-then-hash · Q3 short-lived-keys+Log · Q4 Log optional (L1/L2).
 **Resolved (0.2, from review):** hash-string multibase pinned · SSE decode unit specified · JWS≡JCS invariant · inputs/outputs hashing split · JOSE hardening · cost-as-strings · AP2 corrected · `binding`+`method` discriminator · `log_policy` · §9 value-cap fence · A2A key-location defined · full-chain mandatory for aggregation.
@@ -379,16 +408,16 @@ At minimum: valid receipt; tampered receipt; `none`-alg and header-key-material 
 
 ---
 
-## 17. What a v0.1 reference implementation would contain (for grounding, not built yet)
+## 18. What a v0.1 reference implementation would contain (for grounding, not built yet)
 1. **Receipt library** (Py + TS): build/sign/serialize a Receipt (JWS over JCS; pinned multibase; string-int cost).
-2. **Co-signing middleware** (Py + TS): wrap an MCP server / A2A provider; emit `dev.veritrail/receipt`. **Co-signed-only; no self-signed mode in the codebase.**
+2. **Co-signing middleware** (Py + TS): wrap an MCP server / A2A provider; emit `dev.vitni/receipt`. **Co-signed-only; no self-signed mode in the codebase.**
 3. **Two *independent* verifiers** (different languages) — to enforce the §12 byte-identical-verdict requirement against §15.1.
 4. **Conformance vector suite** (§15.1) — the falsifiability artifact.
 5. **(Later) Log service** — RFC 6962-style Merkle log + STH + inclusion proofs + witness co-signing.
 
 ---
 
-## 18. Known gaps / roadmap
+## 19. Known gaps / roadmap
 - **Revocation** beyond short-lived-keys+Log (CRL/OCSP/StatusList) — weakest link (§10).
 - **Cross-stranger identity** (WIMSE/SCIM/DIDs) — the v2 root-of-trust layer.
 - **COSE/binary profile** — additive post-v1 (§3).
