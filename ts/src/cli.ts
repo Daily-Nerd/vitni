@@ -32,34 +32,23 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-async function main() {
-  const command = process.argv[2];
-  if (!command) {
-    process.stdout.write(JSON.stringify({ error: 'missing_command' }) + '\n');
-    return;
-  }
-
-  let raw: string;
-  try {
-    raw = await readStdin();
-  } catch {
-    process.stdout.write(JSON.stringify({ error: 'stdin_read_error' }) + '\n');
-    return;
-  }
-
+/**
+ * Run one command over its raw stdin bytes and return the JCS-canonical output
+ * string (no trailing newline). Pure and side-effect-free so it is unit-testable
+ * independently of stdin/argv wiring.
+ */
+export function dispatch(command: string, raw: string): string {
   let input: unknown;
   try {
     input = JSON.parse(raw);
   } catch {
-    process.stdout.write(JSON.stringify({ error: 'invalid_json' }) + '\n');
-    return;
+    return jcsString({ error: 'invalid_json' });
   }
 
   // §4.1 (strict I-JSON): reject duplicate keys for the JCS-canonicalizing
   // commands, matching the Go reference (JSON.parse above silently kept last).
   if (rejectsForDuplicateKeys(command, raw)) {
-    process.stdout.write(jcsString({ error: 'invalid_input' }) + '\n');
-    return;
+    return jcsString({ error: 'invalid_input' });
   }
 
   let result: unknown;
@@ -98,15 +87,41 @@ async function main() {
       default:
         result = { error: 'unknown_command' };
     }
-  } catch (err) {
-    process.stderr.write(`Error: ${err}\n`);
+  } catch {
     result = { error: 'internal_error' };
   }
 
-  // Output must be JCS-canonical (sorted keys) — use jcsString for output
-  process.stdout.write(jcsString(result) + '\n');
+  // Output must be JCS-canonical (sorted keys).
+  return jcsString(result);
 }
 
-main().catch(() => {
+/**
+ * Entry logic with injectable I/O so it is unit-testable independently of the
+ * real process streams. Defaults wire the actual argv/stdin/stdout.
+ */
+export async function main(
+  argv: readonly string[] = process.argv,
+  read: () => Promise<string> = readStdin,
+  write: (s: string) => void = (s) => { process.stdout.write(s); },
+): Promise<void> {
+  const command = argv[2];
+  if (!command) {
+    write(JSON.stringify({ error: 'missing_command' }) + '\n');
+    return;
+  }
+  let raw: string;
+  try {
+    raw = await read();
+  } catch {
+    write(JSON.stringify({ error: 'stdin_read_error' }) + '\n');
+    return;
+  }
+  write(dispatch(command, raw) + '\n');
+}
+
+/** Last-resort handler if main() itself rejects (should not happen in practice). */
+export function writeFatal(): void {
   process.stdout.write(JSON.stringify({ error: 'internal_error' }) + '\n');
-});
+}
+
+main().catch(writeFatal);

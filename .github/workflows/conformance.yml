@@ -20,7 +20,7 @@ jobs:
         run: |
           cd go
           go build -o ../bin/vitni-verify-go ./cmd/vitni-verify
-          go test ./... -coverprofile=coverage.out -covermode=atomic
+          go test ./... -coverpkg=./... -coverprofile=coverage.out -covermode=atomic
 
       - name: Set up Node
         uses: actions/setup-node@v4
