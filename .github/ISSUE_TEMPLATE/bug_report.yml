@@ -1,0 +1,85 @@
+name: Bug report
+description: Something broke — signing, verification, chains, a binding, the CLI, or the conformance suite
+title: "fix: "
+labels: ["bug", "type:fix"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        vitni is deterministic by construction — a failing receipt plus the verifier's
+        verdict usually answers the question in one round-trip. Paste them (redact
+        anything sensitive) and skip the back-and-forth.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did and what broke. Quote error text / verdict JSON exactly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: dropdown
+    id: implementation
+    attributes:
+      label: Implementation
+      options:
+        - TypeScript (@daily-nerd/vitni)
+        - Go (github.com/Daily-Nerd/vitni/go)
+        - Both (cross-implementation divergence)
+        - CLI (vitni-verify)
+        - Conformance suite / vectors
+        - Spec (docs/DESIGN.md)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: binding
+    attributes:
+      label: Binding
+      options:
+        - mcp
+        - a2a
+        - local
+        - not binding-specific
+    validations:
+      required: false
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. echo '{...}' | vitni-verify verify
+        2. ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        Versions plus, if applicable, the failing receipt (JWS or receipt JSON) and the
+        verifier verdict — redact key material and anything you consider sensitive:
+
+            npm ls @daily-nerd/vitni   # or: go list -m github.com/Daily-Nerd/vitni/go
+            node --version / go version
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: divergence
+    attributes:
+      label: Cross-implementation divergence detail
+      description: "If Go and TS disagree: both outputs, byte-for-byte. This is a conformance bug — the highest-priority kind."
+      render: text
+    validations:
+      required: false
