@@ -61,7 +61,7 @@ def jws(header: dict, payload_bytes: bytes, alg: str, priv=None) -> str:
 
 def receipt(performer_id: str, binding: str = "mcp", method: str = "mcp:echo") -> dict:
     return {
-        "v": "veritrail/0.1", "binding": binding, "action_ref": None,
+        "v": "vitni/0.2", "binding": binding, "action_ref": None,
         "performer_id": performer_id, "requester_id": None, "method": method,
         "inputs_hash": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
         "outputs_hash": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
@@ -162,6 +162,41 @@ write("verify-context-mismatch.json", "verify/context-mismatch",
 write("verify-wrong-key.json", "verify/wrong-key",
       jws({"alg": "EdDSA", "kid": "ed-1"}, ed_payload, "EdDSA", priv=ed_priv_other),
       reg(), NO_POLICY, False, "bad_signature")
+
+# ---- sign/ed25519 (previously hand-authored; now generated) ----
+# Deterministic key: bytes 0x01..0x20 == base64 "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+SIGN_SEED = bytes(range(1, 33))
+sign_priv = ed25519.Ed25519PrivateKey.from_private_bytes(SIGN_SEED)
+sign_receipt = receipt("srv-ed")
+sign_payload = jcs(sign_receipt).encode()
+signed_sign_vector = jws({"alg": "EdDSA", "kid": "ed-1"}, sign_payload, "EdDSA", priv=sign_priv)
+(OUT / "sign-ed25519.json").write_text(json.dumps({
+    "name": "sign/ed25519", "command": "sign",
+    "input": {"receipt": sign_receipt, "kid": "ed-1",
+              "private_key_b64": base64.b64encode(SIGN_SEED).decode()},
+    "anchor": {"signed_receipt": signed_sign_vector},
+}) + "\n")
+
+# ---- verify: local binding, valid ----
+r_local = receipt("srv-ed", binding="local", method="local:daimon.serialize")
+local_payload = jcs(r_local).encode()
+write("verify-local-valid.json", "verify/local-valid",
+      jws({"alg": "EdDSA", "kid": "ed-1"}, local_payload, "EdDSA"),
+      reg(), NO_POLICY, True, "ok")
+
+# 12. local receipt presented as mcp -> context_mismatch
+write("verify-local-context-mismatch.json", "verify/local-context-mismatch",
+      jws({"alg": "EdDSA", "kid": "ed-1"}, local_payload, "EdDSA"),
+      reg(), {"expected_binding": "mcp", "expected_method": None},
+      False, "context_mismatch")
+
+# 13. ext present, still valid (ext never affects verification)
+r_ext = receipt("srv-ed")
+r_ext["ext"] = {"dev.daimon/prompt_version": "3"}
+ext_payload = jcs(r_ext).encode()
+write("verify-ext-valid.json", "verify/ext-valid",
+      jws({"alg": "EdDSA", "kid": "ed-1"}, ext_payload, "EdDSA"),
+      reg(), NO_POLICY, True, "ok")
 
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):

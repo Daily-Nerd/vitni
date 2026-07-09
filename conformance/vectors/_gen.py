@@ -113,7 +113,7 @@ write("cost-number-error.json", {
 
 # ---- receipt-id vector (anchor computed from the JCS oracle) ----
 receipt = {
-    "v": "veritrail/0.1", "binding": "mcp", "action_ref": None,
+    "v": "vitni/0.2", "binding": "mcp", "action_ref": None,
     "performer_id": "srv-demo", "requester_id": None, "method": "mcp:echo",
     "inputs_hash": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
     "outputs_hash": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
@@ -126,6 +126,24 @@ canon = jcs(receipt).encode()
 write("receipt-id-basic.json", {
     "name": "receipt-id/basic", "command": "receipt-id",
     "input": {"receipt": receipt},
+    "anchor": {"canonical_hex": canon.hex(), "receipt_id": hashstr(canon)},
+})
+
+# ---- receipt-id: local binding (vitni/0.2) ----
+receipt_local = dict(receipt, binding="local", method="local:daimon.serialize")
+canon = jcs(receipt_local).encode()
+write("receipt-id-local.json", {
+    "name": "receipt-id/local-binding", "command": "receipt-id",
+    "input": {"receipt": receipt_local},
+    "anchor": {"canonical_hex": canon.hex(), "receipt_id": hashstr(canon)},
+})
+
+# ---- receipt-id: ext present (JCS must sort inside ext) ----
+receipt_ext = dict(receipt, ext={"dev.daimon/prompt_version": "3", "dev.daimon/cost_source": "api"})
+canon = jcs(receipt_ext).encode()
+write("receipt-id-ext.json", {
+    "name": "receipt-id/ext-object", "command": "receipt-id",
+    "input": {"receipt": receipt_ext},
     "anchor": {"canonical_hex": canon.hex(), "receipt_id": hashstr(canon)},
 })
 

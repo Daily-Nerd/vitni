@@ -62,7 +62,7 @@ def sign(performer_id, payload_bytes):
 
 def receipt(performer_id, method, parent_hash, parent_perf):
     return {
-        "v": "veritrail/0.1", "binding": "mcp", "action_ref": None,
+        "v": "vitni/0.2", "binding": "mcp", "action_ref": None,
         "performer_id": performer_id, "requester_id": None, "method": method,
         "inputs_hash": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
         "outputs_hash": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
