@@ -49,6 +49,31 @@ func loadVectors(t *testing.T) []vectorFile {
 	return vecs
 }
 
+// isErrorVector reports whether a vector's anchor asserts an error, i.e. it is
+// a negative (malformed-input) vector rather than a happy-path one.
+func isErrorVector(t *testing.T, anchor json.RawMessage) bool {
+	t.Helper()
+	var a map[string]json.RawMessage
+	if err := json.Unmarshal(anchor, &a); err != nil {
+		return false
+	}
+	_, ok := a["error"]
+	return ok
+}
+
+// assertBase64Rejected fails unless the input is rejected by BOTH standard
+// base64 decoders — the exact condition under which the CLI (main.go) returns
+// invalid_input. Used for negative vectors whose rejection lives at the CLI
+// decode layer, not in the library.
+func assertBase64Rejected(t *testing.T, s string) {
+	t.Helper()
+	_, e1 := base64.StdEncoding.DecodeString(s)
+	_, e2 := base64.RawStdEncoding.DecodeString(s)
+	if e1 == nil || e2 == nil {
+		t.Fatalf("expected base64 rejection, but a decoder accepted %q", s)
+	}
+}
+
 // -------------------------------------------------------------------
 // Unit tests for JCS
 // -------------------------------------------------------------------
@@ -279,6 +304,14 @@ func TestVectors_Digest(t *testing.T) {
 			if err := json.Unmarshal(v.Input, &inp); err != nil {
 				t.Fatal(err)
 			}
+			if isErrorVector(t, v.Anchor) {
+				// Malformed-base64 rejection is a CLI-layer concern (main.go
+				// decodes before the library); assert both standard decoders
+				// reject it, mirroring the CLI. Cross-impl parity for these is
+				// checked end-to-end by conformance/compare.mjs.
+				assertBase64Rejected(t, inp.BytesB64)
+				return
+			}
 			raw, err := base64.StdEncoding.DecodeString(inp.BytesB64)
 			if err != nil {
 				// Try raw (no padding)
@@ -351,6 +384,11 @@ func TestVectors_SSEOutputsHash(t *testing.T) {
 			}
 			if err := json.Unmarshal(v.Input, &inp); err != nil {
 				t.Fatal(err)
+			}
+			if isErrorVector(t, v.Anchor) {
+				// CLI-layer strict base64 rejection; see TestVectors_Digest.
+				assertBase64Rejected(t, inp.RawB64)
+				return
 			}
 			rawBytes, err := base64.StdEncoding.DecodeString(inp.RawB64)
 			if err != nil {

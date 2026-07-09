@@ -1,0 +1,1 @@
+{"name": "digest/base64url-rejected", "command": "digest", "input": {"bytes_b64": "aa-_"}, "anchor": {"error": "invalid_input"}}

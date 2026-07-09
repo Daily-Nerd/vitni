@@ -1,0 +1,1 @@
+{"name": "cost-canon/null-magnitude", "command": "cost-canon", "input": {"cost": {"tokens": null, "usd_micros": "0", "wall_ms": "3", "rail_ref": null}}, "anchor": {"error": "cost_must_be_string_int"}}

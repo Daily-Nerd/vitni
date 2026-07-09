@@ -1,0 +1,1 @@
+{"name": "sse-outputs-hash/malformed-base64", "command": "sse-outputs-hash", "input": {"mode": "sse", "raw_b64": "aa!!!garbage"}, "anchor": {"error": "invalid_input"}}
