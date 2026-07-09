@@ -1,0 +1,1 @@
+{"name": "cost-canon/duplicate-key", "command": "cost-canon", "input_raw": "{\"cost\":{\"tokens\":\"1\",\"tokens\":\"2\",\"usd_micros\":\"0\",\"wall_ms\":\"0\",\"rail_ref\":null}}", "anchor": {"error": "invalid_input"}}
