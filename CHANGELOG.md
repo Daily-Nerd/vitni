@@ -4,6 +4,17 @@ All notable changes to veritrail are documented here. Format: [Keep a Changelog]
 
 > **One version, one changelog.** vitni (formerly veritrail) ships the Go module and the npm package (`@daily-nerd/vitni`) in lockstep under a single version — any change to either implementation bumps it. release-please generates entries here from conventional commits. The `0.2.0`–`0.2.1` entries (the npm-only transition releases) live in git history — `git show v0.2.2:ts/CHANGELOG.md`; unified history resumes from `0.2.2`.
 
+## [0.3.0](https://github.com/Daily-Nerd/vitni/compare/v0.2.2...v0.3.0) (2026-07-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* Go module path, Go package name, npm package name, bin name, and two exported TS symbols are renamed.
+
+### Features
+
+* rename project to vitni (formerly veritrail) ([#22](https://github.com/Daily-Nerd/vitni/issues/22)) ([7b22f9f](https://github.com/Daily-Nerd/vitni/commit/7b22f9f8395f209ceb89bed0d45a7b4b7f4c4137))
+
 ## [0.2.2](https://github.com/Daily-Nerd/veritrail/compare/v0.2.1...v0.2.2) (2026-06-12)
 
 
