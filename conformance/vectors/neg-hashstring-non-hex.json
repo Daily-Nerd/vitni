@@ -1,0 +1,1 @@
+{"name": "hashstring/non-hex", "command": "hashstring", "input": {"algo": "sha2-256", "digest_hex": "zz"}, "anchor": {"error": "invalid_input"}}

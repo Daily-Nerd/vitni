@@ -198,3 +198,15 @@ write("jcs-nested.json", {"name":"jcs/nested-and-unicode","command":"jcs","input
 import base64 as _b64
 write("digest-hello.json", {"name":"digest/hello","command":"digest","input":{"bytes_b64":_b64.b64encode(b"hello").decode()},"anchor":{"hashstr":hashstr(b"hello")}})
 write("digest-empty.json", {"name":"digest/empty","command":"digest","input":{"bytes_b64":_b64.b64encode(b"").decode()},"anchor":{"hashstr":hashstr(b"")}})
+
+# --- negative / malformed-input vectors (§4.1 strict decode; both impls MUST reject identically) ---
+# Each carries an explicit error anchor so the harness asserts the RIGHT error, not merely
+# that both implementations errored. Guards the strict-decode alignment (issue #31/#35).
+write("neg-digest-malformed-b64.json", {"name":"digest/malformed-base64","command":"digest","input":{"bytes_b64":"aGVsbG8=!!!@@@"},"anchor":{"error":"invalid_input"}})
+write("neg-digest-base64url-rejected.json", {"name":"digest/base64url-rejected","command":"digest","input":{"bytes_b64":"aa-_"},"anchor":{"error":"invalid_input"}})
+write("neg-hashstring-odd-hex.json", {"name":"hashstring/odd-length-hex","command":"hashstring","input":{"algo":"sha2-256","digest_hex":"abc"},"anchor":{"error":"invalid_input"}})
+write("neg-hashstring-non-hex.json", {"name":"hashstring/non-hex","command":"hashstring","input":{"algo":"sha2-256","digest_hex":"zz"},"anchor":{"error":"invalid_input"}})
+write("neg-cost-bool-magnitude.json", {"name":"cost-canon/bool-magnitude","command":"cost-canon","input":{"cost":{"tokens":True,"usd_micros":"0","wall_ms":"3","rail_ref":None}},"anchor":{"error":"cost_must_be_string_int"}})
+write("neg-cost-null-magnitude.json", {"name":"cost-canon/null-magnitude","command":"cost-canon","input":{"cost":{"tokens":None,"usd_micros":"0","wall_ms":"3","rail_ref":None}},"anchor":{"error":"cost_must_be_string_int"}})
+write("neg-sse-malformed-b64.json", {"name":"sse-outputs-hash/malformed-base64","command":"sse-outputs-hash","input":{"mode":"sse","raw_b64":"aa!!!garbage"},"anchor":{"error":"invalid_input"}})
+write("neg-a2a-malformed-inline-b64.json", {"name":"a2a-artifact-hash/malformed-inline-base64","command":"a2a-artifact-hash","input":{"artifact":{"parts":[{"kind":"file","file":{"bytes":"aa!!!@@@"}}]}},"anchor":{"error":"invalid_input"}})

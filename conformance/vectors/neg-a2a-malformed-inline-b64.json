@@ -1,0 +1,1 @@
+{"name": "a2a-artifact-hash/malformed-inline-base64", "command": "a2a-artifact-hash", "input": {"artifact": {"parts": [{"kind": "file", "file": {"bytes": "aa!!!@@@"}}]}}, "anchor": {"error": "invalid_input"}}
