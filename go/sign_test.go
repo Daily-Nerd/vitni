@@ -14,7 +14,7 @@ import (
 // the public Verify API accepts under the matching registry key.
 func TestSign_RoundTripsWithVerify(t *testing.T) {
 	// Deterministic Ed25519 keypair from a fixed 32-byte seed.
-	seed := []byte("veritrail-test-ed25519-seed-32by")
+	seed := []byte("vitni-test-ed25519-seed-32bytes!")
 	if len(seed) != ed25519.SeedSize {
 		t.Fatalf("seed size = %d, want %d", len(seed), ed25519.SeedSize)
 	}
