@@ -20,7 +20,7 @@ jobs:
         run: |
           cd go
           go build -o ../bin/vitni-verify-go ./cmd/vitni-verify
-          go test ./...
+          go test ./... -coverprofile=coverage.out -covermode=atomic
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -32,7 +32,30 @@ jobs:
           cd ts
           npm install
           npm run build
-          npm test
+          npx c8 --reporter=lcov --reports-dir=coverage npm test
 
       - name: Cross-implementation conformance (Go ≡ TS, byte-identical)
         run: node conformance/compare.mjs
+
+      - name: Upload Go coverage to Codecov
+        # Reporting only — no coverage threshold gates the build. The upload
+        # no-ops gracefully when CODECOV_TOKEN is unset, so a missing secret
+        # never turns CI red.
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: Daily-Nerd/vitni
+          files: ./go/coverage.out
+          flags: go
+          fail_ci_if_error: false
+
+      - name: Upload TS coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: Daily-Nerd/vitni
+          files: ./ts/coverage/lcov.info
+          flags: ts
+          fail_ci_if_error: false
