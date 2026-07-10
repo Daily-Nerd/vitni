@@ -55,6 +55,25 @@ const verdict = verify({
 // -> { valid: true, reason: 'ok' }
 ```
 
+## Generate a keypair
+
+```sh
+echo '{}' | vitni-verify keygen
+```
+
+```json
+{"jwk":{"alg":"EdDSA","crv":"Ed25519","kty":"OKP","status":"active","x":"..."},"private_key_b64":"..."}
+```
+
+Keep `private_key_b64` secret — it is the 32-byte Ed25519 seed that `sign`
+consumes. Paste `jwk` into the `keys[performer_id][kid]` slot of your verify
+keyset. Already have a seed? Pass it to derive the same public key
+deterministically:
+
+```sh
+echo '{"seed_b64":"<base64 of your 32-byte seed>"}' | vitni-verify keygen
+```
+
 ## Local check — sign and verify with the CLI
 
 The `vitni-verify` CLI reads one JSON object on stdin and writes one
