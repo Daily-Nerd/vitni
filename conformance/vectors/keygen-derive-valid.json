@@ -1,0 +1,1 @@
+{"name": "keygen/derive-valid", "command": "keygen", "input": {"seed_b64": "nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A="}, "anchor": {"jwk": {"alg": "EdDSA", "crv": "Ed25519", "kty": "OKP", "status": "active", "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"}, "private_key_b64": "nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A="}}

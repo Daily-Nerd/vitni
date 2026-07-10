@@ -27,6 +27,7 @@ const { verify } = await import(`${DIST}/commands/verify.js`);
 const { verifyChain } = await import(`${DIST}/commands/verify-chain.js`);
 const { a2aArtifactHash } = await import(`${DIST}/commands/a2a-artifact-hash.js`);
 const { sign } = await import(`${DIST}/commands/sign.js`);
+const { keygen } = await import(`${DIST}/commands/keygen.js`);
 
 function loadVector(filename) {
   return JSON.parse(readFileSync(join(VECTORS_DIR, filename), 'utf8'));
@@ -44,6 +45,7 @@ function runCommand(cmd, input) {
     case 'verify-chain': return verifyChain(input);
     case 'a2a-artifact-hash': return a2aArtifactHash(input);
     case 'sign': return sign(input);
+    case 'keygen': return keygen(input);
     default: return { error: 'unknown_command' };
   }
 }
@@ -310,4 +312,39 @@ test('sign/accepts-unpadded-base64', () => {
   const a = sign(v.input);
   const b = sign({ ...v.input, private_key_b64: unpadded });
   assert.deepStrictEqual(a, b);
+});
+
+// --- keygen/derive-valid ---
+test('keygen/derive-valid', () => {
+  const v = loadVector('keygen-derive-valid.json');
+  const result = runCommand(v.command, v.input);
+  assertAnchorMatch(result, v.anchor, v.name);
+});
+
+// --- keygen/seed-empty-string ---
+test('keygen/seed-empty-string', () => {
+  const v = loadVector('keygen-seed-empty-string.json');
+  const result = runCommand(v.command, v.input);
+  assertAnchorMatch(result, v.anchor, v.name);
+});
+
+// --- keygen/seed-wrong-length ---
+test('keygen/seed-wrong-length', () => {
+  const v = loadVector('keygen-seed-wrong-length.json');
+  const result = runCommand(v.command, v.input);
+  assertAnchorMatch(result, v.anchor, v.name);
+});
+
+// --- keygen/seed-malformed-b64 ---
+test('keygen/seed-malformed-b64', () => {
+  const v = loadVector('keygen-seed-malformed-b64.json');
+  const result = runCommand(v.command, v.input);
+  assertAnchorMatch(result, v.anchor, v.name);
+});
+
+// --- keygen/unknown-key ---
+test('keygen/unknown-key', () => {
+  const v = loadVector('keygen-unknown-key.json');
+  const result = runCommand(v.command, v.input);
+  assertAnchorMatch(result, v.anchor, v.name);
 });
