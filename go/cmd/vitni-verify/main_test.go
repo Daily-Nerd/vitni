@@ -30,6 +30,7 @@ var dispatch = map[string]func([]byte) (json.RawMessage, error){
 	"verify-chain":      runVerifyChain,
 	"a2a-artifact-hash": runA2AArtifactHash,
 	"sign":              runSign,
+	"keygen":            runKeygen,
 }
 
 type vec struct {

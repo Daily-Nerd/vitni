@@ -19,6 +19,7 @@ import { verify } from './commands/verify.js';
 import { verifyChain } from './commands/verify-chain.js';
 import { a2aArtifactHash } from './commands/a2a-artifact-hash.js';
 import { sign } from './commands/sign.js';
+import { keygen } from './commands/keygen.js';
 import { jcsString } from './commands/jcs.js';
 import { rejectsForDuplicateKeys } from './commands/strict-json.js';
 
@@ -83,6 +84,9 @@ export function dispatch(command: string, raw: string): string {
         break;
       case 'sign':
         result = sign(input as Parameters<typeof sign>[0]);
+        break;
+      case 'keygen':
+        result = keygen(input);
         break;
       default:
         result = { error: 'unknown_command' };

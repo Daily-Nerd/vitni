@@ -408,12 +408,24 @@ At minimum: valid receipt; tampered receipt; `none`-alg and header-key-material 
 
 ---
 
-## 18. What a v0.1 reference implementation would contain (for grounding, not built yet)
+## 18. Reference implementation
 1. **Receipt library** (Py + TS): build/sign/serialize a Receipt (JWS over JCS; pinned multibase; string-int cost).
 2. **Co-signing middleware** (Py + TS): wrap an MCP server / A2A provider; emit `dev.vitni/receipt`. **Co-signed-only; no self-signed mode in the codebase.**
 3. **Two *independent* verifiers** (different languages) — to enforce the §12 byte-identical-verdict requirement against §16.1.
 4. **Conformance vector suite** (§16.1) — the falsifiability artifact.
 5. **(Later) Log service** — RFC 6962-style Merkle log + STH + inclusion proofs + witness co-signing.
+
+### 18.1 keygen (tooling)
+
+`keygen` is key tooling, not protocol: it changes neither the receipt format
+nor the wire string (`vitni/0.2`). Input `{}` generates a fresh Ed25519
+keypair; input `{"seed_b64": "<b64 of a 32-byte RFC 8032 seed>"}` derives the
+public key deterministically. Output encodings are deliberately asymmetric:
+`jwk.x` is base64url without padding because JWK (RFC 7517/8037) mandates it,
+while `private_key_b64` is standard padded base64 because that is the form
+`sign` consumes — do not "fix" one to match the other. A present-but-empty
+`seed_b64` is `invalid_seed`, never treated as absent, so a buggy caller
+cannot silently receive a fresh key.
 
 ---
 

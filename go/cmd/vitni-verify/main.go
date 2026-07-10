@@ -6,6 +6,7 @@ package main
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -24,6 +25,7 @@ import (
 var (
 	errInvalidPrivateKey = errors.New("invalid_private_key")
 	errKidRequired       = errors.New("kid_required")
+	errInvalidSeed       = errors.New("invalid_seed")
 )
 
 func main() {
@@ -63,6 +65,8 @@ func main() {
 		result, cmdErr = runA2AArtifactHash(stdin)
 	case "sign":
 		result, cmdErr = runSign(stdin)
+	case "keygen":
+		result, cmdErr = runKeygen(stdin)
 	default:
 		writeError("unsupported_command")
 		return
@@ -109,6 +113,9 @@ func errorCode(err error) string {
 	}
 	if errors.Is(err, errKidRequired) {
 		return "kid_required"
+	}
+	if errors.Is(err, errInvalidSeed) {
+		return "invalid_seed"
 	}
 	return "invalid_input"
 }
@@ -385,5 +392,75 @@ func runSign(stdin []byte) (json.RawMessage, error) {
 	out := struct {
 		SignedReceipt string `json:"signed_receipt"`
 	}{SignedReceipt: signed}
+	return json.Marshal(out)
+}
+
+// runKeygen generates an Ed25519 keypair, or — when seed_b64 is present —
+// deterministically derives the public key from the given 32-byte RFC 8032
+// seed (no randomness consumed). The emitted jwk pastes verbatim into the
+// keys[performer_id][kid] slot of verify input, status kept explicit so
+// revocation semantics stay visible.
+//
+// ENCODING ASYMMETRY (deliberate): jwk.x is base64url-nopad because JWK
+// (RFC 7517/8037) mandates it; private_key_b64 is standard padded base64
+// because that is the form `sign` consumes. Do not normalize.
+//
+// A PRESENT-but-empty seed_b64 is invalid_seed, never treat-as-absent: a
+// buggy consumer passing "" must not silently receive a fresh random key.
+func runKeygen(stdin []byte) (json.RawMessage, error) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(stdin, &obj); err != nil {
+		return nil, err
+	}
+	if obj == nil {
+		return nil, errors.New("invalid_input: not an object")
+	}
+	for k := range obj {
+		if k != "seed_b64" {
+			return nil, fmt.Errorf("invalid_input: unknown field %q", k)
+		}
+	}
+
+	var seed []byte
+	if raw, present := obj["seed_b64"]; present {
+		var s string
+		if err := json.Unmarshal(raw, &s); err != nil {
+			return nil, errInvalidSeed
+		}
+		var err error
+		seed, err = base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			seed, err = base64.RawStdEncoding.DecodeString(s)
+			if err != nil {
+				return nil, errInvalidSeed
+			}
+		}
+		if len(seed) != ed25519.SeedSize {
+			return nil, errInvalidSeed
+		}
+	} else {
+		seed = make([]byte, ed25519.SeedSize)
+		if _, err := rand.Read(seed); err != nil {
+			return nil, err // unreachable in practice; maps to invalid_input
+		}
+	}
+
+	pub := ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey)
+	out := struct {
+		Jwk struct {
+			Alg    string `json:"alg"`
+			Crv    string `json:"crv"`
+			Kty    string `json:"kty"`
+			Status string `json:"status"`
+			X      string `json:"x"`
+		} `json:"jwk"`
+		PrivateKeyB64 string `json:"private_key_b64"`
+	}{}
+	out.Jwk.Alg = "EdDSA"
+	out.Jwk.Crv = "Ed25519"
+	out.Jwk.Kty = "OKP"
+	out.Jwk.Status = "active"
+	out.Jwk.X = base64.RawURLEncoding.EncodeToString(pub)
+	out.PrivateKeyB64 = base64.StdEncoding.EncodeToString(seed)
 	return json.Marshal(out)
 }

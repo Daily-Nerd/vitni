@@ -1,0 +1,1 @@
+{"name": "keygen/seed-malformed-b64", "command": "keygen", "input": {"seed_b64": "!!!not-base64!!!"}, "anchor": {"error": "invalid_seed"}}

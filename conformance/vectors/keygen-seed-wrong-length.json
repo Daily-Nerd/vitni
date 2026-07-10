@@ -1,0 +1,1 @@
+{"name": "keygen/seed-wrong-length", "command": "keygen", "input": {"seed_b64": "AQIDBAUGBwgJCgsMDQ4PEA=="}, "anchor": {"error": "invalid_seed"}}
