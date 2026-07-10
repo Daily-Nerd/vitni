@@ -70,6 +70,7 @@ func TestKeygen_Errors(t *testing.T) {
 		{name: "wrong length (16 bytes)", stdin: `{"seed_b64":"AQIDBAUGBwgJCgsMDQ4PEA=="}`, wantSeed: true},
 		{name: "malformed base64", stdin: `{"seed_b64":"!!!not-base64!!!"}`, wantSeed: true},
 		{name: "null seed value", stdin: `{"seed_b64":null}`, wantSeed: true},
+		{name: "non-string seed (number)", stdin: `{"seed_b64":123}`, wantSeed: true},
 		{name: "unknown top-level key", stdin: `{"seed_b64":"` + rfcSeedB64 + `","kid":"x"}`, wantSeed: false},
 		{name: "non-object input", stdin: `[1,2]`, wantSeed: false},
 		{name: "json null input", stdin: `null`, wantSeed: false},

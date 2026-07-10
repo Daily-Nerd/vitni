@@ -348,3 +348,10 @@ test('keygen/unknown-key', () => {
   const result = runCommand(v.command, v.input);
   assertAnchorMatch(result, v.anchor, v.name);
 });
+
+// --- keygen/seed-non-string ---
+test('keygen/seed-non-string', () => {
+  const v = loadVector('keygen-seed-non-string.json');
+  const result = runCommand(v.command, v.input);
+  assertAnchorMatch(result, v.anchor, v.name);
+});

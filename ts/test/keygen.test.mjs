@@ -44,6 +44,8 @@ test('keygen error cases', () => {
     'wrong length (16 bytes)');
   assert.deepStrictEqual(kg('{"seed_b64":"!!!not-base64!!!"}'), { error: 'invalid_seed' });
   assert.deepStrictEqual(kg('{"seed_b64":null}'), { error: 'invalid_seed' });
+  assert.deepStrictEqual(kg('{"seed_b64":123}'), { error: 'invalid_seed' },
+    'non-string seed value');
   assert.deepStrictEqual(kg(`{"seed_b64":"${RFC_SEED_B64}","kid":"x"}`), { error: 'invalid_input' },
     'unknown top-level key');
   assert.deepStrictEqual(kg('[1,2]'), { error: 'invalid_input' });

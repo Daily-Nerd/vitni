@@ -1,0 +1,1 @@
+{"name": "keygen/seed-non-string", "command": "keygen", "input": {"seed_b64": 123}, "anchor": {"error": "invalid_seed"}}
