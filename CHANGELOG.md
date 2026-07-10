@@ -4,6 +4,13 @@ All notable changes to veritrail are documented here. Format: [Keep a Changelog]
 
 > **One version, one changelog.** vitni (formerly veritrail) ships the Go module and the npm package (`@daily-nerd/vitni`) in lockstep under a single version — any change to either implementation bumps it. release-please generates entries here from conventional commits. The `0.2.0`–`0.2.1` entries (the npm-only transition releases) live in git history — `git show v0.2.2:ts/CHANGELOG.md`; unified history resumes from `0.2.2`.
 
+## [0.5.0](https://github.com/Daily-Nerd/vitni/compare/v0.4.0...v0.5.0) (2026-07-10)
+
+
+### Features
+
+* keygen command (Ed25519 keypair generation + JWK derivation) ([#41](https://github.com/Daily-Nerd/vitni/issues/41)) ([35e1741](https://github.com/Daily-Nerd/vitni/commit/35e1741c6609fd789e9acb65e2a11a992214f722))
+
 ## [0.4.0](https://github.com/Daily-Nerd/vitni/compare/v0.3.0...v0.4.0) (2026-07-09)
 
 
