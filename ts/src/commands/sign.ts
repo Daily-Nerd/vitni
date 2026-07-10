@@ -48,7 +48,7 @@ function b64url(buf: Buffer): string {
  * Decode base64, accepting BOTH standard and raw (unpadded) base64 — matching the
  * `digest` command's tolerance. Returns null on invalid input.
  */
-function decodeFlexibleBase64(s: string): Buffer | null {
+export function decodeFlexibleBase64(s: string): Buffer | null {
   // Node's 'base64' decoder is lenient and accepts both padded and unpadded input,
   // but it silently ignores trailing garbage. Re-encode and compare lengths to
   // reject genuinely malformed input while tolerating the padding difference.
@@ -67,7 +67,7 @@ function decodeFlexibleBase64(s: string): Buffer | null {
 }
 
 /** Wrap a 32-byte Ed25519 seed into a node KeyObject. Returns null on failure. */
-function privateKeyFromSeed(seed: Buffer): KeyObject | null {
+export function privateKeyFromSeed(seed: Buffer): KeyObject | null {
   if (seed.length !== 32) return null;
   try {
     const der = Buffer.concat([PKCS8_ED25519_PREFIX, seed]);
