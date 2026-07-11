@@ -15,10 +15,11 @@ npm i @daily-nerd/vitni
 ## Use
 
 ```ts
-import { sign, verify } from "@daily-nerd/vitni";
+import { signCommand, verify, hashOf } from "@daily-nerd/vitni";
 
-// the performer signs what it did
-const { signed_receipt } = sign({
+// the performer signs what it did (signCommand: seed-in-hand signing;
+// MCP servers use the vitniToolResult middleware instead — see quickstart)
+const { signed_receipt } = signCommand({
   receipt: {
     binding: "mcp",
     method: "mcp:add",
@@ -29,7 +30,7 @@ const { signed_receipt } = sign({
     // ...see the spec for the full receipt object
   },
   kid: "key-1",
-  private_key_b64: myEd25519SeedB64,
+  private_key_b64: myEd25519SeedB64,   // 32-byte Ed25519 seed, base64
 });
 
 // anyone verifies it independently — offline
@@ -40,10 +41,11 @@ MCP servers: attach receipts to tool results via the co-signing middleware (one 
 
 ## CLI
 
-The package ships `vitni-verify` — a standalone conformance verifier (JSON on stdin, verdict on stdout):
+The package ships `vitni-verify` — a standalone CLI (JSON on stdin, one JCS-canonical line on stdout) covering keygen, signing, verification, and the conformance commands:
 
 ```sh
-vitni-verify verify < receipt.json
+echo '{}' | vitni-verify keygen        # Ed25519 keypair + ready-to-paste verify JWK
+vitni-verify verify < verify-input.json
 ```
 
 ## What it proves — and what it does NOT
