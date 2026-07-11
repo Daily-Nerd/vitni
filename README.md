@@ -6,7 +6,7 @@
   <a href="https://github.com/Daily-Nerd/vitni/actions/workflows/conformance.yml"><img src="https://github.com/Daily-Nerd/vitni/actions/workflows/conformance.yml/badge.svg" alt="conformance"></a>
   <a href="https://codecov.io/gh/Daily-Nerd/vitni"><img src="https://codecov.io/gh/Daily-Nerd/vitni/graph/badge.svg?token=bkJnBEV2yF" alt="codecov"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
-  <img src="https://img.shields.io/badge/conformance-63%2F63-brightgreen" alt="conformance 63/63">
+  <img src="https://img.shields.io/badge/conformance-69%2F69-brightgreen" alt="conformance 69/69">
 </p>
 
 ---
@@ -22,24 +22,28 @@ When an AI agent performs an action — a tool call, a task, a step in a chain �
 It is the difference between *"trust me, here's a summary"* and *"check me — here's a record you can verify."*
 
 ```ts
-import { sign, verify } from "@daily-nerd/vitni";
+import { generateTestSigner, vitniToolResult, verify, registryFromSigner } from "@daily-nerd/vitni";
 
-// the performer signs what it did
-const receipt = await sign(key, {
-  binding: "mcp",
-  method: "mcp:add",
-  inputs_hash:  hashOf(params),
-  outputs_hash: hashOf(result),
-  cost: { tokens: "0", usd_micros: "0", wall_ms: "3", rail_ref: null },
+// the performer co-signs what it did (one _meta field on the MCP tool result)
+const signer = generateTestSigner("srv-demo", "ed-1");   // demo keys; production uses your KMS/HSM
+const result = vitniToolResult({
+  signer,
+  toolName: "add",
+  params: { a: 2, b: 3 },
+  result: { content: [{ type: "text", text: "5" }] },
 });
 
 // anyone verifies it independently — offline
-const verdict = await verify(receipt, { keys });   // -> { valid: true, reason: "ok" }
+const verdict = verify({
+  signed_receipt: result._meta["dev.vitni/receipt"],
+  keys: registryFromSigner(signer),
+});
+// -> { valid: true, reason: "ok" }
 ```
 
 ```sh
-$ vitni-verify verify < receipt.json
-  valid: true  reason: ok
+$ vitni-verify verify < verify-input.json
+{"reason":"ok","valid":true}
 ```
 
 ## Why depend on it instead of rolling your own
@@ -84,12 +88,12 @@ npm i @daily-nerd/vitni
 
 ## Quickstart
 
-New here? **[docs/QUICKSTART.md](docs/QUICKSTART.md)** takes you from install to a signed, independently-verifiable receipt — the production MCP co-signing path plus a local `sign | verify` round-trip with the CLI.
+New here? **[docs/QUICKSTART.md](docs/QUICKSTART.md)** takes you from install to a signed, independently-verifiable receipt — generate a keypair with `vitni-verify keygen`, then the production MCP co-signing path plus a local `sign | verify` round-trip with the CLI.
 
 ## Spec & conformance
 
 - **[docs/DESIGN.md](docs/DESIGN.md)** — the full protocol: receipt object, canonicalization, signing, the verification algorithm, chain semantics, MCP/A2A bindings, threat model.
-- **Conformance vectors** — a language-agnostic suite; any implementation that passes is interoperable. (Porting in — see ROADMAP.)
+- **[Conformance vectors](conformance/vectors/)** — a language-agnostic suite (69 vectors, positive + negative classes); any implementation that passes is interoperable. Both reference implementations are held byte-identical against it in CI.
 
 ## License
 
