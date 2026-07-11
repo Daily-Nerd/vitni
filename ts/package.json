@@ -1,6 +1,6 @@
 {
   "name": "@daily-nerd/vitni",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "The witness to agent actions (formerly veritrail) — signed, tamper-evident execution receipts for AI agents (MCP & A2A): JWS signing/verification, JCS canonicalization, lineage chains, and co-signing middleware.",
   "type": "module",
   "main": "dist/index.js",
