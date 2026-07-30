@@ -1,0 +1,1 @@
+{"name":"a2a-artifact-hash/embedded-newline-inline-base64","command":"a2a-artifact-hash","input":{"artifact":{"parts":[{"kind":"file","file":{"bytes":"aGVs\nbG8="}}]}},"anchor":{"error":"invalid_input"}}

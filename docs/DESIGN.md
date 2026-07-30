@@ -427,6 +427,16 @@ while `private_key_b64` is standard padded base64 because that is the form
 `seed_b64` is `invalid_seed`, never treated as absent, so a buggy caller
 cannot silently receive a fresh key.
 
+Every standard-base64 *input* in the tooling (`seed_b64`, `private_key_b64`,
+`bytes_b64`, `raw_b64`, A2A inline `bytes`) shares one accept set: exactly
+canonical padded or canonical unpadded standard-alphabet base64. Non-canonical
+input — embedded newlines, excess or misplaced padding, non-zero trailing
+bits — is rejected identically by both implementations (Go
+`vitni.DecodeStdBase64`, TS `decodeStdBase64`), pinned by conformance
+vectors. A lenient decoder that silently normalizes would let the same input
+succeed on one implementation and fail on the other (§4.1's rule applied to
+inputs).
+
 ---
 
 ## 19. Known gaps / roadmap

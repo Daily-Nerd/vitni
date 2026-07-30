@@ -1,0 +1,1 @@
+{"name":"digest/nonzero-trailing-bits","command":"digest","input":{"bytes_b64":"aGVsbG9"},"anchor":{"error":"invalid_input"}}

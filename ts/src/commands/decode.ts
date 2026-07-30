@@ -10,20 +10,20 @@
 
 /**
  * Decode a standard-alphabet base64 string (`+/`, with or without padding),
- * matching Go's `base64.StdEncoding` then `base64.RawStdEncoding` fallback.
+ * matching Go's `base64.StdEncoding.Strict()` then
+ * `base64.RawStdEncoding.Strict()` fallback (vitni.DecodeStdBase64). The
+ * accept set is exactly two forms: canonical padded or canonical unpadded.
  * Returns null (caller maps to `invalid_input`) on any out-of-alphabet byte,
- * base64url char (`-_`), whitespace, or invalid length/padding.
+ * base64url char (`-_`), whitespace, invalid length/padding, or non-zero
+ * trailing bits — the re-encode compare rejects them all, since Node's
+ * lenient decoder masks trailing bits and skips what it can't map.
  */
 export function decodeStdBase64(s: string): Buffer | null {
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(s)) return null;
-  if (s.includes('=')) {
-    // StdEncoding: padded input must be a whole number of 4-char quanta.
-    if (s.length % 4 !== 0) return null;
-  } else if (s.length % 4 === 1) {
-    // RawStdEncoding: a remainder of 1 is not a valid unpadded length.
-    return null;
-  }
-  return Buffer.from(s, 'base64');
+  const buf = Buffer.from(s, 'base64');
+  const canonical = buf.toString('base64');
+  if (s !== canonical && s !== canonical.replace(/=+$/, '')) return null;
+  return buf;
 }
 
 /**

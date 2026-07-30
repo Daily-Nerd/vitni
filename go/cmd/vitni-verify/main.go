@@ -173,13 +173,9 @@ func runDigest(stdin []byte) (json.RawMessage, error) {
 	if err := json.Unmarshal(stdin, &inp); err != nil {
 		return nil, err
 	}
-	raw, err := base64.StdEncoding.DecodeString(inp.BytesB64)
+	raw, err := vitni.DecodeStdBase64(inp.BytesB64)
 	if err != nil {
-		// Try without padding
-		raw, err = base64.RawStdEncoding.DecodeString(inp.BytesB64)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 	hashStr, err := vitni.Digest(raw)
 	if err != nil {
@@ -220,12 +216,9 @@ func runSSEOutputsHash(stdin []byte) (json.RawMessage, error) {
 	if err := json.Unmarshal(stdin, &inp); err != nil {
 		return nil, err
 	}
-	rawBytes, err := base64.StdEncoding.DecodeString(inp.RawB64)
+	rawBytes, err := vitni.DecodeStdBase64(inp.RawB64)
 	if err != nil {
-		rawBytes, err = base64.RawStdEncoding.DecodeString(inp.RawB64)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 	decodedHex, outputsHash, err := vitni.SSEOutputsHash(rawBytes, inp.Mode)
 	if err != nil {
@@ -366,13 +359,10 @@ func runSign(stdin []byte) (json.RawMessage, error) {
 		return nil, errKidRequired
 	}
 
-	// Decode the 32-byte seed, accepting both standard and raw (unpadded) base64.
-	seed, err := base64.StdEncoding.DecodeString(inp.PrivateKeyB64)
+	// Decode the 32-byte seed: canonical padded or canonical unpadded base64 only.
+	seed, err := vitni.DecodeStdBase64(inp.PrivateKeyB64)
 	if err != nil {
-		seed, err = base64.RawStdEncoding.DecodeString(inp.PrivateKeyB64)
-		if err != nil {
-			return nil, errInvalidPrivateKey
-		}
+		return nil, errInvalidPrivateKey
 	}
 	if len(seed) != ed25519.SeedSize {
 		return nil, errInvalidPrivateKey
@@ -428,12 +418,9 @@ func runKeygen(stdin []byte) (json.RawMessage, error) {
 			return nil, errInvalidSeed
 		}
 		var err error
-		seed, err = base64.StdEncoding.DecodeString(s)
+		seed, err = vitni.DecodeStdBase64(s)
 		if err != nil {
-			seed, err = base64.RawStdEncoding.DecodeString(s)
-			if err != nil {
-				return nil, errInvalidSeed
-			}
+			return nil, errInvalidSeed
 		}
 		if len(seed) != ed25519.SeedSize {
 			return nil, errInvalidSeed
