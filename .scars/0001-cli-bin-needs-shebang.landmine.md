@@ -1,20 +1,20 @@
 ---
-id: 0
+id: 1
 type: landmine
 title: ts/src/cli.ts must keep its #!/usr/bin/env node shebang on line 1 — the npm bin breaks without it
 severity: high
 confidence: 0.95
 created: 2026-06-12
-authors: ["claude-code"]
+authors: ["claude-code", "Kibukx"]
 anchors:
   - path: ts/src/cli.ts
   - path: ts/test/cli-bin.test.mjs
 evidence:
-  - note: "Published @daily-nerd/veritrail@0.1.1 + 0.2.0 shipped with no shebang; running the installed bin gave 'syntax error near unexpected token <' / ENOEXEC. Fixed in 0.2.1."
+  - note: Published @daily-nerd/veritrail@0.1.1 + 0.2.0 shipped with no shebang; running the installed bin gave 'syntax error near unexpected token <' / ENOEXEC. Fixed in 0.2.1.
 expires:
   condition: "the bin is invoked only via an explicit `node dist/cli.js` wrapper, never as a bare `vitni-verify` executable"
   review_after: 2027-06-12
-status: candidate
+status: active
 ---
 
 The npm `bin` maps `vitni-verify` -> `dist/cli.js`, which the OS executes

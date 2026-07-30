@@ -1,19 +1,20 @@
 ---
+id: 2
 type: deadend
 title: npm view 404 does not mean a package name is claimable — typosquat guard rejects at publish time
 severity: medium
 confidence: 0.9
 created: 2026-07-08
-authors: ["claude-code"]
+authors: ["claude-code", "Kibukx"]
 anchors:
   - path: ts/package.json
   - pattern: "npm publish"
 evidence:
-  - note: "2026-07-08 rename session: `npm view vitni` returned E404 (free), availability recorded in vault; real `npm publish` of a placeholder then failed E403 'Package name too similar to existing packages vite,ini,jiti'"
+  - note: 2026-07-08 rename session: `npm view vitni` returned E404 (free), availability recorded in vault; real `npm publish` of a placeholder then failed E403 'Package name too similar to existing packages vite,ini,jiti'
 expires:
   condition: "npm drops or changes its package-name similarity (typosquat) guard"
   review_after: 2027-07-08
-status: candidate
+status: active
 ---
 
 We verified the new project name `vitni` as "free on npm" via `npm view vitni`
