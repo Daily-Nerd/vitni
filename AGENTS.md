@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-vitni (formerly veritrail) is a cryptographic execution-receipt protocol for
+vitni is a cryptographic execution-receipt protocol for
 AI agents: signed, tamper-evident, content-addressed receipts under MCP and
 beside A2A. Two independent reference implementations (Go at `go/`,
 TypeScript at `ts/`) share no code; `conformance/vectors/` is the contract
