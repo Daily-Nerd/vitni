@@ -1,0 +1,1 @@
+{"name":"keygen/seed-excess-padding","command":"keygen","input":{"seed_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=="},"anchor":{"error":"invalid_seed"}}

@@ -17,6 +17,7 @@
  * fixed 16-byte Ed25519 PKCS8 header, then importing it.
  */
 import { createPrivateKey, sign as cryptoSign, KeyObject } from 'node:crypto';
+import { decodeStdBase64 } from './decode.js';
 import { jcsBytes, jcsString } from './jcs.js';
 import { VERSION } from '../version.js';
 
@@ -45,25 +46,14 @@ function b64url(buf: Buffer): string {
 }
 
 /**
- * Decode base64, accepting BOTH standard and raw (unpadded) base64 — matching the
- * `digest` command's tolerance. Returns null on invalid input.
+ * Decode base64, accepting BOTH standard and raw (unpadded) base64 — the same
+ * strict-canonical accept set as the `digest` command (and Go's
+ * vitni.DecodeStdBase64). One decoder repo-wide keeps sign/keygen seeds and
+ * receipt byte-sources byte-identical across impls.
  */
 export function decodeFlexibleBase64(s: string): Buffer | null {
-  // Node's 'base64' decoder is lenient and accepts both padded and unpadded input,
-  // but it silently ignores trailing garbage. Re-encode and compare lengths to
-  // reject genuinely malformed input while tolerating the padding difference.
   if (typeof s !== 'string') return null;
-  try {
-    const buf = Buffer.from(s, 'base64');
-    // Round-trip guard: the decoded bytes must re-encode (no-pad) to the same
-    // alphabet content as the input (ignoring '=' padding).
-    const reencoded = buf.toString('base64').replace(/=+$/, '');
-    const normalizedInput = s.replace(/=+$/, '');
-    if (reencoded !== normalizedInput) return null;
-    return buf;
-  } catch {
-    return null;
-  }
+  return decodeStdBase64(s);
 }
 
 /** Wrap a 32-byte Ed25519 seed into a node KeyObject. Returns null on failure. */

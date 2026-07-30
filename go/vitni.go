@@ -56,6 +56,23 @@ func Digest(raw []byte) (string, error) {
 	return hashStringFromBytes(h[:]), nil
 }
 
+// DecodeStdBase64 decodes a standard-alphabet base64 string, accepting exactly
+// two forms: canonical padded (StdEncoding) or canonical unpadded
+// (RawStdEncoding). Everything non-canonical — embedded newlines, excess or
+// misplaced padding, non-zero trailing bits — is rejected, keeping the accept
+// set byte-identical with the TS reference (decodeStdBase64). The explicit
+// newline check exists because encoding/base64 silently skips \r and \n even
+// under Strict(), which only enforces the trailing-bit rule.
+func DecodeStdBase64(s string) ([]byte, error) {
+	if strings.ContainsAny(s, "\r\n") {
+		return nil, errors.New("non-canonical base64: embedded newline")
+	}
+	if raw, err := base64.StdEncoding.Strict().DecodeString(s); err == nil {
+		return raw, nil
+	}
+	return base64.RawStdEncoding.Strict().DecodeString(s)
+}
+
 // ReceiptID derives the content address of a Receipt object.
 // It returns (canonicalHex, receiptID, error).
 // Returns ErrReceiptIDMustBeAbsent if the receipt contains a "receipt_id" key.

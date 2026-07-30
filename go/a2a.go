@@ -1,7 +1,6 @@
 package vitni
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 
@@ -107,12 +106,9 @@ func mapPart(partRaw json.RawMessage) (json.RawMessage, error) {
 		}
 		if f.Bytes != nil {
 			// inline: hash the decoded bytes, do NOT embed.
-			raw, err := base64.StdEncoding.DecodeString(*f.Bytes)
+			raw, err := DecodeStdBase64(*f.Bytes)
 			if err != nil {
-				raw, err = base64.RawStdEncoding.DecodeString(*f.Bytes)
-				if err != nil {
-					return nil, err
-				}
+				return nil, err
 			}
 			digest, err := Digest(raw)
 			if err != nil {

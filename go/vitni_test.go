@@ -78,10 +78,8 @@ func isErrorVector(t *testing.T, anchor json.RawMessage) bool {
 // decode layer, not in the library.
 func assertBase64Rejected(t *testing.T, s string) {
 	t.Helper()
-	_, e1 := base64.StdEncoding.DecodeString(s)
-	_, e2 := base64.RawStdEncoding.DecodeString(s)
-	if e1 == nil || e2 == nil {
-		t.Fatalf("expected base64 rejection, but a decoder accepted %q", s)
+	if _, err := vitni.DecodeStdBase64(s); err == nil {
+		t.Fatalf("expected base64 rejection, but DecodeStdBase64 accepted %q", s)
 	}
 }
 
@@ -326,13 +324,9 @@ func TestVectors_Digest(t *testing.T) {
 				assertBase64Rejected(t, inp.BytesB64)
 				return
 			}
-			raw, err := base64.StdEncoding.DecodeString(inp.BytesB64)
+			raw, err := vitni.DecodeStdBase64(inp.BytesB64)
 			if err != nil {
-				// Try raw (no padding)
-				raw, err = base64.RawStdEncoding.DecodeString(inp.BytesB64)
-				if err != nil {
-					t.Fatalf("base64 decode: %v", err)
-				}
+				t.Fatalf("base64 decode: %v", err)
 			}
 			got, err := vitni.Digest(raw)
 			if err != nil {
@@ -407,12 +401,9 @@ func TestVectors_SSEOutputsHash(t *testing.T) {
 				assertBase64Rejected(t, inp.RawB64)
 				return
 			}
-			rawBytes, err := base64.StdEncoding.DecodeString(inp.RawB64)
+			rawBytes, err := vitni.DecodeStdBase64(inp.RawB64)
 			if err != nil {
-				rawBytes, err = base64.RawStdEncoding.DecodeString(inp.RawB64)
-				if err != nil {
-					t.Fatalf("base64 decode: %v", err)
-				}
+				t.Fatalf("base64 decode: %v", err)
 			}
 			decodedHex, outputsHash, err := vitni.SSEOutputsHash(rawBytes, inp.Mode)
 			if err != nil {

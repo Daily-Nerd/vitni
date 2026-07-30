@@ -1,0 +1,1 @@
+{"name":"digest/embedded-newline","command":"digest","input":{"bytes_b64":"aGVs\nbG8="},"anchor":{"error":"invalid_input"}}
