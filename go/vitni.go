@@ -1,4 +1,4 @@
-// Package vitni implements the byte-source layer of the Vitni protocol (formerly Veritrail)
+// Package vitni implements the byte-source layer of the Vitni protocol
 // (§3–§5, §4.3 of the design draft). It provides deterministic, byte-exact
 // functions that the CLI wraps.
 package vitni

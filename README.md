@@ -1,5 +1,5 @@
 <h1 align="center">vitni</h1>
-<p align="center"><em>The witness to agent actions.</em> (Old Norse: <em>vitni</em>, witness — formerly <strong>veritrail</strong>.)</p>
+<p align="center"><em>The witness to agent actions.</em> (Old Norse: <em>vitni</em>, witness.)</p>
 <p align="center">Signed, tamper-evident execution receipts for AI agents — under MCP and beside A2A.</p>
 
 <p align="center">

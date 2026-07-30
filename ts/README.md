@@ -1,6 +1,6 @@
 # @daily-nerd/vitni
 
-**vitni** (Old Norse: *witness*, formerly `veritrail`) — signed, tamper-evident execution receipts for AI agents, under MCP and beside A2A.
+**vitni** (Old Norse: *witness*) — signed, tamper-evident execution receipts for AI agents, under MCP and beside A2A.
 
 When an agent performs an action, the performer emits a small, signed, content-addressed **receipt** of what it did, what it returned, and what it cost. Anyone can verify that receipt independently — offline — walk a multi-hop chain of them, and replay the attested timeline.
 
