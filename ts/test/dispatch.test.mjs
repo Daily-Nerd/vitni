@@ -11,10 +11,10 @@ const { dispatch, main, writeFatal } = await import(`${DIST}/cli.js`);
 const parse = (s) => JSON.parse(s);
 
 test('dispatch: invalid JSON', () => {
-  assert.deepEqual(parse(dispatch('jcs', '{not json')), { error: 'invalid_json' });
+  assert.deepEqual(parse(dispatch('jcs', '{not json')), { error: 'invalid_input' });
 });
 test('dispatch: unknown command', () => {
-  assert.deepEqual(parse(dispatch('nope', '{}')), { error: 'unknown_command' });
+  assert.deepEqual(parse(dispatch('nope', '{}')), { error: 'unsupported_command' });
 });
 test('dispatch: duplicate key rejected for jcs', () => {
   assert.deepEqual(parse(dispatch('jcs', '{"value":{"a":1,"a":2}}')), { error: 'invalid_input' });
@@ -69,4 +69,17 @@ test('writeFatal emits internal_error', () => {
   process.stdout.write = (s) => { out += s; return true; };
   try { writeFatal(); } finally { process.stdout.write = orig; }
   assert.deepEqual(JSON.parse(out), { error: 'internal_error' });
+});
+
+test('dispatch: unparseable stdin -> invalid_input (matches Go)', () => {
+  assert.equal(dispatch('jcs', ')('), '{"error":"invalid_input"}');
+});
+
+test('dispatch: unknown command -> unsupported_command (matches Go)', () => {
+  assert.equal(dispatch('not-a-command', '{}'), '{"error":"unsupported_command"}');
+});
+
+test('dispatch: non-finite number input -> invalid_input, never canonical null', () => {
+  assert.equal(dispatch('jcs', '{"value":{"n":1e400}}'), '{"error":"invalid_input"}');
+  assert.equal(dispatch('jcs', '{"value":{"a":[1,1e309]}}'), '{"error":"invalid_input"}');
 });

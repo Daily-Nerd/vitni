@@ -38,17 +38,30 @@ async function readStdin(): Promise<string> {
  * string (no trailing newline). Pure and side-effect-free so it is unit-testable
  * independently of stdin/argv wiring.
  */
+function hasNonFinite(v: unknown): boolean {
+  if (typeof v === 'number') return !Number.isFinite(v);
+  if (Array.isArray(v)) return v.some(hasNonFinite);
+  if (v !== null && typeof v === 'object') return Object.values(v).some(hasNonFinite);
+  return false;
+}
+
 export function dispatch(command: string, raw: string): string {
   let input: unknown;
   try {
     input = JSON.parse(raw);
   } catch {
-    return jcsString({ error: 'invalid_json' });
+    return jcsString({ error: 'invalid_input' });
   }
 
   // §4.1 (strict I-JSON): reject duplicate keys for the JCS-canonicalizing
   // commands, matching the Go reference (JSON.parse above silently kept last).
   if (rejectsForDuplicateKeys(command, raw)) {
+    return jcsString({ error: 'invalid_input' });
+  }
+
+  // JSON.parse admits 1e400 as Infinity; serializing it would emit the bytes
+  // "null" — silent corruption. Go rejects non-finite at parse; match it.
+  if (hasNonFinite(input)) {
     return jcsString({ error: 'invalid_input' });
   }
 
@@ -89,7 +102,7 @@ export function dispatch(command: string, raw: string): string {
         result = keygen(input);
         break;
       default:
-        result = { error: 'unknown_command' };
+        result = { error: 'unsupported_command' };
     }
   } catch {
     result = { error: 'internal_error' };

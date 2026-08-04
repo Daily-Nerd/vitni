@@ -46,7 +46,7 @@ function runCommand(cmd, input) {
     case 'a2a-artifact-hash': return a2aArtifactHash(input);
     case 'sign': return sign(input);
     case 'keygen': return keygen(input);
-    default: return { error: 'unknown_command' };
+    default: return { error: 'unsupported_command' };
   }
 }
 

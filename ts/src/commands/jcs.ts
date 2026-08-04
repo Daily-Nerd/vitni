@@ -2,8 +2,10 @@
  * RFC 8785 JSON Canonicalization Scheme (JCS).
  *
  * Key rules:
- * - Object keys sorted lexicographically (Unicode code-point order, which is
- *   what JS string comparison uses — matches RFC 8785 §3.2.3).
+ * - Object keys sorted by UTF-16 code units (RFC 8785 §3.2.3). Default JS
+ *   string comparison IS code-unit order, so Array.prototype.sort() with no
+ *   comparator is correct. (Note: this is NOT code-point order — they differ
+ *   for non-BMP keys, e.g. "😀" sorts before "�" in code units.)
  * - Strings: verbatim, no normalization. JSON.stringify handles escaping.
  * - Numbers: ECMAScript Number→string (same as JSON.stringify), which is
  *   exactly what RFC 8785 §3.2.2 specifies.
@@ -33,7 +35,7 @@ export function jcsString(value: unknown): string {
   }
   if (typeof value === 'object') {
     const obj = value as Record<string, unknown>;
-    // Sort keys by Unicode code point (standard JS sort is correct per RFC 8785)
+    // Sort keys by UTF-16 code units (default JS sort) per RFC 8785 §3.2.3
     const keys = Object.keys(obj).sort();
     const pairs = keys.map((k) => `${JSON.stringify(k)}:${jcsString(obj[k])}`);
     return `{${pairs.join(',')}}`;
