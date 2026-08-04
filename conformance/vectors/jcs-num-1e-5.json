@@ -1,0 +1,1 @@
+{"name": "jcs/num-1e-5-decimal", "command": "jcs", "input_raw": "{\"value\":{\"n\":1e-5}}", "anchor": {"canonical_hex": "7b226e223a302e30303030317d", "byte_len": 13}}

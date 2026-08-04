@@ -1,0 +1,1 @@
+{"name": "cli/unparseable-stdin", "command": "jcs", "input_raw": ")(", "anchor": {"error": "invalid_input"}}

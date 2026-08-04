@@ -1,0 +1,1 @@
+{"name": "jcs/nonbmp-key-sort-utf16", "command": "jcs", "input": {"value": {"\ud83d\ude00": 1, "\ufffd": 2}}, "anchor": {"canonical_hex": "7b22f09f9880223a312c22efbfbd223a327d", "byte_len": 18}}
