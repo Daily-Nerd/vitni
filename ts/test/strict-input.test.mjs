@@ -60,6 +60,16 @@ test('sse-outputs-hash rejects malformed base64 with invalid_input', () => {
   assert.deepEqual(sseOutputsHash({ mode: 'sse', raw_b64: 'aa!!!garbage' }), { error: 'invalid_input' });
 });
 
+test('sse-outputs-hash (issue #58): sse-jsonrpc inner result 1e400 rejected, not silently hashed as null', () => {
+  // The stdin-level non-finite guard in cli.ts never sees this — the JSON lives
+  // inside raw_b64, decoded and re-parsed only here. JSON.parse('1e400') is
+  // Infinity, and JSON.stringify(Infinity) emits the bytes "null": without a
+  // guard at this layer, {"n":1e400} and {"n":null} would hash identically.
+  const raw = Buffer.from('data: {"jsonrpc":"2.0","id":1,"result":{"n":1e400}}\n\n', 'utf8');
+  const out = sseOutputsHash({ mode: 'sse-jsonrpc', raw_b64: raw.toString('base64') });
+  assert.deepEqual(out, { error: 'invalid_input' });
+});
+
 test('a2a inline file bytes: malformed base64 rejected with invalid_input', () => {
   const out = a2aArtifactHash({ artifact: { parts: [{ kind: 'file', file: { bytes: 'aa!!!@@@' } }] } });
   assert.deepEqual(out, { error: 'invalid_input' });
