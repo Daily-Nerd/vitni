@@ -16,10 +16,16 @@
  *   each dispatched message data is a JSON-RPC message;
  *   committed unit = JCS(inner result), joined across messages with "\n".
  *   Messages without a "result" key are skipped.
+ *   A present "result" whose tree contains a non-finite number (e.g. 1e400,
+ *   parsed by JSON.parse as Infinity) rejects the whole command with
+ *   invalid_input — raw_b64 hides this JSON from the stdin-level non-finite
+ *   guard in cli.ts, and JCS-serializing Infinity would emit the bytes "null"
+ *   (#58). Unparseable messages keep their existing skip behavior.
  */
 import { digestBytes } from './digest.js';
 import { jcsBytes } from './jcs.js';
 import { decodeStdBase64 } from './decode.js';
+import { hasNonFinite } from './non-finite.js';
 
 export interface SseInput {
   raw_b64: string;
@@ -162,6 +168,10 @@ export function sseOutputsHash(input: SseInput): SseOutput | { error: string } {
         Object.prototype.hasOwnProperty.call(parsed, 'result')
       ) {
         const result = (parsed as Record<string, unknown>)['result'];
+        // #58: raw_b64 hides this JSON from the stdin-level non-finite guard in
+        // cli.ts. Without this check, a 1e400 inner result would JCS-serialize
+        // to the bytes "null" and collide with a genuine null result.
+        if (hasNonFinite(result)) return { error: 'invalid_input' };
         parts.push(jcsBytes(result));
       }
       // No result key → skip

@@ -14,6 +14,7 @@ import { hashstring } from './commands/hashstring.js';
 import { digest } from './commands/digest.js';
 import { receiptId } from './commands/receipt-id.js';
 import { sseOutputsHash } from './commands/sse-outputs-hash.js';
+import { hasNonFinite } from './commands/non-finite.js';
 import { costCanon } from './commands/cost-canon.js';
 import { verify } from './commands/verify.js';
 import { verifyChain } from './commands/verify-chain.js';
@@ -38,13 +39,6 @@ async function readStdin(): Promise<string> {
  * string (no trailing newline). Pure and side-effect-free so it is unit-testable
  * independently of stdin/argv wiring.
  */
-function hasNonFinite(v: unknown): boolean {
-  if (typeof v === 'number') return !Number.isFinite(v);
-  if (Array.isArray(v)) return v.some(hasNonFinite);
-  if (v !== null && typeof v === 'object') return Object.values(v).some(hasNonFinite);
-  return false;
-}
-
 export function dispatch(command: string, raw: string): string {
   let input: unknown;
   try {
