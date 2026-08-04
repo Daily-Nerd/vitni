@@ -232,3 +232,55 @@ write("neg-sign-unknown-key.json", {"name":"sign/unknown-top-level-key","command
 write("neg-sign-numeric-cost.json", {"name":"sign/numeric-cost-magnitude","command":"sign",
       "input":{"receipt":dict(_base_receipt, cost={"tokens":10,"usd_micros":"0","wall_ms":"3","rail_ref":None}),**_sign_key},
       "anchor":{"error":"invalid_input"}})
+
+# --- ES-number serialization vectors (#55). input_raw pins the exact stdin bytes:
+# the harness's own JSON.stringify would round over-safe ints and reformat floats
+# before the verifiers see them. Anchors are hand-pinned from RFC 8785 §3.2.2
+# (ECMAScript Number::toString) — Python json.dumps would be a WRONG oracle
+# (prints 10.0, -0.0, exact bigints; ES prints 10, 0, float64-rounded). ---
+_num_cases = [
+    ("jcs-num-float-integral", "jcs/num-float-integral", '{"value":{"n":10.0}}', '{"n":10}'),
+    ("jcs-num-neg-zero", "jcs/num-neg-zero", '{"value":{"n":-0.0}}', '{"n":0}'),
+    ("jcs-num-1e16", "jcs/num-1e16-decimal", '{"value":{"n":1e16}}', '{"n":10000000000000000}'),
+    ("jcs-num-1e21", "jcs/num-1e21-exponent", '{"value":{"n":1e21}}', '{"n":1e+21}'),
+    ("jcs-num-1e-5", "jcs/num-1e-5-decimal", '{"value":{"n":1e-5}}', '{"n":0.00001}'),
+    ("jcs-num-1e-6", "jcs/num-1e-6-decimal", '{"value":{"n":1e-6}}', '{"n":0.000001}'),
+    ("jcs-num-1e-7", "jcs/num-1e-7-exponent", '{"value":{"n":1e-7}}', '{"n":1e-7}'),
+    ("jcs-num-over-safe-int-raw", "jcs/num-over-safe-int-raw", '{"value":{"n":9007199254740993}}', '{"n":9007199254740992}'),
+]
+for fname, name, raw, expected in _num_cases:
+    exp_bytes = expected.encode()
+    write(f"{fname}.json", {
+        "name": name, "command": "jcs", "input_raw": raw,
+        "anchor": {"canonical_hex": exp_bytes.hex(), "byte_len": len(exp_bytes)},
+    })
+
+# non-finite input: Go's json.Unmarshal errors on 1e400 and on the NaN literal;
+# JSON.parse turns 1e400 into Infinity (must be guarded) and rejects NaN.
+# Both implementations MUST answer invalid_input.
+write("neg-jcs-nonfinite-1e400.json", {
+    "name": "jcs/nonfinite-1e400", "command": "jcs",
+    "input_raw": '{"value":{"n":1e400}}', "anchor": {"error": "invalid_input"}})
+write("neg-jcs-nan-literal.json", {
+    "name": "jcs/nan-literal", "command": "jcs",
+    "input_raw": '{"value":{"n":NaN}}', "anchor": {"error": "invalid_input"}})
+
+# --- non-BMP key sort (#55): RFC 8785 §3.2.3 sorts by UTF-16 CODE UNITS.
+# "😀" = surrogate pair D83D DE00; "�" = FFFD. D83D < FFFD, so 😀 sorts FIRST.
+# A code-POINT sort (Python sorted()) puts � first — the anchor catches it.
+# Canonical string is hand-built; jcs() (Python sort_keys) would be a WRONG oracle here.
+_nonbmp_canonical = '{"\U0001F600":1,"�":2}'.encode()
+write("jcs-nonbmp-key-sort.json", {
+    "name": "jcs/nonbmp-key-sort-utf16", "command": "jcs",
+    "input": {"value": {"\U0001F600": 1, "�": 2}},
+    "anchor": {"canonical_hex": _nonbmp_canonical.hex(), "byte_len": len(_nonbmp_canonical)},
+})
+
+# --- CLI dispatch codes (#55): pin the previously off-vector paths.
+# Go answers unsupported_command / invalid_input today; TS is aligned in the same change.
+write("neg-cli-unsupported-command.json", {
+    "name": "cli/unsupported-command", "command": "not-a-command",
+    "input": {}, "anchor": {"error": "unsupported_command"}})
+write("neg-cli-unparseable-stdin.json", {
+    "name": "cli/unparseable-stdin", "command": "jcs",
+    "input_raw": ")(", "anchor": {"error": "invalid_input"}})

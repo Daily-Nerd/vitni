@@ -1,0 +1,1 @@
+{"name": "jcs/nan-literal", "command": "jcs", "input_raw": "{\"value\":{\"n\":NaN}}", "anchor": {"error": "invalid_input"}}
