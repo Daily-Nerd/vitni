@@ -1,6 +1,6 @@
 # vitni conformance suite
 
-**The interoperability bar for vitni implementations.** 92 language-agnostic
+**The interoperability bar for vitni implementations.** 94 language-agnostic
 vectors that pin every byte the protocol commits to. Any implementation that
 passes them is interoperable with every other implementation that passes them
 — that is the claim this directory exists to make falsifiable.
@@ -31,7 +31,7 @@ interoperability break, even when both are "reasonable."
 | JCS canonicalization | `jcs-*`, `neg-dup-jcs*` | RFC 8785 octets, ECMAScript number serialization, duplicate-key rejection, the 2^53 boundary; ES number formatting (float-integral, -0, exponent boundaries 1e16/1e21/1e-5..1e-7, over-safe-int via input_raw), non-finite rejection, UTF-16 code-unit key sort (non-BMP) |
 | Hash-string encoding | `digest-*`, `neg-hashstring-*`, `neg-digest-*` | multihash + the one pinned multibase (`u` + base64url-nopad); strict-canonical base64 accept set (newlines, excess padding, non-zero trailing bits all rejected) |
 | Receipt-id derivation | `receipt-id-*`, `neg-dup-receipt-id` | `receipt_id = "u" + base64url(multihash(JCS(Receipt)))`, `receipt_id`-must-be-absent |
-| Streaming (SSE) | `sse-*`, `neg-sse-*` | decode-then-hash (§4.3): CRLF/CR/LF framing, BOM strip, comment lines, split `data:` lines, JSON-RPC inner-`result` extraction, re-framed streams hashing identically |
+| Streaming (SSE) | `sse-*`, `neg-sse-*` | decode-then-hash (§4.3): CRLF/CR/LF framing, BOM strip, comment lines, split `data:` lines, JSON-RPC inner-`result` extraction, re-framed streams hashing identically, non-finite inner-result rejection |
 | Cost encoding | `cost-*`, `neg-cost-*` | string-encoded integer magnitudes; JSON-number cost rejected (the silent-rounding defense) |
 | Signing | `sign-*`, `neg-sign-*` | Ed25519 over JCS payload octets; seed accept set; unknown-key error channel |
 | Verification + JOSE hardening | `verify-*` | valid Ed25519/ES256 accepts **and** the closed attack paths: `alg:none`, algorithm substitution, `jwk`/`jku`/`x5*` header key-injection, non-canonical payload, unknown `kid`, revoked key, wrong key, context mismatch |
@@ -71,7 +71,7 @@ implementation:
 GO_VERIFY="./bin/vitni-verify-go" TS_VERIFY="your-verify-cmd" node conformance/compare.mjs
 ```
 
-Byte-identical output against a reference implementation on all 92 vectors
+Byte-identical output against a reference implementation on all 94 vectors
 is the conformance claim. Divergence is a finding: either your
 implementation has a bug, or the spec leaked ambiguity — [file an
 issue](https://github.com/Daily-Nerd/vitni/issues) for either; the second
