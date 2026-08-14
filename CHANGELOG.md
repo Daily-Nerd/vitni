@@ -4,6 +4,14 @@ All notable changes to vitni are documented here. Format: [Keep a Changelog](htt
 
 > **One version, one changelog.** vitni ships the Go module and the npm package (`@daily-nerd/vitni`) in lockstep under a single version — any change to either implementation bumps it. release-please generates entries here from conventional commits. The `0.2.0`–`0.2.1` entries (the npm-only transition releases) live in git history — `git show v0.2.2:ts/CHANGELOG.md`; unified history resumes from `0.2.2`.
 
+## [0.5.3](https://github.com/Daily-Nerd/vitni/compare/v0.5.2...v0.5.3) (2026-08-14)
+
+
+### Bug Fixes
+
+* **conformance:** pin ES-number + dispatch-code vectors; stop TS non-finite corruption ([#56](https://github.com/Daily-Nerd/vitni/issues/56)) ([9a2d94c](https://github.com/Daily-Nerd/vitni/commit/9a2d94c4e24ad1e101daeb6655f4af4fe62419e5))
+* **ts:** close non-finite bypass in sse-outputs-hash; pin with vectors ([#60](https://github.com/Daily-Nerd/vitni/issues/60)) ([c0744d4](https://github.com/Daily-Nerd/vitni/commit/c0744d4e53609619bc878cf6248b998486c46a90))
+
 ## [0.5.2](https://github.com/Daily-Nerd/vitni/compare/v0.5.1...v0.5.2) (2026-07-30)
 
 
