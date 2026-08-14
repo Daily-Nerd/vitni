@@ -397,8 +397,23 @@ func TestVectors_SSEOutputsHash(t *testing.T) {
 				t.Fatal(err)
 			}
 			if isErrorVector(t, v.Anchor) {
-				// CLI-layer strict base64 rejection; see TestVectors_Digest.
-				assertBase64Rejected(t, inp.RawB64)
+				// Two rejection layers feed an "error" anchor here: malformed
+				// base64 (CLI-layer, see TestVectors_Digest) and a valid-base64
+				// stream whose sse-jsonrpc inner result the library itself
+				// rejects (e.g. non-finite, #58 -- jcs.Transform errors on the
+				// float-converted +Inf). Decode once and branch on which layer
+				// actually rejected, matching TestVectors_CostCanon's pattern of
+				// asserting err != nil for library-level error vectors rather
+				// than a specific code, since the library returns errors, not
+				// the CLI's string codes.
+				rawBytes, decErr := vitni.DecodeStdBase64(inp.RawB64)
+				if decErr != nil {
+					assertBase64Rejected(t, inp.RawB64)
+					return
+				}
+				if _, _, err := vitni.SSEOutputsHash(rawBytes, inp.Mode); err == nil {
+					t.Fatal("expected SSEOutputsHash error, got nil")
+				}
 				return
 			}
 			rawBytes, err := vitni.DecodeStdBase64(inp.RawB64)

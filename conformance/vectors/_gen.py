@@ -255,7 +255,11 @@ for fname, name, raw, expected in _num_cases:
         "anchor": {"canonical_hex": exp_bytes.hex(), "byte_len": len(exp_bytes)},
     })
 
-# non-finite input: Go's json.Unmarshal errors on 1e400 and on the NaN literal;
+# non-finite input: 1e400 is valid JSON number syntax, so Go's json.Unmarshal
+# copies it unparsed into json.RawMessage (no float conversion, go/vitni.go:28);
+# rejection happens one layer down, at jcs.Transform, when it float-converts and
+# finds +Inf. The bare NaN literal IS invalid JSON syntax, so that one errors at
+# json.Unmarshal itself, before ever reaching jcs.Transform.
 # JSON.parse turns 1e400 into Infinity (must be guarded) and rejects NaN.
 # Both implementations MUST answer invalid_input.
 write("neg-jcs-nonfinite-1e400.json", {
@@ -284,3 +288,27 @@ write("neg-cli-unsupported-command.json", {
 write("neg-cli-unparseable-stdin.json", {
     "name": "cli/unparseable-stdin", "command": "jcs",
     "input_raw": ")(", "anchor": {"error": "invalid_input"}})
+
+# --- SSE non-finite bypass (#58): sse-jsonrpc carries JSON inside raw_b64, so the
+# stdin-level non-finite guard never sees it. The inner result's 1e400 must be
+# rejected at the decode-then-hash layer by both implementations (Go: jcs.Transform;
+# TS: guard in the sse-jsonrpc path), never silently serialized as the bytes "null".
+_raw_nonfinite = b'data: {"jsonrpc":"2.0","id":1,"result":{"n":1e400}}\n\n'
+write("neg-sse-nonfinite-result.json", {
+    "name": "sse/jsonrpc-nonfinite-result", "command": "sse-outputs-hash",
+    "input": {"mode": "sse-jsonrpc", "raw_b64": base64.b64encode(_raw_nonfinite).decode()},
+    "anchor": {"error": "invalid_input"}})
+
+# --- SSE non-finite bypass (#58), NaN-message probe: `NaN` is not valid JSON, so a
+# strict parser (Go's json.Unmarshal, TS's JSON.parse) fails to parse the message and
+# CONTRACT §5 skip applies -> committed bytes are empty (empirically confirmed identical
+# on both reference implementations). Anchored directly to the skip outcome rather than
+# through sse_parse()'s jsonrpc branch: Python's json.loads accepts NaN by default
+# (parse_constant), so running it through that oracle would wrongly include the message.
+# This vector pins the skip outcome against a future Python impl making that same mistake.
+_raw_nan_message = b'data: {"jsonrpc":"2.0","id":1,"result":NaN}\n\n'
+_dec_nan_message = b""
+write("sse-jsonrpc-nan-message.json", {
+    "name": "sse/jsonrpc-nan-message", "command": "sse-outputs-hash",
+    "input": {"mode": "sse-jsonrpc", "raw_b64": base64.b64encode(_raw_nan_message).decode()},
+    "anchor": {"decoded_hex": _dec_nan_message.hex(), "outputs_hash": hashstr(_dec_nan_message)}})
