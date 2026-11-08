@@ -264,6 +264,8 @@ The performer's signing key MUST be discoverable through a channel the performer
 
 **Cross-stranger (no prior relationship): out of scope v1** (depends on WIMSE/SCIM-for-agents/DIDs, unsettled in 2026). v2 layer.
 
+The shape of the local key registry a verifier reads is defined in `conformance/CONTRACT.md` section 7; [Appendix A](#appendix-a-local-key-registry-non-normative) explains how a deployment can hold one.
+
 ---
 
 ## 11. The transparency log (CT-style)
@@ -450,3 +452,54 @@ inputs).
 ---
 
 *Draft 0.2. The byte-source pins (§3–§4), the JOSE hardening (§12), and the value-cap fence (§9) are the substance of this revision. The remaining open items are Q5/Q6 and the L2/Log wire-format, none of which block understanding what we are building.*
+
+---
+
+## Appendix A. Local key registry (non-normative)
+
+Status: non-normative. This appendix describes how a deployment can hold the keys a verifier resolves (section 10 and section 12). It adds no rules and restates none: the registry shape, the algorithm and key-type binding, the key material rules and every outcome are defined once, in `conformance/CONTRACT.md` section 7 (the `verify` command, steps 5 and 6) and pinned by the conformance vectors. Where this appendix and a vector disagree, the vector wins. Vectors are cited as `vectors/<name>`, the file stem under `conformance/vectors/`.
+
+### A.1 Shape
+
+The registry is a JSON object keyed by `performer_id`, then by `kid`. The members of an entry are listed in the `verify` input of `conformance/CONTRACT.md` section 7. A registry that works looks like this. It is the registry of `vectors/verify-extra-members-ignored`, including the two reserved members described in A.3:
+
+```json
+{
+  "srv-ed": {
+    "ed-1": {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "PM0kHP_Js2GARLl9A22GFFk9iwF8NA8d7odzOFUXZUs",
+      "alg": "EdDSA",
+      "status": "active",
+      "rpId": "example.com",
+      "origins": [
+        "https://example.com"
+      ]
+    }
+  }
+}
+```
+
+### A.2 Revocation flag
+
+Only the exact string `"revoked"` in `status` revokes a key. `vectors/verify-key-revoked-and-mismatched` answers `revoked_key`, while `vectors/verify-status-odd-is-active` (`"Revoked"`) and `vectors/verify-key-member-case-status` (a member named `STATUS`) verify. This is the flag only; how a deployment decides to set it is the revocation question in section 10.
+
+### A.3 Unknown members
+
+A verifier MUST ignore registry members it does not know, so a registry can grow without breaking an older verifier (`vectors/verify-extra-members-ignored`). Member names are case-sensitive: `vectors/verify-key-member-case-alg` and `vectors/verify-key-member-case-x` show that a differently-cased name is simply not the member.
+
+Two names are reserved for later use and carry no meaning today: `rpId` and `origins`. They appear in the example above only to show that they are ignored. WA-ES256 (a WebAuthn-style ES256 profile) is deferred and not part of this release. If it is added, it is expected to arrive as a new profile tag and a new registry `alg` value, in a protocol revision with its own vectors. Nothing in this appendix defines it.
+
+### A.4 Where each outcome is defined
+
+Each outcome below is defined in `conformance/CONTRACT.md` section 7, in the step named here (steps 5 and 6 carry the binding and the key material rules); the vectors are the examples.
+
+- A performer or kid the registry does not contain, or a `null` entry, is step 3: `vectors/verify-key-constructor-name`, `vectors/verify-key-entry-null`.
+- A key type that does not match the entry's `alg`, or an `alg` outside the table, is step 5: `vectors/verify-key-eddsa-kty-ec`, `vectors/verify-key-es256-kty-okp`, `vectors/verify-key-eddsa-crv-ed448`, `vectors/verify-key-es256-crv-p384`, `vectors/verify-key-alg-rs256`.
+- Key material that cannot be used (padding, standard alphabet, newline, wrong length, not on the curve) is step 6, judged by the same strict decoder as a JWS segment and never repaired: `vectors/verify-key-eddsa-x-padded`, `vectors/verify-key-eddsa-x-newline`, `vectors/verify-key-es256-x-33-bytes`, `vectors/verify-key-es256-offcurve`.
+- A registry member of the wrong JSON type, or a registry that is not an object of objects, is a command error rather than a verdict (the input strictness rules in the same file): `vectors/neg-verify-key-x-number`, `vectors/neg-verify-key-alg-number`, `vectors/neg-verify-key-status-number`, `vectors/neg-verify-keys-array`.
+
+### A.5 Location and discovery
+
+Where a deployment stores the registry and how a verifier finds it are deployment decisions. There is no path convention, file name or well-known location here. Section 10 covers how a performer publishes its keys.
