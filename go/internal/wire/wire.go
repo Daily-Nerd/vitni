@@ -83,9 +83,12 @@ func decodeKeys(m map[string]json.RawMessage) (map[string]map[string]vitni.Regis
 		}
 		decoded := make(map[string]vitni.RegistryKey, len(entries))
 		for kid, entry := range entries {
-			key, err := decodeRegistryKey(entry)
+			key, present, err := decodeRegistryKey(entry)
 			if err != nil {
 				return nil, err
+			}
+			if !present {
+				continue // a null entry is absent: Verify answers unknown_key
 			}
 			decoded[kid] = key
 		}
@@ -96,21 +99,20 @@ func decodeKeys(m map[string]json.RawMessage) (map[string]map[string]vitni.Regis
 
 // decodeRegistryKey decodes one registry entry: kty, crv, x, y, alg and status
 // are each a string, null or absent (null and absent are ""). A JSON null entry
-// is the zero key.
-func decodeRegistryKey(raw json.RawMessage) (vitni.RegistryKey, error) {
-	var key vitni.RegistryKey
+// is not present: it is reported as such and never becomes a zero key.
+func decodeRegistryKey(raw json.RawMessage) (key vitni.RegistryKey, present bool, err error) {
 	var obj map[string]json.RawMessage
-	if _, err := fields.Value(raw, &obj); err != nil {
-		return key, err
+	if present, err = fields.Value(raw, &obj); err != nil || !present {
+		return key, present, err
 	}
 	for name, dst := range map[string]*string{
 		"kty": &key.Kty, "crv": &key.Crv, "x": &key.X, "y": &key.Y, "alg": &key.Alg, "status": &key.Status,
 	} {
 		if _, err := fields.Field(obj, name, dst); err != nil {
-			return key, err
+			return key, true, err
 		}
 	}
-	return key, nil
+	return key, true, nil
 }
 
 // decodePolicy decodes `policy`: an object or null/absent whose
