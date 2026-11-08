@@ -177,5 +177,18 @@ class SingleOwner(unittest.TestCase):
         self.assertNotEqual(call.args[0].id, "data")
 
 
+class NoDer(unittest.TestCase):
+    def test_no_function_parses_der(self):
+        # ES256 is raw R||S only: no DER/ASN.1 helper may exist, not even unused.
+        words = set()
+        for n in ast.walk(TREE):
+            if isinstance(n, (ast.FunctionDef, ast.ClassDef)):
+                words |= set(n.name.lower().split("_"))
+            elif isinstance(n, ast.Name):
+                words |= set(n.id.lower().split("_"))
+        self.assertFalse(words & {"der", "asn1", "asn", "dss"}, words & {"der", "asn1", "asn", "dss"})
+        self.assertTrue(top_level_functions() >= {"_ecdsa_p256_verify"})
+
+
 if __name__ == "__main__":
     unittest.main()
