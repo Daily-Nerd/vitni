@@ -1,0 +1,1 @@
+{"name": "sse/jsonrpc-inner-dup-last-wins", "command": "sse-outputs-hash", "input": {"mode": "sse-jsonrpc", "raw_b64": "ZGF0YTogeyJyZXN1bHQiOjEsInJlc3VsdCI6Mn0KCg=="}, "anchor": {"decoded_hex": "32", "outputs_hash": "uEiDUc146Jl4W7uA_WXGLm10DAZwH2LbFH5DaOmZu7BOrNQ"}}

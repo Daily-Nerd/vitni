@@ -1,0 +1,1 @@
+{"name": "a2a/part-lone-surrogate", "command": "a2a-artifact-hash", "input_raw": "{\"artifact\":{\"parts\":[{\"kind\":\"text\",\"text\":\"\\ud800\"}]}}", "anchor": {"error": "invalid_input"}}

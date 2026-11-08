@@ -607,3 +607,63 @@ write("verify-chain-receipts-null.json", {
     "name": "member/verify-chain-receipts-null", "command": "verify-chain",
     "input_raw": '{"receipts":null,"keys":{},"policy":null}',
     "anchor": {"valid": False, "reason": "empty_chain", "chain_len": 0}})
+
+# =====================================================================
+# Embedded parse sites (R0.9). The sse-jsonrpc inner message is JSON text hidden
+# inside raw_b64, so the stdin gate never sees it. It must go through the same
+# strict text function: no lone-surrogate escape, no non-finite number anywhere in
+# the message, depth <= 128; duplicate keys stay last-wins; text that is not JSON
+# at all keeps being skipped (CONTRACT section 5). Violations: invalid_input.
+# a2a parts are NOT an embedded site: they are members of the stdin object, so
+# the stdin gate has already judged them (the a2a vectors below prove it).
+# =====================================================================
+def _sse_jsonrpc(fname, name, message: bytes, anchor):
+    raw = b"data: " + message + b"\n\n"
+    write(f"{fname}.json", {
+        "name": name, "command": "sse-outputs-hash",
+        "input": {"mode": "sse-jsonrpc", "raw_b64": base64.b64encode(raw).decode()},
+        "anchor": anchor})
+
+
+def _sse_committed(fname, name, message: bytes, committed: bytes):
+    _sse_jsonrpc(fname, name, message,
+                 {"decoded_hex": committed.hex(), "outputs_hash": hashstr(committed)})
+
+
+_sse_jsonrpc("neg-sse-jsonrpc-inner-lone-surrogate", "sse/jsonrpc-inner-lone-surrogate",
+             b'{"jsonrpc":"2.0","id":1,"result":"' + _LONE_HI.encode() + b'"}', _INVALID)
+# the policy covers the whole message, not only the member the command reads
+_sse_jsonrpc("neg-sse-jsonrpc-inner-lone-surrogate-ignored-member",
+             "sse/jsonrpc-inner-lone-surrogate-ignored-member",
+             b'{"jsonrpc":"2.0","id":"' + _LONE_HI.encode() + b'","result":1}', _INVALID)
+_sse_jsonrpc("neg-sse-jsonrpc-inner-nonfinite-ignored-member",
+             "sse/jsonrpc-inner-nonfinite-ignored-member",
+             b'{"jsonrpc":"2.0","id":1e400,"result":1}', _INVALID)
+# nesting depth is counted from the inner message itself (its own top level is depth 1)
+_sse_jsonrpc("neg-sse-jsonrpc-inner-depth-129", "sse/jsonrpc-inner-depth-129",
+             b'{"result":' + b"[" * 128 + b"]" * 128 + b"}", _INVALID)
+_nest127 = b"[" * 127 + b"]" * 127
+_sse_committed("sse-jsonrpc-inner-depth-128", "sse/jsonrpc-inner-depth-128",
+               b'{"result":' + _nest127 + b"}", _nest127)
+# duplicate keys inside the inner message are last-wins (not rejected)
+_sse_committed("sse-jsonrpc-inner-dup-last-wins", "sse/jsonrpc-inner-dup-last-wins",
+               b'{"result":1,"result":2}', b"2")
+# mode sse never parses the data as JSON: an escape that would be a lone
+# surrogate is just text
+_lone_text = b'{"result":"' + _LONE_HI.encode() + b'"}'
+write("sse-plain-lone-surrogate-escape-is-text.json", {
+    "name": "sse/plain-lone-surrogate-escape-is-text", "command": "sse-outputs-hash",
+    "input": {"mode": "sse", "raw_b64": base64.b64encode(b"data: " + _lone_text + b"\n\n").decode()},
+    "anchor": {"decoded_hex": _lone_text.hex(), "outputs_hash": hashstr(_lone_text)}})
+
+# a2a: the stdin gate already judges the parts
+_neg("neg-a2a-part-lone-surrogate", "a2a/part-lone-surrogate", "a2a-artifact-hash",
+     text='{"artifact":{"parts":[{"kind":"text","text":"' + _LONE_HI + '"}]}}')
+_neg("neg-a2a-data-depth-129", "a2a/data-depth-129", "a2a-artifact-hash",
+     text='{"artifact":{"parts":[{"kind":"data","data":' + "[" * 125 + "]" * 125 + "}]}}")
+_a2a_nest = "[" * 124 + "]" * 124
+_a2a_desc = jcs({"parts": [{"kind": "data", "data": json.loads(_a2a_nest)}]}).encode()
+write("a2a-data-depth-128.json", {
+    "name": "a2a/data-depth-128", "command": "a2a-artifact-hash",
+    "input_raw": '{"artifact":{"parts":[{"kind":"data","data":' + _a2a_nest + "}]}}",
+    "anchor": {"descriptor_hex": _a2a_desc.hex(), "outputs_hash": hashstr(_a2a_desc)}})
