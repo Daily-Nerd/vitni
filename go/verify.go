@@ -122,9 +122,9 @@ func verifyDecoded(in VerifyInput) (string, decodedReceipt) {
 	if !ok {
 		return "malformed", decodedReceipt{}
 	}
-	performerID := stringClaim(payload, "performer_id")
-	binding := stringClaim(payload, "binding")
-	method := stringClaim(payload, "method")
+	performerID, performerOK := stringClaim(payload, "performer_id")
+	binding, bindingOK := stringClaim(payload, "binding")
+	method, methodOK := stringClaim(payload, "method")
 
 	// --- Step 2: header_key_material ---
 	for _, k := range forbiddenHeaderKeys {
@@ -134,8 +134,10 @@ func verifyDecoded(in VerifyInput) (string, decodedReceipt) {
 	}
 
 	// --- Step 3: resolve key ---
-	kid := stringClaim(header, "kid")
-	if performerID == "" || kid == "" {
+	// An empty string is a name like any other: only an absent or non-string
+	// performer_id/kid is unknown (CONTRACT step 3).
+	kid, kidOK := stringClaim(header, "kid")
+	if !performerOK || !kidOK {
 		return "unknown_key", decodedReceipt{}
 	}
 	perfKeys, ok := in.Keys[performerID]
@@ -153,7 +155,7 @@ func verifyDecoded(in VerifyInput) (string, decodedReceipt) {
 	}
 
 	// --- Step 5: alg_not_allowed ---
-	headerAlg := stringClaim(header, "alg")
+	headerAlg, _ := stringClaim(header, "alg")
 	if headerAlg == "" || headerAlg == "none" || headerAlg != key.Alg {
 		return "alg_not_allowed", decodedReceipt{}
 	}
@@ -185,12 +187,13 @@ func verifyDecoded(in VerifyInput) (string, decodedReceipt) {
 
 	// --- Step 8: context_mismatch ---
 	if in.Policy.ExpectedBinding != nil {
-		if binding != *in.Policy.ExpectedBinding {
+		// An absent or non-string claim never equals an expected value, "" included.
+		if !bindingOK || binding != *in.Policy.ExpectedBinding {
 			return "context_mismatch", decodedReceipt{}
 		}
 	}
 	if in.Policy.ExpectedMethod != nil {
-		if method != *in.Policy.ExpectedMethod {
+		if !methodOK || method != *in.Policy.ExpectedMethod {
 			return "context_mismatch", decodedReceipt{}
 		}
 	}
@@ -200,17 +203,23 @@ func verifyDecoded(in VerifyInput) (string, decodedReceipt) {
 }
 
 // stringClaim extracts a string-valued claim from a raw-message map.
-// Returns "" if absent or not a JSON string.
-func stringClaim(m map[string]json.RawMessage, key string) string {
+// ok is false when the claim is absent or not a JSON string, so callers can
+// tell an absent claim from the empty string.
+func stringClaim(m map[string]json.RawMessage, key string) (string, bool) {
 	raw, ok := m[key]
 	if !ok {
-		return ""
+		return "", false
+	}
+	// json.Unmarshal accepts null into a string without error and leaves it "";
+	// null is not a string, so reject it explicitly.
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return "", false
 	}
 	var s string
 	if err := json.Unmarshal(raw, &s); err != nil {
-		return ""
+		return "", false
 	}
-	return s
+	return s, true
 }
 
 // verifyEd25519 decodes the registry x through the strict base64url decoder.
