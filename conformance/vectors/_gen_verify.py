@@ -614,3 +614,23 @@ edge_vec("verify-ed-order8-b-r-eq-a.json", "verify/ed-order8-b-r-eq-a", ORDER8_B
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)
+
+# ---------------------------------------------------------------------------
+# #69 follow-ups. (1) Surrogate escapes are case-insensitive hex: the uppercase
+# lone and high-high forms are malformed, the uppercase valid pair is merely
+# non-canonical (same as lowercase). (2) An Ed25519 registry key whose 32 bytes
+# are not a curve point (y = 2 has no square root) is a key-material problem:
+# bad_signature in every implementation, never a crash and never a pass.
+# ---------------------------------------------------------------------------
+text_vec("verify-payload-lone-surrogate-upper.json", "verify/payload-lone-surrogate-uppercase",
+         ED_HDR_BYTES, ext_payload(b'"\\uD800"'), MALFORMED)
+text_vec("verify-payload-high-then-high-surrogate.json", "verify/payload-high-then-high-surrogate",
+         ED_HDR_BYTES, ext_payload(b'"\\uD800\\uD800"'), MALFORMED)
+text_vec("verify-payload-surrogate-pair-escape-upper.json",
+         "verify/payload-surrogate-pair-escape-uppercase",
+         ED_HDR_BYTES, ext_payload(b'"\\uD83D\\uDE00"'), NON_CANON)
+
+ED_OFFCURVE_X = b64u(b"\x02" + b"\x00" * 31)
+assert ED_OFFCURVE_X == "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+key_vec("verify-key-eddsa-offcurve.json", "verify/key-eddsa-offcurve", ed_receipt,
+        reg_with(ed={"x": ED_OFFCURVE_X}))
