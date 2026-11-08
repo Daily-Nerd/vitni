@@ -206,3 +206,82 @@ def parse_json(data, *, dup, nonfinite):
     if _has_lone_surrogate(value):
         raise _Reject("lone surrogate")
     return value
+
+
+# --------------------------------------------------------------------------
+# JCS (RFC 8785). Written out by hand: no json.dumps, so no hidden defaults.
+# --------------------------------------------------------------------------
+
+_ESCAPES = {'"': '\\"', "\\": "\\\\", "\b": "\\b", "\f": "\\f", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+_NEEDS_ESCAPE = re.compile('["\\\\\\x00-\\x1f]')
+
+
+def _escape(m):
+    c = m.group()
+    return _ESCAPES.get(c) or "\\u%04x" % ord(c)
+
+
+def _es_number(f):
+    """ECMAScript Number::toString of a finite double, from the shortest
+    round-trip digits that repr() already produces."""
+    if f == 0.0:
+        return "0"
+    sign = "-" if f < 0 else ""
+    mantissa, _, exp = repr(abs(f)).partition("e")
+    whole, _, frac = mantissa.partition(".")
+    digits = whole + frac
+    n = len(whole) + (int(exp) if exp else 0)  # value = 0.<digits> x 10^n
+    stripped = digits.lstrip("0")
+    n -= len(digits) - len(stripped)
+    d = stripped.rstrip("0")
+    k = len(d)
+    if k <= n <= 21:
+        body = d + "0" * (n - k)
+    elif 0 < n <= 21:
+        body = d[:n] + "." + d[n:]
+    elif -6 < n <= 0:
+        body = "0." + "0" * -n + d
+    else:
+        e = n - 1
+        body = d[0] + ("." + d[1:] if k > 1 else "") + "e" + ("+" if e >= 0 else "-") + str(abs(e))
+    return sign + body
+
+
+def _jcs_text(v):
+    if v is None:
+        return "null"
+    if v is True:  # bool is an int subclass: test it before the numbers
+        return "true"
+    if v is False:
+        return "false"
+    if isinstance(v, str):
+        return '"' + _NEEDS_ESCAPE.sub(_escape, v) + '"'
+    if isinstance(v, (int, float)):
+        try:
+            f = float(v)
+        except OverflowError:
+            raise _NotCanonical("number overflows a double") from None
+        if not math.isfinite(f):
+            raise _NotCanonical("non-finite number")
+        return _es_number(f)
+    if isinstance(v, list):
+        return "[" + ",".join(_jcs_text(x) for x in v) + "]"
+    if isinstance(v, dict):
+        keys = sorted(v, key=_utf16_key)
+        return "{" + ",".join(_jcs_text(k) + ":" + _jcs_text(v[k]) for k in keys) + "}"
+    raise _NotCanonical("not a JSON value")  # includes the _NONFINITE sentinel
+
+
+def _utf16_key(k):
+    try:
+        return k.encode("utf-16-be")
+    except UnicodeEncodeError:
+        raise _NotCanonical("lone surrogate in key") from None
+
+
+def jcs(value):
+    """The RFC 8785 canonical bytes of a parsed JSON value."""
+    try:
+        return _jcs_text(value).encode("utf-8")
+    except UnicodeEncodeError:
+        raise _NotCanonical("lone surrogate") from None
