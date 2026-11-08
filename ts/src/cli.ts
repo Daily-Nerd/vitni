@@ -39,7 +39,8 @@ async function readStdin(): Promise<string> {
  * string (no trailing newline). Pure and side-effect-free so it is unit-testable
  * independently of stdin/argv wiring.
  */
-export function dispatch(command: string, raw: string): string {
+export function dispatch(command: string, stdin: Uint8Array | string): string {
+  const raw = typeof stdin === 'string' ? stdin : Buffer.from(stdin).toString('utf8');
   let input: unknown;
   try {
     input = JSON.parse(raw);

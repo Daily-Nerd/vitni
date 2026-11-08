@@ -4,6 +4,10 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { vectorStdin } from './vector-stdin.mjs';
 
 const DIST = new URL('../dist', import.meta.url).pathname;
 const { dispatch, main, writeFatal } = await import(`${DIST}/cli.js`);
@@ -95,3 +99,27 @@ test('dispatch: non-finite number input -> invalid_input, never canonical null',
   assert.equal(dispatch('jcs', '{"value":{"n":1e400}}'), '{"error":"invalid_input"}');
   assert.equal(dispatch('jcs', '{"value":{"a":[1,1e309]}}'), '{"error":"invalid_input"}');
 });
+
+// Every conformance vector, whatever its stdin form (input, input_raw,
+// input_raw_b64), through the full CLI pipeline: exactly the bytes the vector
+// pins go in, the printed line is compared with the anchor. There is no hand
+// list, so a new vector cannot be silently untested.
+const VECTORS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../conformance/vectors');
+const allVectors = readdirSync(VECTORS_DIR)
+  .filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+  .sort()
+  .map((f) => JSON.parse(readFileSync(join(VECTORS_DIR, f), 'utf8')));
+assert.ok(allVectors.length > 100, 'vector directory scan found too few vectors');
+
+for (const v of allVectors) {
+  test(`dispatch vector: ${v.name}`, () => {
+    const out = parse(dispatch(v.command, vectorStdin(v)));
+    if (v.anchor === undefined) {
+      assert.ok(!('error' in out), `${v.name}: unanchored vector must not error, got ${JSON.stringify(out)}`);
+      return;
+    }
+    for (const [k, expected] of Object.entries(v.anchor)) {
+      assert.deepStrictEqual(out[k], expected, `${v.name}: field ${k}`);
+    }
+  });
+}

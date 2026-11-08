@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,12 +36,75 @@ var dispatch = map[string]func([]byte) (json.RawMessage, error){
 	"keygen":            runKeygen,
 }
 
+// vec is one conformance vector file. A vector pins its stdin in exactly one of
+// three forms; the raw forms are pointers so that a present-but-empty value is
+// EMPTY stdin, not "absent" (a plain string cannot tell the two apart).
 type vec struct {
-	Name     string          `json:"name"`
-	Command  string          `json:"command"`
-	Input    json.RawMessage `json:"input"`
-	InputRaw string          `json:"input_raw"`
-	Anchor   json.RawMessage `json:"anchor"`
+	Name        string          `json:"name"`
+	Command     string          `json:"command"`
+	Input       json.RawMessage `json:"input"`
+	InputRaw    *string         `json:"input_raw"`
+	InputRawB64 *string         `json:"input_raw_b64"`
+	Anchor      json.RawMessage `json:"anchor"`
+}
+
+// vecStdin returns the exact stdin bytes a vector pins: input_raw verbatim,
+// input_raw_b64 base64-decoded (bytes a JSON string cannot carry, such as
+// invalid UTF-8), or the serialized input object. Exactly one form is allowed.
+func vecStdin(v vec) ([]byte, error) {
+	forms := 0
+	if v.Input != nil {
+		forms++
+	}
+	if v.InputRaw != nil {
+		forms++
+	}
+	if v.InputRawB64 != nil {
+		forms++
+	}
+	if forms != 1 {
+		return nil, fmt.Errorf("%s: exactly one of input, input_raw, input_raw_b64 required, found %d", v.Name, forms)
+	}
+	switch {
+	case v.InputRawB64 != nil:
+		return base64.StdEncoding.DecodeString(*v.InputRawB64)
+	case v.InputRaw != nil:
+		return []byte(*v.InputRaw), nil
+	default:
+		return []byte(v.Input), nil
+	}
+}
+
+func TestVecStdin(t *testing.T) {
+	s := func(x string) *string { return &x }
+	cases := []struct {
+		name    string
+		v       vec
+		want    []byte
+		wantErr bool
+	}{
+		{"input", vec{Input: json.RawMessage(`{"a":1}`)}, []byte(`{"a":1}`), false},
+		{"raw", vec{InputRaw: s(`{"a":1,"a":2}`)}, []byte(`{"a":1,"a":2}`), false},
+		{"raw-empty-is-empty-stdin", vec{InputRaw: s("")}, []byte{}, false},
+		{"b64-empty-is-empty-stdin", vec{InputRawB64: s("")}, []byte{}, false},
+		{"b64-invalid-utf8", vec{InputRawB64: s("/w==")}, []byte{0xff}, false},
+		{"b64-bom", vec{InputRawB64: s("77u/e30=")}, []byte("\xef\xbb\xbf{}"), false},
+		{"none", vec{}, nil, true},
+		{"two-forms", vec{InputRaw: s("x"), InputRawB64: s("")}, nil, true},
+		{"input-and-raw", vec{Input: json.RawMessage(`{}`), InputRaw: s("")}, nil, true},
+		{"bad-b64", vec{InputRawB64: s("!!!")}, nil, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := vecStdin(c.v)
+			if (err != nil) != c.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, c.wantErr)
+			}
+			if err == nil && (got == nil || !bytes.Equal(got, c.want)) {
+				t.Errorf("stdin = %#v, want %#v", got, c.want)
+			}
+		})
+	}
 }
 
 func TestDispatch_AllVectors(t *testing.T) {
@@ -64,26 +130,21 @@ func TestDispatch_AllVectors(t *testing.T) {
 			continue
 		}
 		t.Run(v.Name, func(t *testing.T) {
-			// Exact stdin bytes: input_raw verbatim (duplicate keys) or the
-			// serialized input object.
-			var stdin []byte
-			if v.InputRaw != "" {
-				stdin = []byte(v.InputRaw)
-			} else {
-				stdin = v.Input
+			// Exact stdin bytes, whichever form the vector pins.
+			stdin, err := vecStdin(v)
+			if err != nil {
+				t.Fatal(err)
 			}
 			out, cmdErr := fn(stdin)
 
-			// A vector whose anchor asserts an error (or that uses input_raw
-			// for a duplicate-key rejection) must produce a non-nil error whose
-			// mapped code matches; a happy vector must not error.
+			// A vector whose anchor asserts an error must produce a non-nil
+			// error whose mapped code matches; a happy vector must not error.
+			// This holds for every command: an `error` anchor is a command
+			// error, a verdict is a {valid:false} result.
 			var anchor map[string]json.RawMessage
 			_ = json.Unmarshal(v.Anchor, &anchor)
 			_, wantErr := anchor["error"]
-			// verify / verify-chain never error at the CLI layer — an invalid
-			// receipt is a {valid:false} result, not a Go error — so only the
-			// command-error vectors (invalid_input etc.) are error cases.
-			if wantErr && v.Command != "verify" && v.Command != "verify-chain" {
+			if wantErr {
 				if cmdErr == nil {
 					t.Fatalf("expected error, got output %s", out)
 				}

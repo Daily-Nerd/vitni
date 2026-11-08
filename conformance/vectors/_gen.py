@@ -24,7 +24,16 @@ def hashstr(content: bytes) -> str:
     return "u" + b64url_nopad(multihash)
 
 
+INPUT_FORMS = ("input", "input_raw", "input_raw_b64")
+
+
 def write(name_file: str, obj: dict) -> None:
+    """Write one vector. It pins its stdin in EXACTLY one form: `input` (structured
+    JSON), `input_raw` (exact stdin text) or `input_raw_b64` (standard base64 of the
+    exact stdin bytes, for what a JSON string cannot carry: invalid UTF-8, BOM)."""
+    forms = [k for k in INPUT_FORMS if k in obj]
+    if len(forms) != 1:
+        raise ValueError(f"{name_file}: exactly one of {INPUT_FORMS} required, found {forms}")
     (OUT / name_file).write_text(json.dumps(obj) + "\n")
 
 
@@ -344,3 +353,10 @@ write("neg-sse-lone-surrogate-result.json", {
     "name": "sse/jsonrpc-lone-surrogate-result", "command": "sse-outputs-hash",
     "input": {"mode": "sse-jsonrpc", "raw_b64": base64.b64encode(_raw_lone).decode()},
     "anchor": {"error": "invalid_input"}})
+
+# --- empty stdin (R0.10): a present-but-empty input_raw_b64 is EMPTY stdin, not
+# "absent" (the Go CLI test used to treat an empty input_raw as absent and run
+# the vector with whatever input it had). Both impls answer invalid_input. ---
+write("neg-stdin-empty.json", {
+    "name": "stdin/empty", "command": "jcs",
+    "input_raw_b64": "", "anchor": {"error": "invalid_input"}})

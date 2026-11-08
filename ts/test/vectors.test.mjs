@@ -184,8 +184,8 @@ test('cost/number-must-error', () => {
 // --- verify, verify-chain, a2a-artifact-hash: directory-driven ---
 // Every vector file whose `command` matches runs here; there is no hand-kept
 // list, so a new vector cannot be silently untested. Vectors that pin raw stdin
-// bytes (`input_raw*`) have no structured `input` and are exercised through the
-// CLI (compare.mjs), not this in-process runner.
+// bytes (`input_raw*`) have no structured `input`; dispatch.test.mjs runs them
+// (and every other vector) through the CLI pipeline with the exact bytes.
 const DIR_COMMANDS = new Set(['verify', 'verify-chain', 'a2a-artifact-hash']);
 const dirVectors = readdirSync(VECTORS_DIR)
   .filter((f) => f.endsWith('.json') && !f.startsWith('_'))
