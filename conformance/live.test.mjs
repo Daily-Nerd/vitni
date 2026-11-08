@@ -31,6 +31,19 @@ test("S1.9 Go and TS declare exactly the catalog's gating atoms, with empty stdi
   }
 });
 
+test("FX every impl answers an empty command argument unsupported_command and no argument missing_command", () => {
+  requireBuilt();
+  const run = (impl, extra) => {
+    const [cmd, ...args] = impl.argv;
+    return spawnSync(cmd, [...args, ...extra], { cwd: ROOT, input: Buffer.from("{}") }).stdout.toString("utf8");
+  };
+  const py = { name: "py", argv: PY_VERIFY.split(/\s+/) };
+  for (const impl of [...defaultImpls({}), py]) {
+    assert.equal(run(impl, [""]), '{"error":"unsupported_command"}\n', `${impl.name} empty argument`);
+    assert.equal(run(impl, []), '{"error":"missing_command"}\n', `${impl.name} no argument`);
+  }
+});
+
 test("S1.23 floors.json holds Go and TS at all vectors and Python at an integer lower bound", () => {
   const floors = JSON.parse(readFileSync(join(HERE, "floors.json"), "utf8"));
   assert.deepEqual(Object.keys(floors).sort(), ["go", "py", "ts"]);

@@ -59,6 +59,25 @@ function isKnownAlg(alg: unknown): alg is AlgName {
   return typeof alg === 'string' && Object.prototype.hasOwnProperty.call(ALGS, alg);
 }
 
+/**
+ * The registry lookup: the SINGLE owner of "answers only for keys the registry
+ * actually contains". Own properties only, at both levels, so a performer_id or
+ * kid named like something every object inherits (__proto__, constructor,
+ * toString) is absent, as in Go. A key that really is in the registry (JSON.parse
+ * defines `__proto__` as an own property) is found.
+ */
+function lookupKey(
+  keys: VerifyInput['keys'] | null | undefined,
+  performerId: string,
+  kid: string
+): RegistryJwk | null {
+  const has = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
+  if (keys === null || keys === undefined || !has(keys, performerId)) return null;
+  const perfKeys = keys[performerId];
+  if (perfKeys === null || perfKeys === undefined || !has(perfKeys, kid)) return null;
+  return perfKeys[kid] ?? null;
+}
+
 const FORBIDDEN_HEADER_KEYS = ['jwk', 'jku', 'x5u', 'x5c', 'x5t', 'x5t#S256'];
 
 function rejected(reason: string): { result: VerifyOutput; decoded: null } {
@@ -175,10 +194,8 @@ export function verifyDecoded(input: VerifyInput): {
   if (typeof performerId !== 'string' || typeof kid !== 'string') {
     return rejected('unknown_key');
   }
-  const perfKeys = input.keys?.[performerId];
-  if (!perfKeys) return rejected('unknown_key');
-  const jwk = perfKeys[kid];
-  if (!jwk) return rejected('unknown_key');
+  const jwk = lookupKey(input.keys, performerId, kid);
+  if (jwk === null) return rejected('unknown_key');
 
   // --- Step 4: revoked_key ---
   if (jwk.status === 'revoked') {
