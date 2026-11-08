@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Daily-Nerd/vitni/go"
@@ -656,5 +657,43 @@ func TestCanonicalizersRejectSurrogateEscapes(t *testing.T) {
 		if err != nil || string(got) != want {
 			t.Errorf("JCS(%s) = %q, %v; want %q", in, got, err, want)
 		}
+	}
+}
+
+// One SSE stream maps to one hash or one error: invalid UTF-8 anywhere in the
+// stream is an error in both modes, never hashed as raw bytes.
+func TestSSEOutputsHash_InvalidUTF8Rejected(t *testing.T) {
+	streams := map[string]string{
+		"data":      "data: a\xffb\n\n",
+		"comment":   ": \xff\n\ndata: a\n\n",
+		"field":     "event: \xff\ndata: a\n\n",
+		"tail":      "data: a\n\n\xff",
+		"truncated": "data: \xe2\x82\n\n",
+		"overlong":  "data: \xc0\x80\n\n",
+		"surrogate": "data: \xed\xa0\x80\n\n",
+		"after-bom": "\xef\xbb\xbfdata: \xff\n\n",
+	}
+	for name, raw := range streams {
+		for _, mode := range []string{"sse", "sse-jsonrpc"} {
+			if _, _, err := vitni.SSEOutputsHash([]byte(raw), mode); err == nil {
+				t.Errorf("%s/%s: invalid UTF-8 was hashed", mode, name)
+			}
+		}
+	}
+	if _, _, err := vitni.SSEOutputsHash([]byte("data: é€\U0001f600\n\n"), "sse"); err != nil {
+		t.Errorf("valid multi-byte text rejected: %v", err)
+	}
+}
+
+// A multihash header never lies about its digest length: the header declares
+// 0x20, so the digest must be exactly 32 bytes.
+func TestHashString_DigestMustBe32Bytes(t *testing.T) {
+	for _, n := range []int{0, 1, 31, 33, 64} {
+		if _, err := vitni.HashString(strings.Repeat("ab", n)); err == nil {
+			t.Errorf("%d-byte digest accepted", n)
+		}
+	}
+	if _, err := vitni.HashString(strings.Repeat("ab", 32)); err != nil {
+		t.Errorf("32-byte digest rejected: %v", err)
 	}
 }

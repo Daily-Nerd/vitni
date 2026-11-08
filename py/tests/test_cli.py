@@ -73,6 +73,8 @@ class Resolution(unittest.TestCase):
         self.assertEqual(run_cli([], b'{"value":1}')[1], b'{"error":"missing_command"}\n')
         self.assertEqual(run_cli(["bogus"], b'{"value":1}')[1], b'{"error":"unsupported_command"}\n')
         self.assertEqual(run_cli(["JCS"], b'{"value":1}')[1], b'{"error":"unsupported_command"}\n')  # exact, case-sensitive
+        # an empty command argument is not a missing one (the shared vector cli/empty-command pins it too)
+        self.assertEqual(run_cli([""], b'{"value":1}')[1], b'{"error":"unsupported_command"}\n')
         self.assertEqual(run_cli(["bogus"], b"\xff\xfe not even json")[1], b'{"error":"unsupported_command"}\n')  # resolves before any parse
 
     def test_declined_commands_never_read_stdin(self):

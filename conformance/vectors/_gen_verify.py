@@ -767,6 +767,29 @@ del _no_receipt["signed_receipt"]
 write_input("verify-signed-receipt-absent.json", "verify-envelope/signed-receipt-absent", "verify",
             _no_receipt, {"valid": False, "reason": "malformed"})
 
+# ---------------------------------------------------------------------------
+# Batch FX. Invariant: registry lookup answers only for keys the registry
+# actually contains. A kid or performer_id that is a name every object inherits
+# (__proto__, constructor, toString) is an ordinary absent key: unknown_key.
+# ---------------------------------------------------------------------------
+UNKNOWN_KEY = (False, "unknown_key")
+for _fname, _name, _kid in (
+        ("verify-key-proto-name.json", "verify/key-proto-name", "__proto__"),
+        ("verify-key-constructor-name.json", "verify/key-constructor-name", "constructor"),
+        ("verify-key-tostring-name.json", "verify/key-tostring-name", "toString")):
+    write(_fname, _name, jws({"alg": "EdDSA", "kid": _kid}, ed_payload, "EdDSA"),
+          reg(), NO_POLICY, *UNKNOWN_KEY)
+# the performer level: __proto__ as performer_id, and a kid the inherited object has
+write("verify-key-proto-performer.json", "verify/key-proto-performer",
+      jws({"alg": "EdDSA", "kid": "toString"}, jcs(receipt("__proto__")).encode(), "EdDSA"),
+      reg(), NO_POLICY, *UNKNOWN_KEY)
+# and the other way round: a registry that DOES contain the name answers for it
+_own = reg()
+_own["srv-ed"] = {"__proto__": _own["srv-ed"]["ed-1"]}
+write("verify-key-own-proto-name.json", "verify/key-own-proto-name",
+      jws({"alg": "EdDSA", "kid": "__proto__"}, ed_payload, "EdDSA"),
+      _own, NO_POLICY, True, "ok")
+
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)

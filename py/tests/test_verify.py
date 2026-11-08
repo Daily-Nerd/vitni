@@ -1,5 +1,6 @@
 """The verify pipeline: CONTRACT steps 1 to 8, first failing step wins."""
 import itertools
+import json
 import unittest
 
 from . import _paths  # noqa: F401
@@ -219,6 +220,16 @@ class HeaderAndPayload(unittest.TestCase):
             self.assertEqual(self.run_with({"alg": "EdDSA", "kid": name}), "unknown_key", name)
             token = jws(None, V.jcs(payload_dict(performer_id=name)))
             self.assertEqual(verdict(V.verify(token, registry(), None)), "unknown_key", name)
+
+    def test_prototype_names_are_pinned_by_shared_vectors(self):
+        # the guard every implementation shares: the vectors, not a Python-only list
+        wanted = {"verify/key-proto-name", "verify/key-constructor-name", "verify/key-tostring-name",
+                  "verify/key-proto-performer", "verify/key-own-proto-name"}
+        found = {v["name"]: v for v in load_vectors() if v["name"] in wanted}
+        self.assertEqual(set(found), wanted)
+        for vec in found.values():
+            got = V.dispatch("verify", lambda vec=vec: stdin_bytes(vec))
+            self.assertEqual({k: v for k, v in json.loads(got).items()}, vec["anchor"], vec["_file"])
 
     def test_revoked_only_for_the_exact_string(self):
         self.assertEqual(self.run_with(keys=registry(status="revoked")), "revoked_key")
