@@ -51,6 +51,8 @@ export function decodeHex(s: string): Buffer | null {
  * `bad_signature`.
  */
 export function decodeB64UrlStrict(s: string): Buffer | null {
+  // Reachable from the exported library verify, whose caller the CLI does not
+  // type (a RegistryJwk may omit y): pinned in decode-b64url.test.mjs.
   if (typeof s !== 'string') return null;
   if (!/^[A-Za-z0-9_-]*$/.test(s)) return null;
   if (s.length % 4 === 1) return null;

@@ -36,3 +36,39 @@ for (const [name, input, want] of CASES) {
     }
   });
 }
+
+// The CLI types the whole keys tree before verify runs, but `verify` is also an
+// exported library function and a library caller is not typed by the CLI: an
+// ES256 key without `y` is legal per RegistryJwk, and an untyped caller can pass
+// any value. The decoder's string check is that caller's only boundary, so a
+// coordinate that is not a string is a key-material problem (bad_signature),
+// never a TypeError thrown out of verify.
+const { verify } = await import(`${DIST}/commands/verify.js`);
+const VECTORS = new URL('../../conformance/vectors', import.meta.url).pathname;
+const { readFileSync } = await import('node:fs');
+const es256 = JSON.parse(readFileSync(`${VECTORS}/verify-valid-es256.json`, 'utf8')).input;
+
+function withKey(patch) {
+  const keys = structuredClone(es256.keys);
+  const [performer, kid] = Object.entries(keys)
+    .flatMap(([p, byKid]) => Object.keys(byKid).filter((k) => byKid[k].alg === 'ES256').map((k) => [p, k]))[0];
+  const key = { ...keys[performer][kid], ...patch };
+  for (const [k, v] of Object.entries(patch)) if (v === undefined) delete key[k];
+  keys[performer][kid] = key;
+  return { ...es256, keys };
+}
+
+for (const [name, patch] of [
+  ['y absent', { y: undefined }],
+  ['x a number', { x: 1234 }],
+  ['y a number', { y: 1234 }],
+  ['x an object', { x: {} }],
+]) {
+  test(`library verify: registry coordinate ${name} is bad_signature`, () => {
+    assert.deepEqual(verify(withKey(patch)), { valid: false, reason: 'bad_signature' });
+  });
+}
+
+test('library verify: the unpatched ES256 key still verifies', () => {
+  assert.deepEqual(verify(withKey({})), { valid: true, reason: 'ok' });
+});
