@@ -58,10 +58,14 @@ test('dispatch: verify returns a verdict object, not a throw', () => {
   const out = parse(dispatch('verify', '{"signed_receipt":"a.b.c","keys":{},"policy":null}'));
   assert.equal(out.valid, false); // malformed JWS -> {valid:false, reason:"malformed"}
 });
+test('dispatch: a non-string raw_b64 is invalid_input, validated before the command runs', () => {
+  assert.deepEqual(parse(dispatch('sse-outputs-hash', '{"mode":"sse","raw_b64":123}')), { error: 'invalid_input' });
+});
 test('dispatch: internal_error when a command throws', () => {
-  // sse-outputs-hash with a non-string raw_b64 makes the decoder throw internally.
-  const out = parse(dispatch('sse-outputs-hash', '{"mode":"sse","raw_b64":123}'));
-  assert.ok('error' in out);
+  // The command table is injectable: validation passes, then the injected
+  // command throws, which is the only way to reach the last-resort catch.
+  const throwing = { digest: () => { throw new Error('boom'); } };
+  assert.deepEqual(parse(dispatch('digest', '{"bytes_b64":"aGVsbG8="}', throwing)), { error: 'internal_error' });
 });
 
 test('main: missing command', async () => {
