@@ -248,6 +248,104 @@ write("verify-ext-valid.json", "verify/ext-valid",
       jws({"alg": "EdDSA", "kid": "ed-1"}, ext_payload, "EdDSA"),
       reg(), NO_POLICY, True, "ok")
 
+# ---------------------------------------------------------------------------
+# PR 0a, batch 2: ONE strict base64url decoder for JWS segments and key material.
+# Every vector below carries a signature that is valid over the UNMUTATED
+# receipt; the mutation is applied after signing, so the verdict is decided by
+# the segment/key-material rule and not by anything else in the receipt.
+# ---------------------------------------------------------------------------
+B64U = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+
+def insert_at(i: int, ch: str):
+    return lambda t: t[:i] + ch + t[i:]
+
+
+def flip_trailing_bit(t: str) -> str:
+    """Set the lowest bit of the last character. For a canonical segment whose
+    byte length is not a multiple of 3 that bit is a trailing (padding) bit that
+    is zero in the canonical encoding, so the result decodes to the SAME bytes
+    under a lenient decoder and is non-canonical under a strict one."""
+    idx = B64U.index(t[-1])
+    assert idx & 1 == 0, "last char already has a non-zero low bit"
+    return t[:-1] + B64U[idx | 1]
+
+
+def to_len_1_mod_4(t: str) -> str:
+    return t + "A" * (((1 - len(t)) % 4) or 4)
+
+
+MALFORMED = (False, "malformed")
+BAD_SIG = (False, "bad_signature")
+ED_HDR = {"alg": "EdDSA", "kid": "ed-1"}
+# header/payload variants whose byte length is NOT a multiple of 3, so their
+# base64url form has trailing bits (trailing ASCII space is valid JSON text)
+ED_HDR_PAD = json.dumps(ED_HDR, separators=(",", ":"), sort_keys=True).encode() + b" "
+ED_PAYLOAD_PAD = ed_payload + b" " if len(ed_payload) % 3 == 0 else ed_payload
+assert len(ED_HDR_PAD) % 3 != 0 and len(ED_PAYLOAD_PAD) % 3 != 0
+
+
+def seg_vec(fname, name, mutate_seg, verdict, hdr=None, payload=None):
+    signed = jws_raw(hdr or json.dumps(ED_HDR, separators=(",", ":"), sort_keys=True).encode(),
+                     payload or ed_payload, "EdDSA", mutate_seg=mutate_seg)
+    write(fname, name, signed, reg(), NO_POLICY, *verdict)
+
+
+# D1: CR/LF inside a segment (Go's RawURLEncoding silently skips them)
+seg_vec("verify-sig-lf-inside.json", "verify/sig-lf-inside", {2: insert_at(10, "\n")}, MALFORMED)
+seg_vec("verify-sig-cr-inside.json", "verify/sig-cr-inside", {2: insert_at(10, "\r")}, MALFORMED)
+seg_vec("verify-header-seg-lf.json", "verify/header-seg-lf", {0: insert_at(10, "\n")}, MALFORMED)
+seg_vec("verify-payload-seg-lf.json", "verify/payload-seg-lf", {1: insert_at(10, "\n")}, MALFORMED)
+# D2: segment length = 1 mod 4 is never valid base64url
+seg_vec("verify-segment-len-1-mod-4.json", "verify/segment-len-1-mod-4", {2: to_len_1_mod_4}, MALFORMED)
+# D3/D3b: non-zero trailing bits are rejected (one canonical encoding per byte string)
+seg_vec("verify-sig-trailing-bits.json", "verify/sig-trailing-bits", {2: flip_trailing_bit}, MALFORMED)
+seg_vec("verify-header-trailing-bits.json", "verify/header-trailing-bits", {0: flip_trailing_bit},
+        MALFORMED, hdr=ED_HDR_PAD)
+seg_vec("verify-payload-trailing-bits.json", "verify/payload-trailing-bits", {1: flip_trailing_bit},
+        MALFORMED, payload=ED_PAYLOAD_PAD)
+# S0.46 pins: already identical in Go and TS today, pinned for any third verifier
+seg_vec("verify-segments-four.json", "verify/segments-four", {2: lambda t: t + ".AAAA"}, MALFORMED)
+seg_vec("verify-segment-padded.json", "verify/segment-padded", {0: lambda t: t + "="}, MALFORMED)
+seg_vec("verify-segment-std-alphabet.json", "verify/segment-std-alphabet",
+        {2: lambda t: t[:5] + "/" + t[6:]}, MALFORMED)
+
+# Key material (R0.2): x/y go through the same strict decoder. Failure here is
+# bad_signature (a key-material problem), while the same decoder failing on a JWS
+# segment is malformed: the call site chooses the code, the decoder is shared.
+ed_receipt = jws({"alg": "EdDSA", "kid": "ed-1"}, ed_payload, "EdDSA")
+ec_receipt = jws({"alg": "ES256", "kid": "ec-1"}, ec_payload, "ES256")
+ed_x = b64u(ed_pub)
+ec_xs, ec_ys = b64u(ec_x), b64u(ec_y)
+
+
+def std_alphabet(t: str) -> str:
+    out = t.replace("-", "+").replace("_", "/")
+    assert out != t, "key has no - or _ to convert; pick another test key"
+    return out
+
+
+def key_vec(fname, name, signed, keys):
+    write(fname, name, signed, keys, NO_POLICY, *BAD_SIG)
+
+
+key_vec("verify-key-eddsa-x-padded.json", "verify/key-eddsa-x-padded", ed_receipt,
+        reg_with(ed={"x": ed_x + "="}))
+key_vec("verify-key-eddsa-x-std-alphabet.json", "verify/key-eddsa-x-std-alphabet", ed_receipt,
+        reg_with(ed={"x": std_alphabet(ed_x)}))
+key_vec("verify-key-eddsa-x-newline.json", "verify/key-eddsa-x-newline", ed_receipt,
+        reg_with(ed={"x": ed_x[:20] + "\n" + ed_x[20:]}))
+key_vec("verify-key-eddsa-x-trailing-bits.json", "verify/key-eddsa-x-trailing-bits", ed_receipt,
+        reg_with(ed={"x": flip_trailing_bit(ed_x)}))
+key_vec("verify-key-es256-x-33-bytes.json", "verify/key-es256-x-33-bytes", ec_receipt,
+        reg_with(ec={"x": b64u(b"\x00" + ec_x)}))
+key_vec("verify-key-es256-y-padded.json", "verify/key-es256-y-padded", ec_receipt,
+        reg_with(ec={"y": ec_ys + "="}))
+key_vec("verify-key-es256-x-std-alphabet.json", "verify/key-es256-x-std-alphabet", ec_receipt,
+        reg_with(ec={"x": std_alphabet(ec_xs)}))
+key_vec("verify-key-es256-offcurve.json", "verify/key-es256-offcurve", ec_receipt,
+        reg_with(ec={"y": b64u((int.from_bytes(ec_y, "big") + 1).to_bytes(32, "big"))}))
+
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)
