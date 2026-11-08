@@ -18,6 +18,7 @@
 import { createPublicKey, verify as cryptoVerify, KeyObject } from 'node:crypto';
 import { jcsBytes } from './jcs.js';
 import { decodeB64UrlStrict } from './decode.js';
+import { parseStrict } from './strict-json.js';
 
 export interface VerifyInput {
   signed_receipt: string;
@@ -65,15 +66,19 @@ function fail(reason: string): VerifyOutput {
 }
 
 /**
- * Decode a Buffer as strict UTF-8. Returns null if it contains invalid UTF-8.
+ * Decode header or payload bytes: strict JSON text (no BOM, valid UTF-8, no
+ * lone-surrogate escape, depth <= 128) that is exactly one JSON object.
+ * Duplicate keys are last-wins and non-finite numbers are accepted here: the
+ * header is never serialized, and a payload with either fails step 7 (its
+ * re-serialization cannot equal the transmitted bytes). Returns null on any
+ * violation; the caller reports `malformed`.
  */
-function strictUtf8(buf: Buffer): string | null {
-  const decoder = new TextDecoder('utf-8', { fatal: true });
-  try {
-    return decoder.decode(buf);
-  } catch {
-    return null;
-  }
+function decodeObject(buf: Buffer): Record<string, unknown> | null {
+  const r = parseStrict(buf, { rejectDuplicates: false, rejectNonFinite: false });
+  if (!r.ok) return null;
+  const v = r.value;
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
+  return v as Record<string, unknown>;
 }
 
 /**
@@ -151,33 +156,17 @@ export function verify(input: VerifyInput): VerifyOutput {
     return fail('malformed');
   }
 
-  // header must be valid JSON object
-  const headerStr = strictUtf8(headerBuf);
-  if (headerStr === null) return fail('malformed');
-  let header: Record<string, unknown>;
-  try {
-    const parsed = JSON.parse(headerStr);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return fail('malformed');
-    }
-    header = parsed as Record<string, unknown>;
-  } catch {
+  // header: strict text that is exactly one JSON object.
+  const header = decodeObject(headerBuf);
+  if (header === null) return fail('malformed');
+  // RFC 7797: b64 absent or true is fine; false or any non-boolean is malformed.
+  if (Object.prototype.hasOwnProperty.call(header, 'b64') && header['b64'] !== true) {
     return fail('malformed');
   }
 
-  // payload must be valid UTF-8 AND valid JSON object (§7 step 1, fail fast).
-  const payloadStr = strictUtf8(payloadBuf);
-  if (payloadStr === null) return fail('malformed');
-  let payload: Record<string, unknown>;
-  try {
-    const parsed = JSON.parse(payloadStr);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return fail('malformed');
-    }
-    payload = parsed as Record<string, unknown>;
-  } catch {
-    return fail('malformed');
-  }
+  // payload: same strict text, exactly one object (§7 step 1, fail fast).
+  const payload = decodeObject(payloadBuf);
+  if (payload === null) return fail('malformed');
 
   // --- Step 2: header_key_material ---
   for (const k of FORBIDDEN_HEADER_KEYS) {
