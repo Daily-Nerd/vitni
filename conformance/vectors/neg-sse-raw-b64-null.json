@@ -1,1 +1,1 @@
-{"name": "member/sse-raw-b64-null", "command": "sse-outputs-hash", "input_raw": "{\"mode\":\"sse\",\"raw_b64\":null}", "anchor": {"error": "invalid_input"}}
+{"name": "member/sse-raw-b64-null", "command": "sse-outputs-hash", "profiles": ["canon:b64-strict"], "input_raw": "{\"mode\":\"sse\",\"raw_b64\":null}", "anchor": {"error": "invalid_input"}}

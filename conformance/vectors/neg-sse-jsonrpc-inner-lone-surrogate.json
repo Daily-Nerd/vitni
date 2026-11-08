@@ -1,1 +1,1 @@
-{"name": "sse/jsonrpc-inner-lone-surrogate", "command": "sse-outputs-hash", "input": {"mode": "sse-jsonrpc", "raw_b64": "ZGF0YTogeyJqc29ucnBjIjoiMi4wIiwiaWQiOjEsInJlc3VsdCI6Ilx1ZDgwMCJ9Cgo="}, "anchor": {"error": "invalid_input"}}
+{"name": "sse/jsonrpc-inner-lone-surrogate", "command": "sse-outputs-hash", "profiles": ["canon:b64-strict", "canon:jcs"], "input": {"mode": "sse-jsonrpc", "raw_b64": "ZGF0YTogeyJqc29ucnBjIjoiMi4wIiwiaWQiOjEsInJlc3VsdCI6Ilx1ZDgwMCJ9Cgo="}, "anchor": {"error": "invalid_input"}}

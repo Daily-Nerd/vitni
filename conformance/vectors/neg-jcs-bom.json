@@ -1,1 +1,1 @@
-{"name": "stdin/jcs-bom", "command": "jcs", "input_raw_b64": "77u/eyJ2YWx1ZSI6MX0=", "anchor": {"error": "invalid_input"}}
+{"name": "stdin/jcs-bom", "command": "jcs", "profiles": ["canon:jcs"], "input_raw_b64": "77u/eyJ2YWx1ZSI6MX0=", "anchor": {"error": "invalid_input"}}

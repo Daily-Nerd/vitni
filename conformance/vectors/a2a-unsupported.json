@@ -1,1 +1,1 @@
-{"name": "a2a/unsupported-part", "command": "a2a-artifact-hash", "input": {"artifact": {"parts": [{"kind": "file", "file": {"mimeType": "x/y"}}]}}, "anchor": {"error": "unsupported_part"}}
+{"name": "a2a/unsupported-part", "command": "a2a-artifact-hash", "profiles": ["canon:jcs"], "input": {"artifact": {"parts": [{"kind": "file", "file": {"mimeType": "x/y"}}]}}, "anchor": {"error": "unsupported_part"}}

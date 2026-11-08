@@ -1,1 +1,1 @@
-{"name": "stdin/verify-lone-surrogate", "command": "verify", "input_raw": "{\"signed_receipt\":\"a.b.c\",\"keys\":{},\"policy\":null,\"x\":\"\\ud800\"}", "anchor": {"error": "invalid_input"}}
+{"name": "stdin/verify-lone-surrogate", "command": "verify", "profiles": ["canon:b64-strict", "canon:jcs"], "input_raw": "{\"signed_receipt\":\"a.b.c\",\"keys\":{},\"policy\":null,\"x\":\"\\ud800\"}", "anchor": {"error": "invalid_input"}}

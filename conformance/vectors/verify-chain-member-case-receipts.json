@@ -1,1 +1,1 @@
-{"name": "member/verify-chain-case-receipts", "command": "verify-chain", "input_raw": "{\"Receipts\":[\"a.b.c\"],\"keys\":{},\"policy\":null}", "anchor": {"valid": false, "reason": "empty_chain", "chain_len": 0}}
+{"name": "member/verify-chain-case-receipts", "command": "verify-chain", "profiles": ["canon:b64-strict", "canon:jcs"], "input_raw": "{\"Receipts\":[\"a.b.c\"],\"keys\":{},\"policy\":null}", "anchor": {"valid": false, "reason": "empty_chain", "chain_len": 0}}

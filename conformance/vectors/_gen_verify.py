@@ -12,6 +12,8 @@ import hashlib
 import json
 import pathlib
 
+import _profiles
+
 from cryptography.hazmat.primitives.asymmetric import ed25519, ec
 from ecdsa import SigningKey, NIST256p
 from ecdsa.util import sigencode_string
@@ -136,7 +138,7 @@ NO_POLICY = {"expected_binding": None, "expected_method": None}
 
 def emit(fname, vec):
     """The one place this generator writes a vector file."""
-    (OUT / fname).write_text(json.dumps(vec) + "\n")
+    _profiles.write(OUT / fname, vec)
 
 
 def write(fname, name, signed, keys, policy, valid, reason):

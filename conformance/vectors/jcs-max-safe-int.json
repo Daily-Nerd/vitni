@@ -1,1 +1,1 @@
-{"name": "jcs/max-safe-int", "command": "jcs", "input": {"value": {"n": 9007199254740991}}, "anchor": {"canonical_hex": "7b226e223a393030373139393235343734303939317d", "byte_len": 22}}
+{"name": "jcs/max-safe-int", "command": "jcs", "profiles": ["canon:jcs"], "input": {"value": {"n": 9007199254740991}}, "anchor": {"canonical_hex": "7b226e223a393030373139393235343734303939317d", "byte_len": 22}}

@@ -1,1 +1,1 @@
-{"name": "stdin/array-digest", "command": "digest", "input_raw": "[]", "anchor": {"error": "invalid_input"}}
+{"name": "stdin/array-digest", "command": "digest", "profiles": [], "input_raw": "[]", "anchor": {"error": "invalid_input"}}

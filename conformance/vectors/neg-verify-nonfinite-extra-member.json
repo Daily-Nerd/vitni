@@ -1,1 +1,1 @@
-{"name": "stdin/verify-nonfinite-extra-member", "command": "verify", "input_raw": "{\"signed_receipt\":\"a.b.c\",\"keys\":{},\"policy\":null,\"x\":1e400}", "anchor": {"error": "invalid_input"}}
+{"name": "stdin/verify-nonfinite-extra-member", "command": "verify", "profiles": ["canon:b64-strict", "canon:jcs"], "input_raw": "{\"signed_receipt\":\"a.b.c\",\"keys\":{},\"policy\":null,\"x\":1e400}", "anchor": {"error": "invalid_input"}}

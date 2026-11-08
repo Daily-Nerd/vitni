@@ -1,1 +1,1 @@
-{"name": "member/sign-receipt-string", "command": "sign", "input_raw": "{\"receipt\":\"x\",\"kid\":\"ed-1\",\"private_key_b64\":\"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=\"}", "anchor": {"error": "invalid_input"}}
+{"name": "member/sign-receipt-string", "command": "sign", "profiles": ["alg:EdDSA", "canon:b64-strict", "canon:jcs"], "input_raw": "{\"receipt\":\"x\",\"kid\":\"ed-1\",\"private_key_b64\":\"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=\"}", "anchor": {"error": "invalid_input"}}

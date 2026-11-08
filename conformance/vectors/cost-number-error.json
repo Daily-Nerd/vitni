@@ -1,1 +1,1 @@
-{"name": "cost/number-must-error", "command": "cost-canon", "input": {"cost": {"tokens": 1500, "usd_micros": "10", "wall_ms": "5", "rail_ref": null}}, "anchor": {"error": "cost_must_be_string_int"}}
+{"name": "cost/number-must-error", "command": "cost-canon", "profiles": ["canon:jcs"], "input": {"cost": {"tokens": 1500, "usd_micros": "10", "wall_ms": "5", "rail_ref": null}}, "anchor": {"error": "cost_must_be_string_int"}}

@@ -10,6 +10,8 @@ import hashlib
 import json
 import pathlib
 
+import _profiles
+
 OUT = pathlib.Path(__file__).parent
 
 
@@ -24,17 +26,11 @@ def hashstr(content: bytes) -> str:
     return "u" + b64url_nopad(multihash)
 
 
-INPUT_FORMS = ("input", "input_raw", "input_raw_b64")
-
-
 def write(name_file: str, obj: dict) -> None:
     """Write one vector. It pins its stdin in EXACTLY one form: `input` (structured
     JSON), `input_raw` (exact stdin text) or `input_raw_b64` (standard base64 of the
     exact stdin bytes, for what a JSON string cannot carry: invalid UTF-8, BOM)."""
-    forms = [k for k in INPUT_FORMS if k in obj]
-    if len(forms) != 1:
-        raise ValueError(f"{name_file}: exactly one of {INPUT_FORMS} required, found {forms}")
-    (OUT / name_file).write_text(json.dumps(obj) + "\n")
+    _profiles.write(OUT / name_file, obj)
 
 
 def sse_parse(raw: bytes, jsonrpc: bool) -> bytes:

@@ -1,1 +1,1 @@
-{"name": "stdin/nul-suffix", "command": "digest", "input_raw_b64": "eyJieXRlc19iNjQiOiIifQA=", "anchor": {"error": "invalid_input"}}
+{"name": "stdin/nul-suffix", "command": "digest", "profiles": [], "input_raw_b64": "eyJieXRlc19iNjQiOiIifQA=", "anchor": {"error": "invalid_input"}}

@@ -1,1 +1,1 @@
-{"name": "jcs/nested-and-unicode", "command": "jcs", "input": {"value": {"z": "\u00e9", "a": [3, 1, 2]}}, "anchor": {"canonical_hex": "7b2261223a5b332c312c325d2c227a223a22c3a9227d", "byte_len": 22}}
+{"name": "jcs/nested-and-unicode", "command": "jcs", "profiles": ["canon:jcs"], "input": {"value": {"z": "\u00e9", "a": [3, 1, 2]}}, "anchor": {"canonical_hex": "7b2261223a5b332c312c325d2c227a223a22c3a9227d", "byte_len": 22}}

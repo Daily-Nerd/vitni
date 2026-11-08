@@ -1,1 +1,1 @@
-{"name": "jcs/num-1e21-exponent", "command": "jcs", "input_raw": "{\"value\":{\"n\":1e21}}", "anchor": {"canonical_hex": "7b226e223a31652b32317d", "byte_len": 11}}
+{"name": "jcs/num-1e21-exponent", "command": "jcs", "profiles": ["canon:jcs"], "input_raw": "{\"value\":{\"n\":1e21}}", "anchor": {"canonical_hex": "7b226e223a31652b32317d", "byte_len": 11}}

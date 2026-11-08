@@ -1,1 +1,1 @@
-{"name": "stdin/verify-chain-bom", "command": "verify-chain", "input_raw_b64": "77u/eyJyZWNlaXB0cyI6W10sImtleXMiOnt9LCJwb2xpY3kiOm51bGx9", "anchor": {"error": "invalid_input"}}
+{"name": "stdin/verify-chain-bom", "command": "verify-chain", "profiles": ["canon:b64-strict", "canon:jcs"], "input_raw_b64": "77u/eyJyZWNlaXB0cyI6W10sImtleXMiOnt9LCJwb2xpY3kiOm51bGx9", "anchor": {"error": "invalid_input"}}

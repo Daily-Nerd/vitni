@@ -1,1 +1,1 @@
-{"name": "stdin/jcs-lone-low-surrogate", "command": "jcs", "input_raw": "{\"value\":\"\\udc00\"}", "anchor": {"error": "invalid_input"}}
+{"name": "stdin/jcs-lone-low-surrogate", "command": "jcs", "profiles": ["canon:jcs"], "input_raw": "{\"value\":\"\\udc00\"}", "anchor": {"error": "invalid_input"}}

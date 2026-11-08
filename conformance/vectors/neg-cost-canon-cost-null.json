@@ -1,1 +1,1 @@
-{"name": "member/cost-canon-cost-null", "command": "cost-canon", "input_raw": "{\"cost\":null}", "anchor": {"error": "invalid_input"}}
+{"name": "member/cost-canon-cost-null", "command": "cost-canon", "profiles": ["canon:jcs"], "input_raw": "{\"cost\":null}", "anchor": {"error": "invalid_input"}}

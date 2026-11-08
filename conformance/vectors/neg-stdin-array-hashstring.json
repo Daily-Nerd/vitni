@@ -1,1 +1,1 @@
-{"name": "stdin/array-hashstring", "command": "hashstring", "input_raw": "[]", "anchor": {"error": "invalid_input"}}
+{"name": "stdin/array-hashstring", "command": "hashstring", "profiles": [], "input_raw": "[]", "anchor": {"error": "invalid_input"}}

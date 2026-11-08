@@ -1,1 +1,1 @@
-{"name": "jcs/high-then-high-surrogate-lowercase", "command": "jcs", "input_raw": "{\"value\":\"\\ud800\\ud800\"}", "anchor": {"error": "invalid_input"}}
+{"name": "jcs/high-then-high-surrogate-lowercase", "command": "jcs", "profiles": ["canon:jcs"], "input_raw": "{\"value\":\"\\ud800\\ud800\"}", "anchor": {"error": "invalid_input"}}

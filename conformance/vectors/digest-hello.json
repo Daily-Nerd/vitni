@@ -1,1 +1,1 @@
-{"name": "digest/hello", "command": "digest", "input": {"bytes_b64": "aGVsbG8="}, "anchor": {"hashstr": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA"}}
+{"name": "digest/hello", "command": "digest", "profiles": ["canon:b64-strict"], "input": {"bytes_b64": "aGVsbG8="}, "anchor": {"hashstr": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA"}}

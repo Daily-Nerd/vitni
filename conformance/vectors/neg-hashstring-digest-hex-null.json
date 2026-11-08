@@ -1,1 +1,1 @@
-{"name": "member/hashstring-digest-hex-null", "command": "hashstring", "input_raw": "{\"algo\":\"sha2-256\",\"digest_hex\":null}", "anchor": {"error": "invalid_input"}}
+{"name": "member/hashstring-digest-hex-null", "command": "hashstring", "profiles": [], "input_raw": "{\"algo\":\"sha2-256\",\"digest_hex\":null}", "anchor": {"error": "invalid_input"}}

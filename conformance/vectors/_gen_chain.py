@@ -11,6 +11,8 @@ import hashlib
 import json
 import pathlib
 
+import _profiles
+
 from cryptography.hazmat.primitives.asymmetric import ed25519, ec
 from ecdsa import SigningKey, NIST256p
 from ecdsa.util import sigencode_string
@@ -91,11 +93,11 @@ def build(performer_id, method, parent_hash, parent_perf):
 
 
 def write(fname, name, receipts, valid, reason):
-    (OUT / fname).write_text(json.dumps({
+    _profiles.write(OUT / fname, {
         "name": name, "command": "verify-chain",
         "input": {"receipts": receipts, "keys": REGISTRY, "policy": NO_POLICY},
         "anchor": {"valid": valid, "reason": reason, "chain_len": len(receipts)},
-    }) + "\n")
+    })
 
 
 # 1. valid 2-hop: leaf(srv-ec) -> root(srv-ed)

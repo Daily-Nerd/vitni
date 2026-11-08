@@ -1,1 +1,1 @@
-{"name": "digest/empty", "command": "digest", "input": {"bytes_b64": ""}, "anchor": {"hashstr": "uEiDjsMRCmPwcFJr79MiZb7kkJ65B5GSbk0yklZkbeFK4VQ"}}
+{"name": "digest/empty", "command": "digest", "profiles": ["canon:b64-strict"], "input": {"bytes_b64": ""}, "anchor": {"hashstr": "uEiDjsMRCmPwcFJr79MiZb7kkJ65B5GSbk0yklZkbeFK4VQ"}}

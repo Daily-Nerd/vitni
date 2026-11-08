@@ -1,1 +1,1 @@
-{"name": "member/a2a-file-string", "command": "a2a-artifact-hash", "input_raw": "{\"artifact\":{\"parts\":[{\"kind\":\"file\",\"file\":\"x\"}]}}", "anchor": {"error": "invalid_input"}}
+{"name": "member/a2a-file-string", "command": "a2a-artifact-hash", "profiles": ["canon:jcs"], "input_raw": "{\"artifact\":{\"parts\":[{\"kind\":\"file\",\"file\":\"x\"}]}}", "anchor": {"error": "invalid_input"}}

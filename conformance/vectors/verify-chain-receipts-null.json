@@ -1,1 +1,1 @@
-{"name": "member/verify-chain-receipts-null", "command": "verify-chain", "input_raw": "{\"receipts\":null,\"keys\":{},\"policy\":null}", "anchor": {"valid": false, "reason": "empty_chain", "chain_len": 0}}
+{"name": "member/verify-chain-receipts-null", "command": "verify-chain", "profiles": ["canon:b64-strict", "canon:jcs"], "input_raw": "{\"receipts\":null,\"keys\":{},\"policy\":null}", "anchor": {"valid": false, "reason": "empty_chain", "chain_len": 0}}

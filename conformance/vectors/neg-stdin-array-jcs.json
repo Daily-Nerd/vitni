@@ -1,1 +1,1 @@
-{"name": "stdin/array-jcs", "command": "jcs", "input_raw": "[]", "anchor": {"error": "invalid_input"}}
+{"name": "stdin/array-jcs", "command": "jcs", "profiles": ["canon:jcs"], "input_raw": "[]", "anchor": {"error": "invalid_input"}}

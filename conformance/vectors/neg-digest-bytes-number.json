@@ -1,1 +1,1 @@
-{"name": "member/digest-bytes-number", "command": "digest", "input_raw": "{\"bytes_b64\":5}", "anchor": {"error": "invalid_input"}}
+{"name": "member/digest-bytes-number", "command": "digest", "profiles": ["canon:b64-strict"], "input_raw": "{\"bytes_b64\":5}", "anchor": {"error": "invalid_input"}}
