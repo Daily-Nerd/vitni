@@ -6,7 +6,6 @@ import (
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"math/big"
 	"strings"
@@ -49,15 +48,15 @@ func Verify(in VerifyInput) (bool, string) {
 	if len(segs) != 3 {
 		return false, "malformed"
 	}
-	headerBytes, err := base64.RawURLEncoding.DecodeString(segs[0])
+	headerBytes, err := DecodeB64URLStrict(segs[0])
 	if err != nil {
 		return false, "malformed"
 	}
-	payloadBytes, err := base64.RawURLEncoding.DecodeString(segs[1])
+	payloadBytes, err := DecodeB64URLStrict(segs[1])
 	if err != nil {
 		return false, "malformed"
 	}
-	sigBytes, err := base64.RawURLEncoding.DecodeString(segs[2])
+	sigBytes, err := DecodeB64URLStrict(segs[2])
 	if err != nil {
 		return false, "malformed"
 	}
@@ -163,40 +162,52 @@ func stringClaim(m map[string]json.RawMessage, key string) string {
 func verifySignature(key RegistryKey, alg string, signingInput, sig []byte) bool {
 	switch alg {
 	case "EdDSA":
-		pub, err := base64.RawURLEncoding.DecodeString(key.X)
-		if err != nil || len(pub) != ed25519.PublicKeySize {
-			return false
-		}
-		return ed25519.Verify(ed25519.PublicKey(pub), signingInput, sig)
-
+		return verifyEd25519(key, signingInput, sig)
 	case "ES256":
-		// JWS ES256 signature is raw R‖S, 64 bytes.
-		if len(sig) != 64 {
-			return false
-		}
-		xb, err := base64.RawURLEncoding.DecodeString(key.X)
-		if err != nil || len(xb) != 32 {
-			return false
-		}
-		yb, err := base64.RawURLEncoding.DecodeString(key.Y)
-		if err != nil || len(yb) != 32 {
-			return false
-		}
-		pub := &ecdsa.PublicKey{
-			Curve: elliptic.P256(),
-			X:     new(big.Int).SetBytes(xb),
-			Y:     new(big.Int).SetBytes(yb),
-		}
-		// Reject points not on the curve.
-		if !pub.Curve.IsOnCurve(pub.X, pub.Y) {
-			return false
-		}
-		r := new(big.Int).SetBytes(sig[:32])
-		s := new(big.Int).SetBytes(sig[32:])
-		digest := sha256.Sum256(signingInput)
-		return ecdsa.Verify(pub, digest[:], r, s)
-
+		return verifyES256(key, signingInput, sig)
 	default:
 		return false
 	}
+}
+
+// verifyEd25519 decodes the registry x through the strict base64url decoder.
+// Any key-material problem (alphabet, padding, trailing bits, wrong length) is
+// reported as an invalid signature (`bad_signature`), never repaired. A JWS
+// SEGMENT failing the same decoder is `malformed`: same decoder, different
+// code at the call site.
+func verifyEd25519(key RegistryKey, signingInput, sig []byte) bool {
+	pub, err := DecodeB64URLStrict(key.X)
+	if err != nil || len(pub) != ed25519.PublicKeySize {
+		return false
+	}
+	return ed25519.Verify(ed25519.PublicKey(pub), signingInput, sig)
+}
+
+// verifyES256 verifies a JWS ES256 signature (raw R||S, 64 bytes). Registry
+// coordinates use the same strict decoder and must be exactly 32 bytes.
+func verifyES256(key RegistryKey, signingInput, sig []byte) bool {
+	if len(sig) != 64 {
+		return false
+	}
+	xb, err := DecodeB64URLStrict(key.X)
+	if err != nil || len(xb) != 32 {
+		return false
+	}
+	yb, err := DecodeB64URLStrict(key.Y)
+	if err != nil || len(yb) != 32 {
+		return false
+	}
+	pub := &ecdsa.PublicKey{
+		Curve: elliptic.P256(),
+		X:     new(big.Int).SetBytes(xb),
+		Y:     new(big.Int).SetBytes(yb),
+	}
+	// Reject points not on the curve.
+	if !pub.Curve.IsOnCurve(pub.X, pub.Y) {
+		return false
+	}
+	r := new(big.Int).SetBytes(sig[:32])
+	s := new(big.Int).SetBytes(sig[32:])
+	digest := sha256.Sum256(signingInput)
+	return ecdsa.Verify(pub, digest[:], r, s)
 }

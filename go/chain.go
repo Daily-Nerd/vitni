@@ -1,7 +1,6 @@
 package vitni
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"strings"
 )
@@ -113,7 +112,7 @@ func decodePayload(jws string) ([]byte, map[string]json.RawMessage, bool) {
 	if len(segs) != 3 {
 		return nil, nil, false
 	}
-	payloadBytes, err := base64.RawURLEncoding.DecodeString(segs[1])
+	payloadBytes, err := DecodeB64URLStrict(segs[1])
 	if err != nil {
 		return nil, nil, false
 	}
