@@ -240,6 +240,31 @@ write("verify-local-context-mismatch.json", "verify/local-context-mismatch",
       reg(), {"expected_binding": "mcp", "expected_method": None},
       False, "context_mismatch")
 
+# 14b. policy expects a method the receipt does not carry -> context_mismatch
+#      (the expected_binding arm is vector 10; this is the expected_method arm)
+write("verify-method-mismatch.json", "verify/method-mismatch",
+      jws({"alg": "EdDSA", "kid": "ed-1"}, ed_payload, "EdDSA"),
+      reg(), {"expected_binding": None, "expected_method": "mcp:other"},
+      False, "context_mismatch")
+
+# 14c. both constraints present and both satisfied -> ok
+write("verify-policy-match.json", "verify/policy-match",
+      jws({"alg": "EdDSA", "kid": "ed-1"}, ed_payload, "EdDSA"),
+      reg(), {"expected_binding": "mcp", "expected_method": "mcp:echo"},
+      True, "ok")
+
+# 14d. the performer is not a registry key at all (kid ed-1 exists under srv-ed,
+#      but the receipt names srv-stranger) -> unknown_key
+write("verify-unknown-performer.json", "verify/unknown-performer",
+      jws({"alg": "EdDSA", "kid": "ed-1"}, jcs(receipt("srv-stranger")).encode(), "EdDSA"),
+      reg(), NO_POLICY, False, "unknown_key")
+
+# 14e. a header with no kid cannot resolve a key -> unknown_key (an absent kid
+#      is not an empty one: the signature here is valid over the header as sent)
+write("verify-header-no-kid.json", "verify/header-no-kid",
+      jws({"alg": "EdDSA"}, ed_payload, "EdDSA"),
+      reg(), NO_POLICY, False, "unknown_key")
+
 # 15. ext present, still valid (ext never affects verification)
 r_ext = receipt("srv-ed")
 r_ext["ext"] = {"dev.daimon/prompt_version": "3"}
