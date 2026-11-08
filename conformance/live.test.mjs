@@ -46,7 +46,7 @@ test("S1.25 compare.mjs prints impls, the computed vector count and a clean pass
   assert.match(r.stdout, new RegExp(`^vectors: ${n}$`, "m"));
   assert.match(r.stdout, new RegExp(`^${n}/${n} passed\\.$`, "m"));
   // Go and TS are in scope for every vector: each matrix cell is k/k
-  const cells = r.stdout.split("--- coverage ---")[1].split(/\n\n/)[1].trim().split("\n").slice(1);
+  const cells = r.stdout.split("--- coverage ---")[1].split("\n\n")[0].trim().split("\n").slice(1);
   assert.ok(cells.length > 5);
   for (const row of cells) {
     for (const cell of row.trim().split(/\s+/).slice(1)) {

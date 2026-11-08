@@ -11,7 +11,6 @@
   <a href="https://github.com/Daily-Nerd/vitni/actions/workflows/conformance.yml"><img src="https://github.com/Daily-Nerd/vitni/actions/workflows/conformance.yml/badge.svg" alt="conformance"></a>
   <a href="https://codecov.io/gh/Daily-Nerd/vitni"><img src="https://codecov.io/gh/Daily-Nerd/vitni/graph/badge.svg?token=bkJnBEV2yF" alt="codecov"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
-  <img src="https://img.shields.io/badge/conformance-94%2F94-brightgreen" alt="conformance 94/94">
 </p>
 
 ---
