@@ -151,3 +151,59 @@ test('main: stdin bytes reach dispatch undecoded', async () => {
   await main(['node', 'cli', 'jcs'], async () => Buffer.from([0xef, 0xbb, 0xbf, 0x7b, 0x7d]), (s) => { out += s; });
   assert.equal(out, '{"error":"invalid_input"}\n');
 });
+
+// R0.12: no stdin reaches internal_error. For every command and every way the
+// stdin itself can be wrong (the mutation matrix below), the answer is exactly
+// one JSON object on one line and never the catch-all. A command bug that
+// throws on input shows up here as `internal_error`.
+const BASELINES = {
+  jcs: '{"value":{"b":1,"a":2}}',
+  hashstring: '{"algo":"sha2-256","digest_hex":"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"}',
+  digest: '{"bytes_b64":"aGVsbG8="}',
+  'receipt-id': '{"receipt":{"v":"vitni/0.2","binding":"mcp"}}',
+  'sse-outputs-hash': '{"mode":"sse","raw_b64":"ZGF0YTogaGVsbG8KCg=="}',
+  'cost-canon': '{"cost":{"tokens":"1","usd_micros":"0","wall_ms":"0","rail_ref":null}}',
+  verify: '{"signed_receipt":"a.b.c","keys":{},"policy":null}',
+  'verify-chain': '{"receipts":[],"keys":{},"policy":null}',
+  'a2a-artifact-hash': '{"artifact":{"parts":[{"kind":"text","text":"hi"}]}}',
+  sign: '{"receipt":{"v":"vitni/0.2"},"kid":"ed-1","private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}',
+  keygen: '{}',
+};
+// Add one member to the baseline object by replacing its closing brace.
+const withMember = (base, member) => Buffer.concat([
+  Buffer.from(base.slice(0, -1) + ',"zz":'), member, Buffer.from('}'),
+]);
+const MUTATIONS = {
+  baseline: (b) => Buffer.from(b),
+  bom: (b) => Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(b)]),
+  'invalid utf-8': (b) => withMember(b, Buffer.concat([Buffer.from('"'), Buffer.from([0xff]), Buffer.from('"')])),
+  'lone surrogate escape': (b) => withMember(b, Buffer.from('"\\ud800"')),
+  'lone low surrogate escape': (b) => withMember(b, Buffer.from('"\\udc00"')),
+  'non-finite number': (b) => withMember(b, Buffer.from('1e400')),
+  array: () => Buffer.from('[]'),
+  null: () => Buffer.from('null'),
+  string: () => Buffer.from('"x"'),
+  empty: () => Buffer.alloc(0),
+  'trailing garbage': (b) => Buffer.from(b + ' x'),
+  'nul suffix': (b) => Buffer.concat([Buffer.from(b), Buffer.from([0])]),
+  'depth 129': (b) => withMember(b, Buffer.from('['.repeat(128) + ']'.repeat(128))),
+  'depth 100000': (b) => withMember(b, Buffer.from('['.repeat(100000) + ']'.repeat(100000))),
+};
+
+assert.deepEqual(Object.keys(BASELINES).sort(), [
+  'a2a-artifact-hash', 'cost-canon', 'digest', 'hashstring', 'jcs', 'keygen', 'receipt-id',
+  'sign', 'sse-outputs-hash', 'verify', 'verify-chain',
+], 'the property test must cover every command');
+
+for (const [command, base] of Object.entries(BASELINES)) {
+  for (const [label, mutate] of Object.entries(MUTATIONS)) {
+    test(`R0.12 ${command} / ${label}: one JSON line, never internal_error`, () => {
+      const out = dispatch(command, mutate(base));
+      assert.ok(!out.includes('\n'), 'output must be a single line');
+      const parsed = JSON.parse(out);
+      assert.ok(parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed));
+      assert.notEqual(parsed.error, 'internal_error');
+      assert.notEqual(parsed.error, 'jcs_output_error');
+    });
+  }
+}
