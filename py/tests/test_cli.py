@@ -52,7 +52,7 @@ class Shape(unittest.TestCase):
             self.assertEqual(err, b"", command)
 
     def test_known_answers(self):
-        self.assertEqual(run_cli(["jcs"], b'{"value":{"b":1,"a":[]}}')[1], b'{"byte_len":13,"canonical_hex":"' + b'{"a":[],"b":1}'.hex().encode() + b'"}\n')
+        self.assertEqual(run_cli(["jcs"], b'{"value":{"b":1,"a":[]}}')[1], b'{"byte_len":14,"canonical_hex":"' + b'{"a":[],"b":1}'.hex().encode() + b'"}\n')
         self.assertEqual(run_cli(["digest"], b'{"bytes_b64":"aGVsbG8="}')[1], b'{"hashstr":"uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA"}\n')
 
     def test_stdout_is_binary_and_never_translated(self):
@@ -106,7 +106,7 @@ class Resolution(unittest.TestCase):
 
     def test_command_sets_are_derived_from_the_vectors(self):
         # no copy of the list: what the vectors exercise is what must exist
-        wanted = {v["command"] for v in load_vectors() if v["anchor"].get("error") != "unsupported_command"}
+        wanted = {v["command"] for v in load_vectors() if v.get("anchor", {}).get("error") != "unsupported_command"}
         self.assertEqual((set(V.COMMANDS) - {"profiles"}) | set(V.DECLINED), wanted)
         self.assertFalse(set(V.COMMANDS) & set(V.DECLINED))
         self.assertEqual(sorted(V.DECLINED), DECLINED)
@@ -120,6 +120,13 @@ class LastResort(unittest.TestCase):
 
     def test_a_bug_inside_a_handler_is_internal_error_not_a_verdict(self):
         with mock.patch.dict(V.COMMANDS, {"jcs": mock.Mock(side_effect=ZeroDivisionError)}):
+            rc, out, err = main_in_process(["jcs"], b'{"value":1}')
+        self.assertEqual((rc, out), (0, b'{"error":"internal_error"}\n'))
+
+    def test_a_value_without_a_canonical_form_is_a_bug_not_invalid_input(self):
+        # stdin text is judged before any handler, so jcs() refusing it means a
+        # decoder let something through: that must surface, not become a code
+        with mock.patch.dict(V.COMMANDS, {"jcs": mock.Mock(side_effect=V._NotCanonical("x"))}):
             rc, out, err = main_in_process(["jcs"], b'{"value":1}')
         self.assertEqual((rc, out), (0, b'{"error":"internal_error"}\n'))
 

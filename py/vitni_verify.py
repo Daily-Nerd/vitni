@@ -611,3 +611,102 @@ def verify(signed_receipt, keys=None, policy=None):
         return {"error": "invalid_input"}
     reason = _verify_reason(signed_receipt, keys, policy)
     return {"reason": reason, "valid": reason == "ok"}
+
+
+# --------------------------------------------------------------------------
+# CLI. The command resolves before any stdin byte is read or decoded.
+# --------------------------------------------------------------------------
+
+# Protocol commands this verifier does not implement: they answer
+# unsupported_profile without reading stdin.
+DECLINED = ("a2a-artifact-hash", "cost-canon", "keygen", "sign", "sse-outputs-hash", "verify-chain")
+
+# The gating profile atoms implemented, derived from the algorithm table.
+PROFILES = tuple(sorted(["alg:" + a for a in ALGS] + ["canon:b64-strict", "canon:jcs"]))
+
+# Whole-text duplicate keys are rejected for the commands whose value flows into JCS.
+_DUP_REJECT = frozenset(("jcs", "receipt-id"))
+
+# name, JSON type (None: any, key presence is what counts and null is a value), required
+_SHAPES = {
+    "jcs": (("value", None, True),),
+    "hashstring": (("algo", str, True), ("digest_hex", str, True)),
+    "digest": (("bytes_b64", str, True),),
+    "receipt-id": (("receipt", dict, True),),
+}
+
+
+def _shape_ok(command, obj):
+    """Exact member names; a required member that is absent or null, or any
+    member of the wrong JSON type, is invalid. Unknown members are ignored."""
+    for name, kind, required in _SHAPES[command]:
+        if kind is None:
+            if required and name not in obj:
+                return False
+        elif obj.get(name) is None:
+            if required:
+                return False
+        elif not isinstance(obj[name], kind):
+            return False
+    return True
+
+
+def _cmd_verify(obj):
+    return verify(obj.get("signed_receipt"), obj.get("keys"), obj.get("policy"))
+
+
+COMMANDS = {
+    "verify": _cmd_verify,
+    "jcs": _cmd_jcs,
+    "digest": _cmd_digest,
+    "hashstring": _cmd_hashstring,
+    "receipt-id": _cmd_receipt_id,
+    "profiles": None,  # infrastructure: answered before any stdin is read
+}
+
+
+def dispatch(command, read_stdin):
+    """Output bytes (no trailing newline) for one command. read_stdin is a
+    zero-argument callable returning the stdin bytes, called only when the
+    command needs them."""
+    if command in DECLINED:
+        return jcs({"error": "unsupported_profile", "profile": "cmd:" + command})
+    if command not in COMMANDS:
+        return jcs({"error": "unsupported_command"})
+    if command == "profiles":
+        return jcs(list(PROFILES))
+    try:
+        obj = parse_json(read_stdin(), dup="reject" if command in _DUP_REJECT else "last", nonfinite="reject")
+    except _Reject:
+        return jcs({"error": "invalid_input"})
+    if not isinstance(obj, dict) or (command != "verify" and not _shape_ok(command, obj)):
+        return jcs({"error": "invalid_input"})
+    try:
+        return jcs(COMMANDS[command](obj))
+    except _NotCanonical:
+        raise  # stdin text has no value without a canonical form: a bug, never invalid_input
+    except _Reject:
+        return jcs({"error": "invalid_input"})
+
+
+def main_output(argv, read_stdin):
+    """dispatch with the last-resort handler: any unexpected exception becomes
+    internal_error (the contract forbids a traceback and a guessed verdict)."""
+    try:
+        if not argv:
+            return jcs({"error": "missing_command"})
+        return dispatch(argv[0], read_stdin)
+    except Exception:
+        return b'{"error":"internal_error"}'
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    out = main_output(argv, lambda: sys.stdin.buffer.read())
+    sys.stdout.buffer.write(out + b"\n")
+    sys.stdout.buffer.flush()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

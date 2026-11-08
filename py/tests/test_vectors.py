@@ -1,5 +1,6 @@
 """Every conformance vector through the dispatcher in process: the fast local
 loop. conformance/compare.mjs stays the authority (it also runs the CLI)."""
+import json
 import unittest
 
 from . import _paths  # noqa: F401
@@ -16,8 +17,15 @@ class EveryVector(unittest.TestCase):
                 self.assertEqual(out, V.jcs({"error": "unsupported_profile", "profile": "cmd:" + vec["command"]}), vec["_file"])
                 declined += 1
             else:
-                self.assertEqual(out, V.jcs(vec["anchor"]), vec["_file"])
-                if vec["anchor"].get("error") == "unsupported_command":
+                got = json.loads(out)
+                anchor = vec.get("anchor")
+                if anchor is None:
+                    # no external anchor (the harness then needs two impls to agree): must be an answer
+                    self.assertNotIn("error", got, vec["_file"])
+                else:
+                    self.assertEqual({k: got.get(k) for k in anchor}, anchor, vec["_file"])
+                    self.assertTrue(set(got) == set(anchor) or "error" not in anchor, vec["_file"])
+                if (anchor or {}).get("error") == "unsupported_command":
                     unsupported += 1
                 else:
                     declared += 1
