@@ -169,6 +169,14 @@ class SingleOwner(unittest.TestCase):
             if isinstance(n, ast.ImportFrom):
                 self.assertNotIn(n.module, ("json", "base64", "binascii"), "use `import x` so uses stay greppable")
 
+    def test_every_parse_site_is_decode_object_or_the_stdin_gate(self):
+        # header and payload share ONE call site; the stdin gate is the other
+        self.assertEqual(
+            {k: len(v) for k, v in owners(lambda d: d == "parse_json").items()},
+            {"_decode_object": 1, "dispatch": 1},
+        )
+        self.assertEqual(len(owners(lambda d: d == "_decode_object")["_verify_reason"]), 2)
+
     def test_parse_json_pins_every_lenient_default(self):
         (call,) = [c for c in ast.walk(TREE) if isinstance(c, ast.Call) and dotted_name(c.func) == "json.loads"]
         self.assertEqual({k.arg for k in call.keywords}, {"parse_constant", "parse_float", "parse_int", "object_pairs_hook"})
