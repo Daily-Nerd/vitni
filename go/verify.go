@@ -10,7 +10,6 @@ import (
 	"math/big"
 	"sort"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/gowebpki/jcs"
 )
@@ -88,17 +87,25 @@ func Verify(in VerifyInput) (bool, string) {
 		return false, "malformed"
 	}
 
-	// header must be valid JSON object
-	var header map[string]json.RawMessage
-	if err := json.Unmarshal(headerBytes, &header); err != nil {
+	// header: strict text (no BOM, valid UTF-8, no lone-surrogate escape, depth
+	// <= MaxDepth) that is exactly one JSON object. Duplicate keys are last-wins
+	// and non-finite numbers are accepted: the header is never serialized.
+	header, ok := decodeObject(headerBytes)
+	if !ok {
 		return false, "malformed"
 	}
-	// payload must be valid UTF-8 and a valid JSON object (§7 step 1: malformed).
-	if !utf8.Valid(payloadBytes) {
-		return false, "malformed"
+	// RFC 7797: b64 absent or true is fine; false or any non-boolean is malformed.
+	if raw, present := header["b64"]; present {
+		var b64 *bool
+		if err := json.Unmarshal(raw, &b64); err != nil || b64 == nil || !*b64 {
+			return false, "malformed"
+		}
 	}
-	var payload map[string]json.RawMessage
-	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+	// payload: same strict text and exactly one object. Duplicate keys are
+	// last-wins at parse and non-finite numbers are deferred: both fail step 7
+	// (the re-serialization cannot equal the transmitted bytes).
+	payload, ok := decodeObject(payloadBytes)
+	if !ok {
 		return false, "malformed"
 	}
 	performerID := stringClaim(payload, "performer_id")
@@ -176,6 +183,20 @@ func Verify(in VerifyInput) (bool, string) {
 
 	// --- Step 9: ok ---
 	return true, "ok"
+}
+
+// decodeObject is the single entry for header and payload bytes: strict JSON
+// text, then exactly one object (a JSON null or array is not an object; note
+// json.Unmarshal accepts null into a map and leaves it nil).
+func decodeObject(b []byte) (map[string]json.RawMessage, bool) {
+	if err := ValidateJSONText(b, TextPolicy{}); err != nil {
+		return nil, false
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil || m == nil {
+		return nil, false
+	}
+	return m, true
 }
 
 // stringClaim extracts a string-valued claim from a raw-message map.
