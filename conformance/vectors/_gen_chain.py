@@ -47,7 +47,7 @@ REGISTRY = {
     "srv-ed": {"ed-1": {"kty": "OKP", "crv": "Ed25519", "x": b64u(ed_pub), "alg": "EdDSA", "status": "active"}},
     "srv-ec": {"ec-1": {"kty": "EC", "crv": "P-256", "x": b64u(ec_x), "y": b64u(ec_y), "alg": "ES256", "status": "active"}},
 }
-SIGNERS = {"srv-ed": ("EdDSA", "ed-1"), "srv-ec": ("ES256", "ec-1")}
+SIGNERS = {"srv-ed": ("EdDSA", "ed-1"), "srv-ec": ("ES256", "ec-1"), "": ("EdDSA", "")}
 NO_POLICY = {"expected_binding": None, "expected_method": None}
 
 
@@ -92,10 +92,10 @@ def build(performer_id, method, parent_hash, parent_perf):
     return jws, hashstr(payload)
 
 
-def write(fname, name, receipts, valid, reason):
+def write(fname, name, receipts, valid, reason, keys=REGISTRY):
     _profiles.write(OUT / fname, {
         "name": name, "command": "verify-chain",
-        "input": {"receipts": receipts, "keys": REGISTRY, "policy": NO_POLICY},
+        "input": {"receipts": receipts, "keys": keys, "policy": NO_POLICY},
         "anchor": {"valid": valid, "reason": reason, "chain_len": len(receipts)},
     })
 
@@ -164,6 +164,21 @@ ab_root_jws, ab_root_id = build("srv-ed", "mcp:orchestrate", None, None)
 ab_leaf_jws, _ = build("srv-ec", "mcp:tool", ab_root_id, ABSENT)
 write("chain-absent-parent-identity.json", "chain/absent-parent-identity-valid",
       [ab_leaf_jws, ab_root_jws], True, "ok")
+
+# 11. a parent whose performer_id is the empty string (a legal name, CONTRACT step 3)
+#     and a leaf whose parent_performer_id is the number 5. A carried claim must be
+#     a string equal to the parent's performer_id; 5 is not, so the splice is
+#     rejected. (A verifier that renders a non-string as "" would match "" and pass.)
+EMPTY_REGISTRY = dict(REGISTRY)
+EMPTY_REGISTRY[""] = {"": dict(REGISTRY["srv-ed"]["ed-1"])}
+ep_root_jws, ep_root_id = build("", "mcp:orchestrate", None, None)
+ep_leaf_jws, _ = build("srv-ec", "mcp:tool", ep_root_id, 5)
+write("chain-non-string-parent-identity.json", "chain/non-string-parent-identity",
+      [ep_leaf_jws, ep_root_jws], False, "parent_identity_mismatch", EMPTY_REGISTRY)
+# and the same empty-named parent, claimed by its exact name, is a valid link
+ev_leaf_jws, _ = build("srv-ec", "mcp:tool", ep_root_id, "")
+write("chain-empty-performer-valid.json", "chain/empty-performer-valid",
+      [ev_leaf_jws, ep_root_jws], True, "ok", EMPTY_REGISTRY)
 
 print("wrote chain vectors:")
 for q in sorted(OUT.glob("chain-*.json")):
