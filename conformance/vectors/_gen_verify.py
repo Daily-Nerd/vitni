@@ -385,6 +385,82 @@ bind_vec("verify-key-alg-header-mismatch-and-bad-kty.json",
          jws({"alg": "ES256", "kid": "ed-1"}, ed_payload, "EdDSA"),
          reg_with(ed={"kty": "EC"}))
 
+# ---------------------------------------------------------------------------
+# PR 0a, batch 4: strict header/payload text (R0.4), the `b64` header (R0.5).
+# jws_raw signs over the exact mutated bytes, so every signature below is VALID
+# and the verdict is decided by the text rule under test.
+# Policy (design 3.1): both texts are strict UTF-8, no BOM, no lone-surrogate
+# escape, exactly one object, depth <= 128, all violations are `malformed` at
+# step 1. Duplicate header keys are last-wins; non-finite numbers are accepted
+# in the header (never serialized) and deferred in the payload (step 7 fails).
+# ---------------------------------------------------------------------------
+OK = (True, "ok")
+NON_CANON = (False, "non_canonical_payload")
+ED_HDR_BYTES = json.dumps(ED_HDR, separators=(",", ":"), sort_keys=True).encode()
+BOM = b"\xef\xbb\xbf"
+
+
+def ext_payload(raw_value: bytes) -> bytes:
+    """Canonical receipt payload whose ext.e is the given RAW JSON value bytes
+    (including quotes), spliced in after canonicalization."""
+    r = receipt("srv-ed")
+    r["ext"] = {"e": "PLACEHOLDER"}
+    out = jcs(r).encode().replace(b'"PLACEHOLDER"', raw_value)
+    assert raw_value in out
+    return out
+
+
+def text_vec(fname, name, hdr, payload, verdict):
+    write(fname, name, jws_raw(hdr, payload, "EdDSA"), reg(), NO_POLICY, *verdict)
+
+
+# payload text
+text_vec("verify-payload-lone-surrogate.json", "verify/payload-lone-surrogate",
+         ED_HDR_BYTES, ext_payload(b'"\\ud800"'), MALFORMED)
+text_vec("verify-payload-lone-low-surrogate.json", "verify/payload-lone-low-surrogate",
+         ED_HDR_BYTES, ext_payload(b'"\\udc00"'), MALFORMED)
+text_vec("verify-payload-bom.json", "verify/payload-bom",
+         ED_HDR_BYTES, BOM + ed_payload, MALFORMED)
+text_vec("verify-payload-invalid-utf8.json", "verify/payload-invalid-utf8",
+         ED_HDR_BYTES, ext_payload(b'"\xff"'), MALFORMED)
+# a valid surrogate PAIR escape is well-formed text, so it is NOT malformed; it is
+# simply not canonical (JCS emits the raw character)
+text_vec("verify-payload-surrogate-pair-escape.json", "verify/payload-surrogate-pair-escape",
+         ED_HDR_BYTES, ext_payload(b'"\\ud83d\\ude00"'), NON_CANON)
+text_vec("verify-payload-nonbmp-raw.json", "verify/payload-nonbmp-raw",
+         ED_HDR_BYTES, ext_payload('"\U0001F600"'.encode()), OK)
+# duplicate payload key: last-wins at parse, but the re-serialization differs
+# from the transmitted bytes, so step 7 reports non_canonical_payload
+assert ed_payload.endswith(b',"v":"vitni/0.2"}')
+text_vec("verify-payload-duplicate-key.json", "verify/payload-duplicate-key",
+         ED_HDR_BYTES, ed_payload[:-1] + b',"v":"vitni/0.2"}', NON_CANON)
+# non-finite in the payload is deferred to step 7 (it can never be canonical)
+nf = receipt("srv-ed")
+nf["ext"] = {"n": 7}
+nf_payload = jcs(nf).encode().replace(b'"n":7', b'"n":1e400')
+assert b"1e400" in nf_payload
+text_vec("verify-payload-nonfinite-defer.json", "verify/payload-nonfinite-defer",
+         ED_HDR_BYTES, nf_payload, NON_CANON)
+
+# header text
+text_vec("verify-header-bom.json", "verify/header-bom",
+         BOM + ED_HDR_BYTES, ed_payload, MALFORMED)
+text_vec("verify-header-invalid-utf8.json", "verify/header-invalid-utf8",
+         b'{"alg":"EdDSA","kid":"ed-1","x":"\xff"}', ed_payload, MALFORMED)
+text_vec("verify-header-lone-surrogate.json", "verify/header-lone-surrogate",
+         b'{"alg":"EdDSA","kid":"ed-1","x":"\\ud800"}', ed_payload, MALFORMED)
+text_vec("verify-header-duplicate-key-last-wins.json", "verify/header-duplicate-key-last-wins",
+         b'{"alg":"EdDSA","kid":"zzz","kid":"ed-1"}', ed_payload, OK)
+# the header is never serialized, so a non-finite number in an ignored member is fine
+text_vec("verify-header-nonfinite-ignored.json", "verify/header-nonfinite-ignored",
+         b'{"alg":"EdDSA","kid":"ed-1","x":1e400}', ed_payload, OK)
+
+# b64 header member (RFC 7797): true is equivalent to absent; anything else is malformed
+for suffix, raw, verdict in (("false", b"false", MALFORMED), ("true", b"true", OK),
+                             ("string", b'"false"', MALFORMED), ("null", b"null", MALFORMED)):
+    text_vec(f"verify-header-b64-{suffix}.json", f"verify/header-b64-{suffix}",
+             b'{"alg":"EdDSA","b64":' + raw + b',"kid":"ed-1"}', ed_payload, verdict)
+
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)
