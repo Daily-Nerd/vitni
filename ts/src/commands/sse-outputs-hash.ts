@@ -25,8 +25,7 @@
 import { digestBytes } from './digest.js';
 import { jcsBytes } from './jcs.js';
 import { decodeStdBase64 } from './decode.js';
-import { hasNonFinite } from './non-finite.js';
-import { hasLoneSurrogate } from './strict-json.js';
+import { hasLoneSurrogate, hasNonFinite } from './strict-json.js';
 
 export interface SseInput {
   raw_b64: string;

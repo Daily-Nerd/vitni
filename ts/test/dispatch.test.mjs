@@ -123,3 +123,31 @@ for (const v of allVectors) {
     }
   });
 }
+
+// D8: the command resolves before stdin is parsed.
+test('dispatch: unknown command wins over any stdin', () => {
+  for (const stdin of [')(', '', '[]', '{"a":1e400}', Buffer.from([0xff])]) {
+    assert.equal(dispatch('not-a-command', stdin), '{"error":"unsupported_command"}');
+  }
+});
+
+// Depth at the stdin edge: the top-level object is depth 1, so {"value": <127
+// arrays>} is exactly 128 and one more array is 129. No host limit is relied on.
+test('dispatch: stdin depth 128 accepted, 129 invalid_input', () => {
+  const nest = (n) => `{"value":${'['.repeat(n)}${']'.repeat(n)}}`;
+  assert.ok(!dispatch('jcs', nest(127)).includes('error'));
+  assert.equal(dispatch('jcs', nest(128)), '{"error":"invalid_input"}');
+  assert.equal(dispatch('jcs', nest(10000)), '{"error":"invalid_input"}');
+});
+
+// stdin is bytes: invalid UTF-8 must not be repaired into U+FFFD and answered.
+test('dispatch: invalid UTF-8 bytes are invalid_input, never U+FFFD', () => {
+  const bad = Buffer.concat([Buffer.from('{"value":{"a":"'), Buffer.from([0xff]), Buffer.from('"}}')]);
+  assert.equal(dispatch('jcs', bad), '{"error":"invalid_input"}');
+});
+
+test('main: stdin bytes reach dispatch undecoded', async () => {
+  let out = '';
+  await main(['node', 'cli', 'jcs'], async () => Buffer.from([0xef, 0xbb, 0xbf, 0x7b, 0x7d]), (s) => { out += s; });
+  assert.equal(out, '{"error":"invalid_input"}\n');
+});
