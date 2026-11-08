@@ -37,6 +37,35 @@ jobs:
       - name: Cross-implementation conformance (Go ≡ TS, byte-identical)
         run: node conformance/compare.mjs
 
+      - name: Harness self-tests
+        run: node --test conformance/*.test.mjs
+
+      - name: Install uv (pinned)
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.15"
+
+      - name: Profile tagger tests
+        run: uv run --no-project python conformance/vectors/test_profiles.py
+
+      - name: Vector regeneration is clean (every vector is generator-owned)
+        # Delete every vector, rerun every generator, require an unchanged tree:
+        # one check for idempotence AND for a vector no generator writes. The
+        # dependency pins are the ones in CONTRIBUTING.md.
+        run: |
+          rm -f conformance/vectors/*.json
+          cd conformance/vectors
+          uv run --no-project python _gen.py
+          uv run --no-project python _gen_a2a.py
+          uv run --no-project --with cryptography==50.0.2 --with ecdsa==0.19.2 python _gen_verify.py
+          uv run --no-project --with cryptography==50.0.2 --with ecdsa==0.19.2 python _gen_chain.py
+          cd ../..
+          if [ -n "$(git status --porcelain conformance/vectors)" ]; then
+            git status --porcelain conformance/vectors
+            echo "vector regeneration changed the tree"
+            exit 1
+          fi
+
       - name: Upload Go coverage to Codecov
         # Reporting only — no coverage threshold gates the build. The upload
         # no-ops gracefully when CODECOV_TOKEN is unset, so a missing secret
