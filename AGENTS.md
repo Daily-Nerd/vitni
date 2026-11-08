@@ -4,9 +4,11 @@
 
 vitni is a cryptographic execution-receipt protocol for
 AI agents: signed, tamper-evident, content-addressed receipts under MCP and
-beside A2A. Two independent reference implementations (Go at `go/`,
-TypeScript at `ts/`) share no code; `conformance/vectors/` is the contract
-between them. The spec is `docs/DESIGN.md`.
+beside A2A. Two independent full reference implementations (Go at `go/`,
+TypeScript at `ts/`) share no code, and a verify-only Python verifier
+(`py/vitni_verify.py`, one file, standard library only) is held to the same
+vectors; `conformance/vectors/` is the contract between them. The spec is
+`docs/DESIGN.md`.
 
 ## Agent Contract
 
@@ -26,7 +28,8 @@ between them. The spec is `docs/DESIGN.md`.
 
 - Go tests: `cd go && go test -count=1 ./...` (the test cache does not see vector files)
 - TS tests: `cd ts && npm install && npm run build && npm test`
-- Cross-impl harness: build both, then `node conformance/compare.mjs` (all vectors must pass; the harness prints the count)
+- Python verifier tests (stdlib only, run on both supported Pythons): `uv run --no-project --python 3.10 python -I -m unittest discover -s py/tests -t py`, then the same with `--python 3.13`
+- Cross-impl harness: build both, then `REQUIRE_IMPLS=go,ts,py PY_VERIFY="uv run --no-project python -I py/vitni_verify.py" node conformance/compare.mjs` (all vectors must pass; the harness prints the count and the impls that ran; a bare run covers Go and TS only)
 - Vector regeneration: `uv run` only — see CONTRIBUTING.md (never pip/bare python)
 
 ## Repository Rules

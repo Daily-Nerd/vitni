@@ -5,9 +5,11 @@ vectors that pin every byte the protocol commits to. Any implementation that
 passes them is interoperable with every other implementation that passes them
 — that is the claim this directory exists to make falsifiable.
 
-The two reference implementations (`go/`, `ts/`) share no code and are held
-**byte-identical** against this suite in CI on every commit. Agreement across
-two independent runtimes is the proof of the spec's normative guarantee
+The two full reference implementations (`go/`, `ts/`) share no code and are held
+**byte-identical** against this suite in CI on every commit, and a verify-only
+Python verifier (`py/vitni_verify.py`) answers the same vectors for everything
+it declares and declines the rest with an exact `unsupported_profile`. Agreement
+across independent runtimes is the proof of the spec's normative guarantee
 ([DESIGN.md §12](../docs/DESIGN.md)): *two conformant verifiers MUST produce
 byte-identical verdicts and identical recomputed hashes on every vector.*
 
@@ -76,6 +78,9 @@ implementation:
 ```sh
 # your implementation vs the Go reference
 GO_VERIFY="./bin/vitni-verify-go" TS_VERIFY="your-verify-cmd" node conformance/compare.mjs
+
+# the Python verifier joins the run through PY_VERIFY (add REQUIRE_IMPLS=go,ts,py to insist on it)
+PY_VERIFY="uv run --no-project python -I py/vitni_verify.py" node conformance/compare.mjs
 ```
 
 Byte-identical output against a reference implementation on every vector (the harness prints the count) is the conformance claim.

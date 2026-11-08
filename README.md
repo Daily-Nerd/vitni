@@ -54,7 +54,7 @@ $ vitni-verify verify < verify-input.json
 
 Getting receipts *right* is deceptively hard — deterministic canonicalization, signature verification that resists the classic JOSE attacks, chain integrity that resists splicing. vitni ships that, proven:
 
-- **Deterministic by construction** — RFC 8785 JCS canonicalization, proven **byte-identical across two independent implementations** (Go + TS) on a public conformance suite. Two verifiers always agree.
+- **Deterministic by construction**: RFC 8785 JCS canonicalization, proven **byte-identical across two independent implementations** (Go + TS) on a public conformance suite. A third, verify-only Python verifier (one file, standard library only) answers the same vectors for everything it declares. Verifiers always agree.
 - **Hardened verification** — Ed25519 + ES256 (JWS), with the dangerous paths closed: rejects `alg:none`, algorithm substitution, `jwk`/`jku`/`x5*` header key-injection, non-canonical payloads, unknown/revoked keys.
 - **Chain integrity** — multi-hop receipts link `parent → child` into a tamper-evident lineage, with a `parent_performer_id` binding that defeats foreign-parent splicing.
 - **Rides the existing rails** — one `_meta` field on an MCP tool result; one artifact-metadata entry on an A2A task. **No new transport, no extra round-trip.** A client that doesn't understand it ignores it.
