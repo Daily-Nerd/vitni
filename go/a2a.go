@@ -4,17 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/Daily-Nerd/vitni/go/internal/fields"
 	"github.com/gowebpki/jcs"
 )
 
 // ErrUnsupportedPart is returned when an A2A part has neither bytes nor uri,
 // or an unknown kind.
 var ErrUnsupportedPart = errors.New("unsupported_part")
-
-// a2aArtifact is the input artifact shape.
-type a2aArtifact struct {
-	Parts []json.RawMessage `json:"parts"`
-}
 
 // A2AArtifactHash canonicalizes an A2A artifact into a descriptor and returns
 // the JCS bytes of the descriptor plus the pinned outputs_hash.
@@ -26,13 +22,19 @@ type a2aArtifact struct {
 //   - file by-uri (uri present, no bytes) → {kind:"file", uri, declared_digest|null, mimeType|null, name|null}
 //   - otherwise → ErrUnsupportedPart
 func A2AArtifactHash(artifact json.RawMessage) (descriptorBytes []byte, outputsHash string, err error) {
-	var art a2aArtifact
-	if err := json.Unmarshal(artifact, &art); err != nil {
+	// Member names are exact and case-sensitive (internal/fields); the artifact
+	// must be an object with a `parts` array of objects.
+	art, err := fields.Object(artifact)
+	if err != nil {
+		return nil, "", err
+	}
+	var parts []json.RawMessage
+	if err := fields.Required(art, "parts", &parts); err != nil {
 		return nil, "", err
 	}
 
-	descriptors := make([]json.RawMessage, 0, len(art.Parts))
-	for _, partRaw := range art.Parts {
+	descriptors := make([]json.RawMessage, 0, len(parts))
+	for _, partRaw := range parts {
 		d, perr := mapPart(partRaw)
 		if perr != nil {
 			return nil, "", perr
@@ -59,33 +61,23 @@ func A2AArtifactHash(artifact json.RawMessage) (descriptorBytes []byte, outputsH
 	return canon, hashStr, nil
 }
 
-// a2aFile is the file sub-object of a file part.
-type a2aFile struct {
-	Bytes          *string         `json:"bytes"`
-	URI            *string         `json:"uri"`
-	MimeType       *string         `json:"mimeType"`
-	Name           *string         `json:"name"`
-	DeclaredDigest json.RawMessage `json:"declared_digest"`
-}
-
 // mapPart maps one A2A part to its canonical descriptor (as JSON bytes).
 func mapPart(partRaw json.RawMessage) (json.RawMessage, error) {
-	var part struct {
-		Kind string          `json:"kind"`
-		Text json.RawMessage `json:"text"`
-		Data json.RawMessage `json:"data"`
-		File json.RawMessage `json:"file"`
+	part, err := fields.Object(partRaw)
+	if err != nil {
+		return nil, err
 	}
-	if err := json.Unmarshal(partRaw, &part); err != nil {
+	var kind string
+	if _, err := fields.Field(part, "kind", &kind); err != nil {
 		return nil, err
 	}
 
-	switch part.Kind {
+	switch kind {
 	case "text":
 		// {kind:"text", text}
 		d := map[string]json.RawMessage{
 			"kind": rawString("text"),
-			"text": part.Text,
+			"text": part["text"],
 		}
 		return json.Marshal(d)
 
@@ -93,20 +85,35 @@ func mapPart(partRaw json.RawMessage) (json.RawMessage, error) {
 		// {kind:"data", data}
 		d := map[string]json.RawMessage{
 			"kind": rawString("data"),
-			"data": part.Data,
+			"data": part["data"],
 		}
 		return json.Marshal(d)
 
 	case "file":
-		var f a2aFile
-		if len(part.File) > 0 {
-			if err := json.Unmarshal(part.File, &f); err != nil {
+		var fileRaw json.RawMessage
+		if _, err := fields.Field(part, "file", &fileRaw); err != nil {
+			return nil, err
+		}
+		var file map[string]json.RawMessage
+		if fileRaw != nil {
+			if file, err = fields.Object(fileRaw); err != nil {
 				return nil, err
 			}
 		}
-		if f.Bytes != nil {
+		var bytesB64, uri, mimeType, name *string
+		for field, dst := range map[string]**string{"bytes": &bytesB64, "uri": &uri, "mimeType": &mimeType, "name": &name} {
+			var v string
+			present, err := fields.Field(file, field, &v)
+			if err != nil {
+				return nil, err
+			}
+			if present {
+				*dst = &v
+			}
+		}
+		if bytesB64 != nil {
 			// inline: hash the decoded bytes, do NOT embed.
-			raw, err := DecodeStdBase64(*f.Bytes)
+			raw, err := DecodeStdBase64(*bytesB64)
 			if err != nil {
 				return nil, err
 			}
@@ -117,23 +124,23 @@ func mapPart(partRaw json.RawMessage) (json.RawMessage, error) {
 			d := map[string]json.RawMessage{
 				"kind":     rawString("file"),
 				"digest":   rawString(digest),
-				"mimeType": nullableString(f.MimeType),
-				"name":     nullableString(f.Name),
+				"mimeType": nullableString(mimeType),
+				"name":     nullableString(name),
 			}
 			return json.Marshal(d)
 		}
-		if f.URI != nil {
+		if uri != nil {
 			// by-uri: never dereference. declared_digest passed through (or null).
 			declared := json.RawMessage("null")
-			if len(f.DeclaredDigest) > 0 && string(f.DeclaredDigest) != "null" {
-				declared = f.DeclaredDigest
+			if raw, ok := file["declared_digest"]; ok && string(raw) != "null" {
+				declared = raw
 			}
 			d := map[string]json.RawMessage{
 				"kind":            rawString("file"),
-				"uri":             rawString(*f.URI),
+				"uri":             rawString(*uri),
 				"declared_digest": declared,
-				"mimeType":        nullableString(f.MimeType),
-				"name":            nullableString(f.Name),
+				"mimeType":        nullableString(mimeType),
+				"name":            nullableString(name),
 			}
 			return json.Marshal(d)
 		}

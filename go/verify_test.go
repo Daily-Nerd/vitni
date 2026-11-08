@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Daily-Nerd/vitni/go"
+	"github.com/Daily-Nerd/vitni/go/internal/wire"
 )
 
 // TestVectors_Verify drives the verify command against every verify-*.json vector.
@@ -17,9 +18,17 @@ func TestVectors_Verify(t *testing.T) {
 		count++
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
-			var inp vitni.VerifyInput
-			if err := json.Unmarshal(v.Input, &inp); err != nil {
-				t.Fatalf("unmarshal input: %v", err)
+			// The wire decoder is the one the CLI uses: member names are exact
+			// and wrong types are errors. An `error` anchor is a command error.
+			inp, err := wire.DecodeVerifyInput(v.Input)
+			if isErrorVector(t, v.Anchor) {
+				if err == nil {
+					t.Fatalf("expected a decode error for anchor %s, got none", v.Anchor)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("decode input: %v", err)
 			}
 			valid, reason := vitni.Verify(inp)
 

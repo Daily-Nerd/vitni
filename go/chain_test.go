@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Daily-Nerd/vitni/go"
+	"github.com/Daily-Nerd/vitni/go/internal/wire"
 )
 
 // TestVectors_VerifyChain drives the verify-chain command against every chain-*.json vector.
@@ -17,9 +18,15 @@ func TestVectors_VerifyChain(t *testing.T) {
 		count++
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
-			var inp vitni.VerifyChainInput
-			if err := json.Unmarshal(v.Input, &inp); err != nil {
-				t.Fatalf("unmarshal input: %v", err)
+			inp, err := wire.DecodeVerifyChainInput(v.Input)
+			if isErrorVector(t, v.Anchor) {
+				if err == nil {
+					t.Fatalf("expected a decode error for anchor %s, got none", v.Anchor)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("decode input: %v", err)
 			}
 			valid, reason, chainLen := vitni.VerifyChain(inp)
 
