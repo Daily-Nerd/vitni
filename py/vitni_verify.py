@@ -30,6 +30,7 @@ formatter may rewrite it.
 """
 
 import base64
+import hashlib
 import json
 import math
 import re
@@ -285,3 +286,38 @@ def jcs(value):
         return _jcs_text(value).encode("utf-8")
     except UnicodeEncodeError:
         raise _NotCanonical("lone surrogate") from None
+
+
+# --------------------------------------------------------------------------
+# Hashes and ids. Each command handler takes the already-parsed, already
+# shape-checked stdin object and returns the result dict; a bad value inside a
+# member raises _Reject (the CLI answers invalid_input).
+# --------------------------------------------------------------------------
+
+
+def hashstring(digest):
+    """Pinned hash-string: 'u' + base64url(multihash code 0x12, length 0x20, digest)."""
+    return "u" + b64url_encode(b"\x12\x20" + digest)
+
+
+def _cmd_hashstring(inp):
+    if inp["algo"] != "sha2-256":
+        raise _Reject("algo")
+    return {"hashstr": hashstring(hex_decode_strict(inp["digest_hex"]))}
+
+
+def _cmd_digest(inp):
+    return {"hashstr": hashstring(hashlib.sha256(b64std_decode_strict(inp["bytes_b64"])).digest())}
+
+
+def _cmd_receipt_id(inp):
+    receipt = inp["receipt"]
+    if "receipt_id" in receipt:
+        return {"error": "receipt_id_must_be_absent"}
+    canonical = jcs(receipt)
+    return {"canonical_hex": canonical.hex(), "receipt_id": hashstring(hashlib.sha256(canonical).digest())}
+
+
+def _cmd_jcs(inp):
+    canonical = jcs(inp["value"])
+    return {"byte_len": len(canonical), "canonical_hex": canonical.hex()}
