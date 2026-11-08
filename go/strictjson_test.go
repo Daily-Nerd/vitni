@@ -142,3 +142,20 @@ func TestValidateJSONText(t *testing.T) {
 		})
 	}
 }
+
+// TestJWSTextOnlyThroughDecodeObject guards the single-owner invariant for JWS
+// header and payload bytes: verify.go and chain.go never json.Unmarshal those
+// bytes directly (that is lenient: BOM-tolerant callers, null-into-map, no
+// surrogate or depth rules). decodeObject in strictjson.go is the one entry.
+func TestJWSTextOnlyThroughDecodeObject(t *testing.T) {
+	re := regexp.MustCompile(`json\.Unmarshal\((headerBytes|payloadBytes|b)\b`)
+	for _, f := range []string{"verify.go", "chain.go"} {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if re.Match(src) {
+			t.Errorf("%s unmarshals JWS header/payload bytes directly; use decodeObject", f)
+		}
+	}
+}

@@ -30,3 +30,12 @@ test('no base64url decode outside decode.ts', () => {
     );
   assert.deepEqual(offenders, []);
 });
+
+test('verify and verify-chain never JSON.parse JWS header/payload directly', () => {
+  // decodeJsonObject (strict-json.ts) is the one entry for those bytes.
+  for (const f of ['commands/verify.ts', 'commands/verify-chain.ts']) {
+    const src = readFileSync(join(SRC, f), 'utf8');
+    const code = src.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+    assert.ok(!/JSON\.parse\(/.test(code), `${f} calls JSON.parse directly`);
+  }
+});

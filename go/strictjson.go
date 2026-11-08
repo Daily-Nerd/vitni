@@ -159,6 +159,20 @@ func scanText(b []byte) error {
 	return nil
 }
 
+// decodeObject is the single entry for header and payload bytes: strict JSON
+// text, then exactly one object (a JSON null or array is not an object; note
+// json.Unmarshal accepts null into a map and leaves it nil).
+func decodeObject(b []byte) (map[string]json.RawMessage, bool) {
+	if err := ValidateJSONText(b, TextPolicy{}); err != nil {
+		return nil, false
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil || m == nil {
+		return nil, false
+	}
+	return m, true
+}
+
 type tokenFrame struct {
 	isObject  bool
 	expectKey bool

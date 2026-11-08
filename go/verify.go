@@ -185,20 +185,6 @@ func Verify(in VerifyInput) (bool, string) {
 	return true, "ok"
 }
 
-// decodeObject is the single entry for header and payload bytes: strict JSON
-// text, then exactly one object (a JSON null or array is not an object; note
-// json.Unmarshal accepts null into a map and leaves it nil).
-func decodeObject(b []byte) (map[string]json.RawMessage, bool) {
-	if err := ValidateJSONText(b, TextPolicy{}); err != nil {
-		return nil, false
-	}
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err != nil || m == nil {
-		return nil, false
-	}
-	return m, true
-}
-
 // stringClaim extracts a string-valued claim from a raw-message map.
 // Returns "" if absent or not a JSON string.
 func stringClaim(m map[string]json.RawMessage, key string) string {

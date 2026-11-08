@@ -56,6 +56,21 @@ export function parseStrict(bytes: Uint8Array, p: TextPolicy): StrictParse {
   return { ok: true, value };
 }
 
+/**
+ * Decode JWS header or payload bytes: strict text that is exactly one JSON
+ * object. Duplicate keys are last-wins and non-finite numbers are accepted here:
+ * the header is never serialized, and a payload with either fails verify step 7
+ * (its re-serialization cannot equal the transmitted bytes). Returns null on any
+ * violation; the caller reports `malformed`.
+ */
+export function decodeJsonObject(bytes: Uint8Array): Record<string, unknown> | null {
+  const r = parseStrict(bytes, { rejectDuplicates: false, rejectNonFinite: false });
+  if (!r.ok) return null;
+  const v = r.value;
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
+  return v as Record<string, unknown>;
+}
+
 /** One raw scan with string state; text is not yet known to be valid JSON. */
 function withinDepth(text: string): boolean {
   let depth = 0;

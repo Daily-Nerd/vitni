@@ -18,7 +18,7 @@
 import { createPublicKey, verify as cryptoVerify, KeyObject } from 'node:crypto';
 import { jcsBytes } from './jcs.js';
 import { decodeB64UrlStrict } from './decode.js';
-import { parseStrict } from './strict-json.js';
+import { decodeJsonObject } from './strict-json.js';
 
 export interface VerifyInput {
   signed_receipt: string;
@@ -63,22 +63,6 @@ const FORBIDDEN_HEADER_KEYS = ['jwk', 'jku', 'x5u', 'x5c', 'x5t', 'x5t#S256'];
 
 function fail(reason: string): VerifyOutput {
   return { valid: false, reason };
-}
-
-/**
- * Decode header or payload bytes: strict JSON text (no BOM, valid UTF-8, no
- * lone-surrogate escape, depth <= 128) that is exactly one JSON object.
- * Duplicate keys are last-wins and non-finite numbers are accepted here: the
- * header is never serialized, and a payload with either fails step 7 (its
- * re-serialization cannot equal the transmitted bytes). Returns null on any
- * violation; the caller reports `malformed`.
- */
-function decodeObject(buf: Buffer): Record<string, unknown> | null {
-  const r = parseStrict(buf, { rejectDuplicates: false, rejectNonFinite: false });
-  if (!r.ok) return null;
-  const v = r.value;
-  if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
-  return v as Record<string, unknown>;
 }
 
 /**
@@ -157,7 +141,7 @@ export function verify(input: VerifyInput): VerifyOutput {
   }
 
   // header: strict text that is exactly one JSON object.
-  const header = decodeObject(headerBuf);
+  const header = decodeJsonObject(headerBuf);
   if (header === null) return fail('malformed');
   // RFC 7797: b64 absent or true is fine; false or any non-boolean is malformed.
   if (Object.prototype.hasOwnProperty.call(header, 'b64') && header['b64'] !== true) {
@@ -165,7 +149,7 @@ export function verify(input: VerifyInput): VerifyOutput {
   }
 
   // payload: same strict text, exactly one object (§7 step 1, fail fast).
-  const payload = decodeObject(payloadBuf);
+  const payload = decodeJsonObject(payloadBuf);
   if (payload === null) return fail('malformed');
 
   // --- Step 2: header_key_material ---
