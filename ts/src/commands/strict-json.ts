@@ -1,4 +1,118 @@
 /**
+ * Strict JSON text policy: the single owner of how external JSON text is
+ * decoded in the TS impl (`parseStrict`), plus the duplicate-key scanner it uses.
+ *
+ * Counterpart of Go's ValidateJSONText. Base rules (always): no BOM, valid
+ * UTF-8, exactly one JSON value, no lone-surrogate escape in any key or string,
+ * nesting depth <= MAX_DEPTH. Per-site options: duplicate keys, non-finite
+ * numbers.
+ */
+import { hasNonFinite } from './non-finite.js';
+
+/** Pinned JSON nesting limit (DESIGN.md section 12 step 1). Top level is depth 1. */
+export const MAX_DEPTH = 128;
+
+export interface TextPolicy {
+  /** Reject a duplicate object key anywhere in the text. */
+  rejectDuplicates: boolean;
+  /** Reject any number that overflows to +-Infinity. */
+  rejectNonFinite: boolean;
+}
+
+export type StrictParse = { ok: true; value: unknown } | { ok: false };
+
+/**
+ * Decode `bytes` as one strict JSON value. Never throws: every violation is
+ * `{ ok: false }` and the caller maps it to its own error code.
+ *
+ * Node 18 is the engine floor, so String.prototype.isWellFormed (Node 20) is not
+ * used. JSON.parse turns a lone `\ud800` escape into a lone UTF-16 surrogate
+ * with no error, and `/[\uD800-\uDFFF]/u` matches ONLY lone surrogates (a valid
+ * pair is one code point under the `u` flag), so that is the detector.
+ */
+export function parseStrict(bytes: Uint8Array, p: TextPolicy): StrictParse {
+  // Explicit BOM check: do not rely on TextDecoder BOM handling.
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return { ok: false };
+  }
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    return { ok: false };
+  }
+  // Depth first: JSON.parse and the walks below recurse or iterate on the result,
+  // so nothing deeper than MAX_DEPTH may reach them.
+  if (!withinDepth(text)) return { ok: false };
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { ok: false };
+  }
+  if (hasLoneSurrogate(value)) return { ok: false };
+  if (p.rejectDuplicates && hasDuplicateKeys(text)) return { ok: false };
+  if (p.rejectNonFinite && hasNonFinite(value)) return { ok: false };
+  return { ok: true, value };
+}
+
+/**
+ * Decode JWS header or payload bytes: strict text that is exactly one JSON
+ * object. Duplicate keys are last-wins and non-finite numbers are accepted here:
+ * the header is never serialized, and a payload with either fails verify step 7
+ * (its re-serialization cannot equal the transmitted bytes). Returns null on any
+ * violation; the caller reports `malformed`.
+ */
+export function decodeJsonObject(bytes: Uint8Array): Record<string, unknown> | null {
+  const r = parseStrict(bytes, { rejectDuplicates: false, rejectNonFinite: false });
+  if (!r.ok) return null;
+  const v = r.value;
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
+  return v as Record<string, unknown>;
+}
+
+/** One raw scan with string state; text is not yet known to be valid JSON. */
+function withinDepth(text: string): boolean {
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (inString) {
+      if (c === 0x5c) i++; // backslash: skip the escaped character
+      else if (c === 0x22) inString = false;
+    } else if (c === 0x22) {
+      inString = true;
+    } else if (c === 0x7b || c === 0x5b) {
+      if (++depth > MAX_DEPTH) return false;
+    } else if (c === 0x7d || c === 0x5d) {
+      depth--;
+    }
+  }
+  return true;
+}
+
+const LONE_SURROGATE = /[\uD800-\uDFFF]/u;
+
+/** Iterative walk over every key and string value (depth already bounded). */
+function hasLoneSurrogate(root: unknown): boolean {
+  const stack: unknown[] = [root];
+  while (stack.length > 0) {
+    const v = stack.pop();
+    if (typeof v === 'string') {
+      if (LONE_SURROGATE.test(v)) return true;
+    } else if (Array.isArray(v)) {
+      for (const x of v) stack.push(x);
+    } else if (v !== null && typeof v === 'object') {
+      for (const [k, x] of Object.entries(v)) {
+        if (LONE_SURROGATE.test(k)) return true;
+        stack.push(x);
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Duplicate-key detection over raw JSON text.
  *
  * JSON.parse silently keeps the last value for a duplicate object key, so a

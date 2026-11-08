@@ -6,7 +6,8 @@
  *  2. header_key_material  — header contains ANY of jwk/jku/x5u/x5c/x5t/x5t#S256.
  *  3. unknown_key          — performer_id (from payload) / kid (from header) absent or not in keys.
  *  4. revoked_key          — resolved key status == "revoked".
- *  5. alg_not_allowed      — header alg is none/absent, OR header alg != resolved key alg.
+ *  5. alg_not_allowed      : header alg is none/absent, OR header alg != resolved key alg,
+ *                            OR the key's alg/kty/crv is not a row of the ALGS table.
  *  6. bad_signature        — signature fails over b64url(header).b64url(payload).
  *  7. non_canonical_payload— decode(payload) != JCS(parse(payload)) byte-for-byte.
  *  8. context_mismatch     — policy.expected_binding/expected_method set and != payload's.
@@ -16,6 +17,8 @@
  */
 import { createPublicKey, verify as cryptoVerify, KeyObject } from 'node:crypto';
 import { jcsBytes } from './jcs.js';
+import { decodeB64UrlStrict } from './decode.js';
+import { decodeJsonObject } from './strict-json.js';
 
 export interface VerifyInput {
   signed_receipt: string;
@@ -40,6 +43,22 @@ export interface VerifyOutput {
   reason: string;
 }
 
+/**
+ * The algorithm table: the SINGLE owner of {alg -> kty, crv}. Step 5 (key-type
+ * binding), key construction in step 6 and the declared alg set all derive
+ * from it, so "algs we verify" and "algs we declare" cannot drift.
+ */
+export const ALGS = {
+  EdDSA: { kty: 'OKP', crv: 'Ed25519' },
+  ES256: { kty: 'EC', crv: 'P-256' },
+} as const;
+
+type AlgName = keyof typeof ALGS;
+
+function isKnownAlg(alg: unknown): alg is AlgName {
+  return typeof alg === 'string' && Object.prototype.hasOwnProperty.call(ALGS, alg);
+}
+
 const FORBIDDEN_HEADER_KEYS = ['jwk', 'jku', 'x5u', 'x5c', 'x5t', 'x5t#S256'];
 
 function fail(reason: string): VerifyOutput {
@@ -47,39 +66,30 @@ function fail(reason: string): VerifyOutput {
 }
 
 /**
- * Decode a base64url segment to a Buffer. Returns null on invalid input.
- * Strict: rejects characters outside the base64url alphabet.
+ * Build a node KeyObject from a registry JWK for the given alg. Key coordinates
+ * go through the one strict base64url decoder and must be exactly 32 bytes; the
+ * JWK handed to Node is rebuilt from the RE-ENCODED canonical strings, so Node's
+ * lenient JWK import (padding, std alphabet, trailing bits, extra bytes) never
+ * sees raw registry input. Any key-material problem returns null, which the
+ * caller reports as `bad_signature` (a JWS segment failing the same decoder is
+ * `malformed`: same decoder, different code at the call site).
  */
-function b64urlDecode(seg: string): Buffer | null {
-  // base64url alphabet: A-Z a-z 0-9 - _  (no padding)
-  if (!/^[A-Za-z0-9\-_]*$/.test(seg)) return null;
-  return Buffer.from(seg, 'base64url');
-}
-
-/**
- * Decode a Buffer as strict UTF-8. Returns null if it contains invalid UTF-8.
- */
-function strictUtf8(buf: Buffer): string | null {
-  const decoder = new TextDecoder('utf-8', { fatal: true });
-  try {
-    return decoder.decode(buf);
-  } catch {
+function buildPublicKey(jwk: RegistryJwk, alg: string): KeyObject | null {
+  const x = decodeB64UrlStrict(jwk.x);
+  if (x === null || x.length !== 32) return null;
+  let jwkFields: Record<string, string>;
+  if (alg === 'EdDSA') {
+    jwkFields = { ...ALGS.EdDSA, x: x.toString('base64url') };
+  } else if (alg === 'ES256') {
+    const y = decodeB64UrlStrict(jwk.y as string);
+    if (y === null || y.length !== 32) return null;
+    jwkFields = {
+      ...ALGS.ES256,
+      x: x.toString('base64url'),
+      y: y.toString('base64url'),
+    };
+  } else {
     return null;
-  }
-}
-
-/**
- * Build a node KeyObject from a registry JWK. Keep only the standard JWK fields
- * (drop status/alg which node may reject for some key types). Returns null on failure.
- */
-function buildPublicKey(jwk: RegistryJwk): KeyObject | null {
-  const jwkFields: Record<string, string> = {
-    kty: jwk.kty,
-    crv: jwk.crv,
-    x: jwk.x,
-  };
-  if (jwk.y !== undefined) {
-    jwkFields.y = jwk.y;
   }
   try {
     return createPublicKey({ key: jwkFields, format: 'jwk' });
@@ -123,40 +133,24 @@ export function verify(input: VerifyInput): VerifyOutput {
   if (parts.length !== 3) return fail('malformed');
   const [headerSeg, payloadSeg, sigSeg] = parts;
 
-  const headerBuf = b64urlDecode(headerSeg);
-  const payloadBuf = b64urlDecode(payloadSeg);
-  const sigBuf = b64urlDecode(sigSeg);
+  const headerBuf = decodeB64UrlStrict(headerSeg);
+  const payloadBuf = decodeB64UrlStrict(payloadSeg);
+  const sigBuf = decodeB64UrlStrict(sigSeg);
   if (headerBuf === null || payloadBuf === null || sigBuf === null) {
     return fail('malformed');
   }
 
-  // header must be valid JSON object
-  const headerStr = strictUtf8(headerBuf);
-  if (headerStr === null) return fail('malformed');
-  let header: Record<string, unknown>;
-  try {
-    const parsed = JSON.parse(headerStr);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return fail('malformed');
-    }
-    header = parsed as Record<string, unknown>;
-  } catch {
+  // header: strict text that is exactly one JSON object.
+  const header = decodeJsonObject(headerBuf);
+  if (header === null) return fail('malformed');
+  // RFC 7797: b64 absent or true is fine; false or any non-boolean is malformed.
+  if (Object.prototype.hasOwnProperty.call(header, 'b64') && header['b64'] !== true) {
     return fail('malformed');
   }
 
-  // payload must be valid UTF-8 AND valid JSON object (§7 step 1, fail fast).
-  const payloadStr = strictUtf8(payloadBuf);
-  if (payloadStr === null) return fail('malformed');
-  let payload: Record<string, unknown>;
-  try {
-    const parsed = JSON.parse(payloadStr);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return fail('malformed');
-    }
-    payload = parsed as Record<string, unknown>;
-  } catch {
-    return fail('malformed');
-  }
+  // payload: same strict text, exactly one object (§7 step 1, fail fast).
+  const payload = decodeJsonObject(payloadBuf);
+  if (payload === null) return fail('malformed');
 
   // --- Step 2: header_key_material ---
   for (const k of FORBIDDEN_HEADER_KEYS) {
@@ -191,9 +185,20 @@ export function verify(input: VerifyInput): VerifyOutput {
   ) {
     return fail('alg_not_allowed');
   }
+  // The registry key must be the key type its alg requires. An alg outside the
+  // table, and a missing or null kty/crv, fail here, before any key material is
+  // decoded. Runs after step 4 (a revoked key stays revoked_key) and after the
+  // header/registry alg equality above.
+  if (
+    !isKnownAlg(jwk.alg) ||
+    jwk.kty !== ALGS[jwk.alg].kty ||
+    jwk.crv !== ALGS[jwk.alg].crv
+  ) {
+    return fail('alg_not_allowed');
+  }
 
   // --- Step 6: bad_signature ---
-  const keyObj = buildPublicKey(jwk);
+  const keyObj = buildPublicKey(jwk, headerAlg);
   if (keyObj === null) return fail('bad_signature');
   // signingInput = ASCII b64u(header).b64u(payload)
   const signingInput = Buffer.from(`${headerSeg}.${payloadSeg}`, 'ascii');

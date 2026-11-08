@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -181,61 +181,26 @@ test('cost/number-must-error', () => {
   assertAnchorMatch(result, v.anchor, v.name);
 });
 
-// --- verify: all 12 vectors, table-driven ---
-const VERIFY_VECTORS = [
-  'verify-valid-ed25519.json',
-  'verify-valid-es256.json',
-  'verify-alg-none.json',
-  'verify-alg-substitution.json',
-  'verify-jwk-header-injection.json',
-  'verify-bad-signature.json',
-  'verify-malformed-payload.json',
-  'verify-non-canonical-payload.json',
-  'verify-unknown-kid.json',
-  'verify-revoked-key.json',
-  'verify-context-mismatch.json',
-  'verify-wrong-key.json',
-];
+// --- verify, verify-chain, a2a-artifact-hash: directory-driven ---
+// Every vector file whose `command` matches runs here; there is no hand-kept
+// list, so a new vector cannot be silently untested. Vectors that pin raw stdin
+// bytes (`input_raw*`) have no structured `input` and are exercised through the
+// CLI (compare.mjs), not this in-process runner.
+const DIR_COMMANDS = new Set(['verify', 'verify-chain', 'a2a-artifact-hash']);
+const dirVectors = readdirSync(VECTORS_DIR)
+  .filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+  .sort()
+  .map((f) => ({ f, v: loadVector(f) }))
+  .filter(({ v }) => DIR_COMMANDS.has(v.command) && v.input !== undefined);
 
-for (const filename of VERIFY_VECTORS) {
-  const v = loadVector(filename);
-  test(v.name, () => {
-    const result = runCommand(v.command, v.input);
-    assertAnchorMatch(result, v.anchor, v.name);
-  });
-}
+assert.ok(
+  dirVectors.some(({ v }) => v.command === 'verify') &&
+    dirVectors.some(({ v }) => v.command === 'verify-chain') &&
+    dirVectors.some(({ v }) => v.command === 'a2a-artifact-hash'),
+  'directory scan found no vectors for a command'
+);
 
-// --- verify-chain: all 7 vectors, table-driven ---
-const CHAIN_VECTORS = [
-  'chain-valid-2hop.json',
-  'chain-valid-3hop.json',
-  'chain-link-mismatch.json',
-  'chain-forged-parent.json',
-  'chain-dangling-parent.json',
-  'chain-parent-identity-mismatch.json',
-  'chain-middle-null-parent.json',
-];
-
-for (const filename of CHAIN_VECTORS) {
-  const v = loadVector(filename);
-  test(v.name, () => {
-    const result = runCommand(v.command, v.input);
-    assertAnchorMatch(result, v.anchor, v.name);
-  });
-}
-
-// --- a2a-artifact-hash: all 6 vectors, table-driven ---
-const A2A_VECTORS = [
-  'a2a-text.json',
-  'a2a-data.json',
-  'a2a-file-inline.json',
-  'a2a-file-uri.json',
-  'a2a-mixed.json',
-  'a2a-unsupported.json',
-];
-
-for (const filename of A2A_VECTORS) {
-  const v = loadVector(filename);
+for (const { v } of dirVectors) {
   test(v.name, () => {
     const result = runCommand(v.command, v.input);
     assertAnchorMatch(result, v.anchor, v.name);

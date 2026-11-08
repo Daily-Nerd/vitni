@@ -68,3 +68,19 @@ func TestVerify_MalformedBadJSONHeader(t *testing.T) {
 		t.Errorf("got (%v, %q), want (false, malformed)", valid, reason)
 	}
 }
+
+// TestSupportedAlgs pins the algorithm table: it is the single owner of
+// {alg -> kty, crv, verify fn}, and the declared alg set derives from it, so it
+// cannot drift from what Verify accepts.
+func TestSupportedAlgs(t *testing.T) {
+	got := vitni.SupportedAlgs()
+	want := []string{"ES256", "EdDSA"} // sorted by code point
+	if len(got) != len(want) {
+		t.Fatalf("SupportedAlgs() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("SupportedAlgs() = %v, want %v", got, want)
+		}
+	}
+}
