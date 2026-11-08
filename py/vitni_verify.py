@@ -129,16 +129,27 @@ class _NonFinite:
 
 _NONFINITE = _NonFinite()
 
-_TOKEN = re.compile(r'"[^"\\]*(?:\\.[^"\\]*)*"|[\[\]{}]', re.DOTALL)
 _SURROGATE = re.compile("[\\ud800-\\udfff]")
 
 
 def _within_depth(text):
-    """One raw scan with string state: the top-level value is depth 1."""
+    """One raw, single-pass scan with string state: the top-level value is
+    depth 1. Linear in len(text): every character is visited once, and an
+    unterminated string just runs to the end (json.loads rejects it later)."""
     depth = 0
-    for m in _TOKEN.finditer(text):
-        c = m.group()
-        if c == "[" or c == "{":
+    in_string = False
+    escaped = False
+    for c in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif c == "\\":
+                escaped = True
+            elif c == '"':
+                in_string = False
+        elif c == '"':
+            in_string = True
+        elif c == "[" or c == "{":
             depth += 1
             if depth > MAX_DEPTH:
                 return False
