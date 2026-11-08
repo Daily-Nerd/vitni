@@ -211,3 +211,34 @@ for (const [command, base] of Object.entries(BASELINES)) {
     });
   }
 }
+
+// `profiles` is infrastructure: it declares the gating atoms of
+// conformance/profiles.json this verifier implements and ignores stdin entirely.
+const PROFILES_LINE = '["alg:ES256","alg:EdDSA","canon:b64-strict","canon:jcs"]';
+const CATALOG = JSON.parse(readFileSync(new URL('../../conformance/profiles.json', import.meta.url), 'utf8'));
+const { ALGS } = await import(`${DIST}/commands/verify.js`);
+
+test('profiles: the same line whatever stdin is (junk, empty, an object, a gate violation)', () => {
+  for (const stdin of ['', ')(', '[]', '{"a":1e400}', '{"profiles":["x"]}', Buffer.from([0xff, 0xfe])]) {
+    assert.equal(dispatch('profiles', stdin), PROFILES_LINE, JSON.stringify(String(stdin)));
+  }
+});
+test('profiles: main never reads stdin for it (a closed stdin cannot fail it)', async () => {
+  let out = '';
+  let reads = 0;
+  await main(['node', 'cli', 'profiles'], async () => { reads++; throw new Error('closed'); }, (s) => { out += s; });
+  assert.equal(out, PROFILES_LINE + '\n');
+  assert.equal(reads, 0);
+});
+test('profiles: derived from the ALGS table and equal to the catalog gating atoms', () => {
+  const declared = JSON.parse(dispatch('profiles', ''));
+  for (const alg of Object.keys(ALGS)) assert.ok(declared.includes(`alg:${alg}`), `alg ${alg} verified but not declared`);
+  const gating = CATALOG.atoms.filter((a) => a.gating).map((a) => a.id).sort();
+  assert.deepEqual(declared, gating);
+  assert.deepEqual(declared, [...declared].sort(), 'sorted by code point');
+  assert.ok(declared.every((a) => !a.startsWith('cmd:')), 'cmd atoms are never declared');
+});
+test('profiles: is not a stdin-gated command (an unknown command still wins over stdin)', () => {
+  assert.deepEqual(parse(dispatch('profile', '{}')), { error: 'unsupported_command' });
+  assert.deepEqual(parse(dispatch('Profiles', '{}')), { error: 'unsupported_command' });
+});
