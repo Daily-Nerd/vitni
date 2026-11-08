@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/Daily-Nerd/vitni/go/internal/fields"
+	"github.com/Daily-Nerd/vitni/go/internal/hashstr"
 	"github.com/gowebpki/jcs"
 )
 
@@ -54,11 +55,7 @@ func A2AArtifactHash(artifact json.RawMessage) (descriptorBytes []byte, outputsH
 	if err != nil {
 		return nil, "", err
 	}
-	hashStr, err := Digest(canon)
-	if err != nil {
-		return nil, "", err
-	}
-	return canon, hashStr, nil
+	return canon, hashstr.Sum(canon), nil
 }
 
 // mapPart maps one A2A part to its canonical descriptor (as JSON bytes).
@@ -90,15 +87,10 @@ func mapPart(partRaw json.RawMessage) (json.RawMessage, error) {
 		return json.Marshal(d)
 
 	case "file":
-		var fileRaw json.RawMessage
-		if _, err := fields.Field(part, "file", &fileRaw); err != nil {
-			return nil, err
-		}
+		// `file` is an object, null or absent (a nil map reads as no member).
 		var file map[string]json.RawMessage
-		if fileRaw != nil {
-			if file, err = fields.Object(fileRaw); err != nil {
-				return nil, err
-			}
+		if _, err := fields.Field(part, "file", &file); err != nil {
+			return nil, err
 		}
 		var bytesB64, uri, mimeType, name *string
 		for field, dst := range map[string]**string{"bytes": &bytesB64, "uri": &uri, "mimeType": &mimeType, "name": &name} {
@@ -117,13 +109,9 @@ func mapPart(partRaw json.RawMessage) (json.RawMessage, error) {
 			if err != nil {
 				return nil, err
 			}
-			digest, err := Digest(raw)
-			if err != nil {
-				return nil, err
-			}
 			d := map[string]json.RawMessage{
 				"kind":     rawString("file"),
-				"digest":   rawString(digest),
+				"digest":   rawString(hashstr.Sum(raw)),
 				"mimeType": nullableString(mimeType),
 				"name":     nullableString(name),
 			}

@@ -1,6 +1,10 @@
 package vitni
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/Daily-Nerd/vitni/go/internal/hashstr"
+)
 
 // VerifyChainInput is the input object for the verify-chain command.
 type VerifyChainInput struct {
@@ -39,7 +43,7 @@ func VerifyChain(in VerifyChainInput) (bool, string, int) {
 		// --- Step 3: receipt_id[i] ---
 		// The hop passed §7 verify, so its payload is valid canonical JSON: the raw
 		// payload bytes equal JCS(payload) and receipt_id = Digest(bytes).
-		receiptIDs[i] = digestString(hop.bytes)
+		receiptIDs[i] = hashstr.Sum(hop.bytes)
 		payloads[i] = hop.object
 	}
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/Daily-Nerd/vitni/go"
 	"github.com/Daily-Nerd/vitni/go/internal/fields"
+	"github.com/Daily-Nerd/vitni/go/internal/hashstr"
 	"github.com/Daily-Nerd/vitni/go/internal/wire"
 	"github.com/gowebpki/jcs"
 )
@@ -30,10 +31,15 @@ var (
 	errInvalidSeed       = errors.New("invalid_seed")
 )
 
+// runner runs one command. `in` is the stdin top-level object, decoded ONCE by
+// the gate in respond; `stdin` is the same text for the two commands whose
+// wire decoder owns its own shape check (verify, verify-chain).
+type runner func(in map[string]json.RawMessage, stdin []byte) (json.RawMessage, error)
+
 // commands is the single table of CLI commands. Resolving the command here,
 // before any stdin byte is parsed, is what makes an unknown command answer
 // unsupported_command whatever the stdin looks like.
-var commands = map[string]func([]byte) (json.RawMessage, error){
+var commands = map[string]runner{
 	"jcs":               runJCS,
 	"hashstring":        runHashString,
 	"digest":            runDigest,
@@ -71,7 +77,8 @@ func main() {
 //  1. the command resolves (unknown: unsupported_command, stdin never parsed);
 //  2. the stdin gate, ONCE for every command: strict UTF-8, no BOM, no
 //     lone-surrogate escape, exactly one JSON value, depth <= MaxDepth, no
-//     non-finite number, duplicate keys per dupReject, top level an object;
+//     non-finite number, duplicate keys per dupReject, top level an object
+//     (decoded here, once, and handed to the command);
 //  3. the command runs on text that has already passed the gate.
 //
 // Any gate violation is invalid_input, a command error and never a verdict.
@@ -86,10 +93,11 @@ func respond(command string, stdin []byte) []byte {
 	}); err != nil {
 		return errorLine("invalid_input")
 	}
-	if !isJSONObject(stdin) {
+	in, err := fields.Object(stdin)
+	if err != nil {
 		return errorLine("invalid_input")
 	}
-	result, err := run(stdin)
+	result, err := run(in, stdin)
 	if err != nil {
 		return errorLine(errorCode(err))
 	}
@@ -103,19 +111,6 @@ func respond(command string, stdin []byte) []byte {
 		return errorLine("jcs_output_error")
 	}
 	return append(canonical, '\n')
-}
-
-// isJSONObject reports whether already-validated JSON text is one object (not
-// null, an array or a scalar).
-func isJSONObject(text []byte) bool {
-	for _, c := range text {
-		switch c {
-		case ' ', '\t', '\n', '\r':
-			continue
-		}
-		return c == '{'
-	}
-	return false
 }
 
 // errorLine renders {"error":"<code>"}: a single key is already sorted, so it
@@ -152,11 +147,7 @@ func errorCode(err error) string {
 // Command implementations
 // -------------------------------------------------------------------
 
-func runJCS(stdin []byte) (json.RawMessage, error) {
-	in, err := fields.Object(stdin)
-	if err != nil {
-		return nil, err
-	}
+func runJCS(in map[string]json.RawMessage, _ []byte) (json.RawMessage, error) {
 	// `value` is any JSON value, null included (the canonical form of null is
 	// "null"), so presence is the key being there, not a non-null value.
 	value, ok := in["value"]
@@ -177,11 +168,7 @@ func runJCS(stdin []byte) (json.RawMessage, error) {
 	return json.Marshal(out)
 }
 
-func runHashString(stdin []byte) (json.RawMessage, error) {
-	in, err := fields.Object(stdin)
-	if err != nil {
-		return nil, err
-	}
+func runHashString(in map[string]json.RawMessage, _ []byte) (json.RawMessage, error) {
 	var algo, digestHex string
 	if err := fields.Required(in, "algo", &algo); err != nil {
 		return nil, err
@@ -202,11 +189,7 @@ func runHashString(stdin []byte) (json.RawMessage, error) {
 	return json.Marshal(out)
 }
 
-func runDigest(stdin []byte) (json.RawMessage, error) {
-	in, err := fields.Object(stdin)
-	if err != nil {
-		return nil, err
-	}
+func runDigest(in map[string]json.RawMessage, _ []byte) (json.RawMessage, error) {
 	var bytesB64 string
 	if err := fields.Required(in, "bytes_b64", &bytesB64); err != nil {
 		return nil, err
@@ -215,21 +198,13 @@ func runDigest(stdin []byte) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	hashStr, err := vitni.Digest(raw)
-	if err != nil {
-		return nil, err
-	}
 	out := struct {
 		Hashstr string `json:"hashstr"`
-	}{Hashstr: hashStr}
+	}{Hashstr: hashstr.Sum(raw)}
 	return json.Marshal(out)
 }
 
-func runReceiptID(stdin []byte) (json.RawMessage, error) {
-	in, err := fields.Object(stdin)
-	if err != nil {
-		return nil, err
-	}
+func runReceiptID(in map[string]json.RawMessage, _ []byte) (json.RawMessage, error) {
 	receipt, err := wire.RequiredObject(in, "receipt")
 	if err != nil {
 		return nil, err
@@ -248,11 +223,7 @@ func runReceiptID(stdin []byte) (json.RawMessage, error) {
 	return json.Marshal(out)
 }
 
-func runSSEOutputsHash(stdin []byte) (json.RawMessage, error) {
-	in, err := fields.Object(stdin)
-	if err != nil {
-		return nil, err
-	}
+func runSSEOutputsHash(in map[string]json.RawMessage, _ []byte) (json.RawMessage, error) {
 	var rawB64, mode string
 	if err := fields.Required(in, "raw_b64", &rawB64); err != nil {
 		return nil, err
@@ -278,11 +249,7 @@ func runSSEOutputsHash(stdin []byte) (json.RawMessage, error) {
 	return json.Marshal(out)
 }
 
-func runCostCanon(stdin []byte) (json.RawMessage, error) {
-	in, err := fields.Object(stdin)
-	if err != nil {
-		return nil, err
-	}
+func runCostCanon(in map[string]json.RawMessage, _ []byte) (json.RawMessage, error) {
 	cost, err := wire.RequiredObject(in, "cost")
 	if err != nil {
 		return nil, err
@@ -297,7 +264,7 @@ func runCostCanon(stdin []byte) (json.RawMessage, error) {
 	return json.Marshal(out)
 }
 
-func runVerify(stdin []byte) (json.RawMessage, error) {
+func runVerify(_ map[string]json.RawMessage, stdin []byte) (json.RawMessage, error) {
 	in, err := wire.DecodeVerifyInput(stdin)
 	if err != nil {
 		return nil, err
@@ -313,7 +280,7 @@ func runVerify(stdin []byte) (json.RawMessage, error) {
 	return json.Marshal(out)
 }
 
-func runVerifyChain(stdin []byte) (json.RawMessage, error) {
+func runVerifyChain(_ map[string]json.RawMessage, stdin []byte) (json.RawMessage, error) {
 	in, err := wire.DecodeVerifyChainInput(stdin)
 	if err != nil {
 		return nil, err
@@ -331,11 +298,7 @@ func runVerifyChain(stdin []byte) (json.RawMessage, error) {
 	return json.Marshal(out)
 }
 
-func runA2AArtifactHash(stdin []byte) (json.RawMessage, error) {
-	in, err := fields.Object(stdin)
-	if err != nil {
-		return nil, err
-	}
+func runA2AArtifactHash(in map[string]json.RawMessage, _ []byte) (json.RawMessage, error) {
 	artifact, err := wire.RequiredObject(in, "artifact")
 	if err != nil {
 		return nil, err
@@ -368,18 +331,15 @@ var knownReceiptKeys = map[string]bool{
 	"ext": true,
 }
 
-func runSign(stdin []byte) (json.RawMessage, error) {
-	in, err := fields.Object(stdin)
-	if err != nil {
-		return nil, err
-	}
+func runSign(in map[string]json.RawMessage, _ []byte) (json.RawMessage, error) {
 	// receipt must be present and a JSON object. kid and private_key_b64 are
 	// optional at this layer (absent or null is "", judged below with their own
 	// codes) but a present one must be a string.
-	receipt, err := wire.RequiredObject(in, "receipt")
-	if err != nil {
+	var receiptObj map[string]json.RawMessage
+	if err := fields.Required(in, "receipt", &receiptObj); err != nil {
 		return nil, err
 	}
+	receipt := in["receipt"]
 	var kid, privateKeyB64 string
 	if _, err := fields.Field(in, "kid", &kid); err != nil {
 		return nil, err
@@ -387,11 +347,6 @@ func runSign(stdin []byte) (json.RawMessage, error) {
 	if _, err := fields.Field(in, "private_key_b64", &privateKeyB64); err != nil {
 		return nil, err
 	}
-	receiptObj, err := fields.Object(receipt)
-	if err != nil {
-		return nil, err
-	}
-
 	// receipt_id must be absent (reuse the existing contract).
 	if _, present := receiptObj["receipt_id"]; present {
 		return nil, vitni.ErrReceiptIDMustBeAbsent
@@ -450,11 +405,7 @@ func runSign(stdin []byte) (json.RawMessage, error) {
 //
 // A PRESENT-but-empty seed_b64 is invalid_seed, never treat-as-absent: a
 // buggy consumer passing "" must not silently receive a fresh random key.
-func runKeygen(stdin []byte) (json.RawMessage, error) {
-	obj, err := fields.Object(stdin)
-	if err != nil {
-		return nil, err
-	}
+func runKeygen(obj map[string]json.RawMessage, _ []byte) (json.RawMessage, error) {
 	for k := range obj {
 		if k != "seed_b64" {
 			return nil, fmt.Errorf("invalid_input: unknown field %q", k)

@@ -13,7 +13,18 @@ import (
 	"testing"
 
 	vitni "github.com/Daily-Nerd/vitni/go"
+	"github.com/Daily-Nerd/vitni/go/internal/fields"
 )
+
+// runOn feeds stdin through the same single decode the gate in respond does,
+// then runs one command, for tests that exercise a runner without the gate.
+func runOn(r runner, stdin string) (json.RawMessage, error) {
+	in, err := fields.Object([]byte(stdin))
+	if err != nil {
+		return nil, err
+	}
+	return r(in, []byte(stdin))
+}
 
 // The run* functions are the CLI dispatch layer. End-to-end they are exercised
 // by conformance/compare.mjs (a subprocess), which `go test -coverprofile`
@@ -214,14 +225,14 @@ func TestRunSign_ContractErrors(t *testing.T) {
 			} else {
 				stdin = `{"receipt":` + c.receipt + `,` + key + `}`
 			}
-			if _, err := runSign([]byte(stdin)); err == nil {
+			if _, err := runOn(runSign, stdin); err == nil {
 				t.Fatal("expected error, got nil")
 			}
 		})
 	}
 	// unknown-command is handled in main(); assert the error string carries the
 	// field name so the message is actionable.
-	if _, err := runSign([]byte(`{"receipt":{` + base + `,"FOO":"x"},` + key + `}`)); err == nil || !strings.Contains(err.Error(), "FOO") {
+	if _, err := runOn(runSign, `{"receipt":{`+base+`,"FOO":"x"},`+key+`}`); err == nil || !strings.Contains(err.Error(), "FOO") {
 		t.Errorf("unknown-key error should name the field, got %v", err)
 	}
 }
