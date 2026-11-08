@@ -15,30 +15,53 @@ const CONTRIBUTING = readFileSync(join(ROOT, "CONTRIBUTING.md"), "utf8");
 
 // One entry per `- name:` / `- uses:` step of the job.
 const STEPS = WORKFLOW.split(/\n(?=      - )/).slice(1);
-const step = (re) => {
-  const found = STEPS.filter((s) => re.test(s));
-  assert.equal(found.length, 1, `expected exactly one step matching ${re}, found ${found.length}`);
+
+// A step is identified by its `name:` and by nothing else. Finding it by its
+// command text lets any other step that runs the same command (the coverage
+// step runs the unit tests too) change which step the guard inspects, and it
+// pushes authors to reorder arguments just to dodge the pattern.
+const nameOf = (s) => (s.match(/^      (?:- |  )name: (.+)$/m) ?? [])[1];
+function findNamed(steps, name) {
+  const found = steps.filter((s) => nameOf(s) === name);
+  assert.equal(found.length, 1, `expected exactly one step named "${name}", found ${found.length}`);
   return found[0];
-};
+}
+const named = (name) => findNamed(STEPS, name);
 const index = (s) => STEPS.indexOf(s);
 
+const UV = "Install uv (pinned)";
+const UNIT = "Python verifier unit tests (stdlib only, both supported Pythons)";
+const COMPARE = "Cross-implementation conformance (Go, TS and Python, byte-identical in scope)";
+const CROSS = "Python verifier cross-check against a second implementation";
+const STDLIB = "Python verifier imports nothing outside the standard library";
+const SELFTESTS = "Harness self-tests";
+
+test("a step is found by its name, never by a command another step shares", () => {
+  const run = "        run: uv run python -I -m unittest discover -s py/tests -t py\n";
+  const a = `      - name: A\n${run}`;
+  const b = `      - name: B\n        env:\n          X: "1"\n${run}`;
+  assert.equal(findNamed([a, b], "A"), a);
+  assert.equal(findNamed([a, b], "B"), b);
+  assert.throws(() => findNamed([a, a], "A"), /exactly one step named "A", found 2/);
+  assert.throws(() => findNamed([a, b], "C"), /exactly one step named "C", found 0/);
+});
+
 test("S2.51 the Python unit tests run on 3.10 and 3.13 with no --with (stdlib only)", () => {
-  const unit = step(/unittest discover -s py\/tests -t py/);
+  const unit = named(UNIT);
   assert.match(unit, /for v in 3\.10 3\.13; do/);
   assert.match(unit, /uv run --no-project --python "\$v" python -I -m unittest discover -s py\/tests -t py/);
   assert.doesNotMatch(unit, /--with/);
 });
 
 test("the unit tests run before the compare, uv is installed (pinned) before both", () => {
-  const uv = step(/uses: astral-sh\/setup-uv@/);
+  const uv = named(UV);
+  assert.match(uv, /uses: astral-sh\/setup-uv@/);
   assert.match(uv, /version: "[0-9.]+"/);
-  const unit = step(/unittest discover -s py\/tests -t py/);
-  const compare = step(/PY_VERIFY=/);
-  assert.ok(index(uv) < index(unit) && index(unit) < index(compare));
+  assert.ok(index(uv) < index(named(UNIT)) && index(named(UNIT)) < index(named(COMPARE)));
 });
 
 test("the compare runs per Python version with PY_VERIFY and requires all three impls through REQUIRE_IMPLS", () => {
-  const compare = step(/PY_VERIFY=/);
+  const compare = named(COMPARE);
   assert.match(compare, /for v in 3\.10 3\.13; do/);
   assert.match(compare, /PY_VERIFY="uv run --no-project --python \$v python -I py\/vitni_verify\.py"/);
   assert.match(compare, /REQUIRE_IMPLS=go,ts,py/);
@@ -50,15 +73,16 @@ test("the compare runs per Python version with PY_VERIFY and requires all three 
 });
 
 test("the cross-check target runs separately, with the pinned cryptography", () => {
-  const cross = step(/py\/tests_cross/);
+  const cross = named(CROSS);
+  assert.match(cross, /unittest discover -s py\/tests_cross -t py/);
   const pin = CONTRIBUTING.match(/--with (cryptography==[0-9][0-9.]*)/);
   assert.ok(pin, "CONTRIBUTING.md owns the cryptography pin");
   assert.ok(cross.includes(`--with ${pin[1]}`), "the cross-check uses the pin owned by CONTRIBUTING.md");
-  assert.doesNotMatch(step(/unittest discover -s py\/tests -t py/), /py\/tests_cross/);
+  assert.doesNotMatch(named(UNIT), /py\/tests_cross/);
 });
 
 test("S2.52 the stdlib-only grep gate fails the job when a third-party crypto name appears", () => {
-  const gate = step(/cryptography\|ecdsa\|nacl/);
+  const gate = named(STDLIB);
   assert.match(gate, /py\/vitni_verify\.py/);
   assert.match(gate, /if grep -nE 'cryptography\|ecdsa\|nacl' py\/vitni_verify\.py; then[\s\S]*exit 1/);
 });
@@ -73,7 +97,9 @@ test("S2.58 no step, Python or otherwise, can be made non-fatal", () => {
 });
 
 test("the harness self-tests run after uv is installed (the live tests spawn the Python verifier)", () => {
-  assert.ok(index(step(/node --test conformance\/\*\.test\.mjs/)) > index(step(/uses: astral-sh\/setup-uv@/)));
+  const selftests = named(SELFTESTS);
+  assert.match(selftests, /node --test conformance\/\*\.test\.mjs/);
+  assert.ok(index(selftests) > index(named(UV)));
 });
 
 // A pipeline takes the exit status of its LAST command unless pipefail is set, so
