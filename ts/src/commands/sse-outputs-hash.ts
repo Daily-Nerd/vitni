@@ -137,7 +137,7 @@ function splitLines(text: string): string[] {
 
 export function sseOutputsHash(input: SseInput): SseOutput | { error: string } {
   if (input.mode !== 'sse' && input.mode !== 'sse-jsonrpc') {
-    return { error: 'unsupported_mode' };
+    return { error: 'invalid_input' };
   }
 
   const raw = decodeStdBase64(input.raw_b64);

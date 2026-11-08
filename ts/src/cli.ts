@@ -22,6 +22,7 @@ import { sign } from './commands/sign.js';
 import { keygen } from './commands/keygen.js';
 import { jcsString } from './commands/jcs.js';
 import { DUP_REJECT_COMMANDS, parseStrict } from './commands/strict-json.js';
+import { validateInput } from './commands/schema.js';
 
 async function readStdin(): Promise<Buffer> {
   // Robust across platforms: async-iterate the stream. Avoids the
@@ -64,7 +65,8 @@ const COMMANDS: Record<string, (input: unknown) => unknown> = {
  *     BOM, no lone-surrogate escape, exactly one JSON value, depth <= MAX_DEPTH,
  *     no non-finite number, duplicate keys per DUP_REJECT_COMMANDS, and the top
  *     level must be an object;
- *  3. the command runs on text that has already passed the gate.
+ *  3. validateInput: exact member names, required members and member types;
+ *  4. the command runs on text that has already passed the gate.
  *
  * Any gate violation is invalid_input, a command error and never a verdict.
  * The catch-all below is a last resort that no stdin is meant to reach.
@@ -79,7 +81,7 @@ export function dispatch(command: string, stdin: Uint8Array | string): string {
     rejectNonFinite: true,
   });
   const input = parsed.ok ? parsed.value : undefined;
-  if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+  if (input === null || typeof input !== 'object' || Array.isArray(input) || !validateInput(command, input)) {
     return jcsString({ error: 'invalid_input' });
   }
 
