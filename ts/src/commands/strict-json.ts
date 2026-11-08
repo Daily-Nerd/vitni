@@ -82,8 +82,12 @@ export function hasNonFinite(v: unknown): boolean {
   return false;
 }
 
-/** One raw scan with string state; text is not yet known to be valid JSON. */
-function withinDepth(text: string): boolean {
+/**
+ * One raw scan with string state; text is not yet known to be valid JSON. It
+ * needs no syntactically valid input, so a site that skips text that is not JSON
+ * at all can run it first: nesting over MAX_DEPTH is rejected, never "skipped".
+ */
+export function withinDepth(text: string): boolean {
   let depth = 0;
   let inString = false;
   for (let i = 0; i < text.length; i++) {
@@ -105,7 +109,7 @@ function withinDepth(text: string): boolean {
 const LONE_SURROGATE = /[\uD800-\uDFFF]/u;
 
 /** Iterative walk over every key and string value (depth already bounded). */
-export function hasLoneSurrogate(root: unknown): boolean {
+function hasLoneSurrogate(root: unknown): boolean {
   const stack: unknown[] = [root];
   while (stack.length > 0) {
     const v = stack.pop();
