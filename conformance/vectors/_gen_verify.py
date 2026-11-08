@@ -748,6 +748,17 @@ write_input("neg-verify-chain-policy-binding-number.json",
             "verify-envelope/chain-policy-binding-number", "verify-chain",
             {"receipts": [], "keys": {}, "policy": {"expected_binding": 5}}, INVALID_INPUT)
 
+# U4: signed_receipt absent or null is the one required-looking member whose
+# absence stays a VERDICT (malformed), while a wrong type is invalid_input. The
+# asymmetry is existing behavior on both impls; these vectors keep it from
+# drifting while the rest of the envelope is typed.
+write_input("verify-signed-receipt-null.json", "verify-envelope/signed-receipt-null", "verify",
+            envelope(signed_receipt=None), {"valid": False, "reason": "malformed"})
+_no_receipt = envelope()
+del _no_receipt["signed_receipt"]
+write_input("verify-signed-receipt-absent.json", "verify-envelope/signed-receipt-absent", "verify",
+            _no_receipt, {"valid": False, "reason": "malformed"})
+
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)
