@@ -469,6 +469,13 @@ text_vec("verify-payload-depth-128.json", "verify/payload-depth-128",
 text_vec("verify-payload-depth-129.json", "verify/payload-depth-129",
          ED_HDR_BYTES, ext_payload(b"[" * 127 + b"]" * 127), MALFORMED)
 
+# header or payload that is valid JSON but not an object (R0.4: "exactly one
+# object"). `null` is the easy one to miss: Go's json.Unmarshal into a map
+# accepts it and leaves a nil map.
+text_vec("verify-header-null.json", "verify/header-null", b"null", ed_payload, MALFORMED)
+text_vec("verify-payload-null.json", "verify/payload-null", ED_HDR_BYTES, b"null", MALFORMED)
+text_vec("verify-header-array.json", "verify/header-array", b"[]", ed_payload, MALFORMED)
+
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)
