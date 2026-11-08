@@ -321,3 +321,74 @@ def _cmd_receipt_id(inp):
 def _cmd_jcs(inp):
     canonical = jcs(inp["value"])
     return {"byte_len": len(canonical), "canonical_hex": canonical.hex()}
+
+
+# --------------------------------------------------------------------------
+# Ed25519 (RFC 8032 arithmetic, verification as Go and OpenSSL decide it).
+# Cofactorless: accept iff encode([S]B - [k]A) == R_enc. R is never decoded, so
+# a non-canonical R fails. A is decoded with y reduced mod p and x = 0 with the
+# sign bit set accepted. k hashes the ORIGINAL 32 public-key bytes, never a
+# re-encoding. No small-order, identity-key or torsion rejection.
+# --------------------------------------------------------------------------
+
+_P = 2 ** 255 - 19
+_L = 2 ** 252 + 27742317777372353535851937790883648493
+_D = -121665 * pow(121666, -1, _P) % _P
+_SQRT_M1 = pow(2, (_P - 1) // 4, _P)
+
+
+def _ed_recover_x(y, sign):
+    x2 = (y * y - 1) * pow(_D * y * y + 1, -1, _P) % _P
+    x = pow(x2, (_P + 3) // 8, _P)
+    if (x * x - x2) % _P:
+        x = x * _SQRT_M1 % _P
+    if (x * x - x2) % _P:
+        return None  # not a square: no such point
+    if x & 1 != sign:
+        x = (_P - x) % _P  # x = 0 with sign 1 stays 0, accepted
+    return x
+
+
+def _ed_add(p, q):
+    """Complete unified addition on extended coordinates (X, Y, Z, T)."""
+    a = (p[1] - p[0]) * (q[1] - q[0]) % _P
+    b = (p[1] + p[0]) * (q[1] + q[0]) % _P
+    c = p[3] * 2 * _D * q[3] % _P
+    d = p[2] * 2 * q[2] % _P
+    e, f, g, h = b - a, d - c, d + c, b + a
+    return (e * f % _P, g * h % _P, f * g % _P, e * h % _P)
+
+
+def _ed_mul(s, p):
+    r = (0, 1, 1, 0)
+    for i in range(s.bit_length() - 1, -1, -1):
+        r = _ed_add(r, r)
+        if (s >> i) & 1:
+            r = _ed_add(r, p)
+    return r
+
+
+def _ed_encode(p):
+    zinv = pow(p[2], -1, _P)
+    x, y = p[0] * zinv % _P, p[1] * zinv % _P
+    return (y | ((x & 1) << 255)).to_bytes(32, "little")
+
+
+_ED_BY = 4 * pow(5, -1, _P) % _P
+_ED_BX = _ed_recover_x(_ED_BY, 0)
+_ED_B = (_ED_BX, _ED_BY, 1, _ED_BX * _ED_BY % _P)
+
+
+def _ed25519_verify(pub, sig, msg):
+    if len(pub) != 32 or len(sig) != 64:
+        return False
+    s = int.from_bytes(sig[32:], "little")
+    if s >= _L:
+        return False
+    y = (int.from_bytes(pub, "little") & (2 ** 255 - 1)) % _P
+    x = _ed_recover_x(y, pub[31] >> 7)
+    if x is None:
+        return False
+    neg_a = ((-x) % _P, y, 1, (-x * y) % _P)
+    k = int.from_bytes(hashlib.sha512(sig[:32] + pub + msg).digest(), "little") % _L
+    return _ed_encode(_ed_add(_ed_mul(s, _ED_B), _ed_mul(k, neg_a))) == sig[:32]
