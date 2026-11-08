@@ -97,7 +97,7 @@ New here? **[docs/QUICKSTART.md](docs/QUICKSTART.md)** takes you from install to
 ## Spec & conformance
 
 - **[docs/DESIGN.md](docs/DESIGN.md)** — the full protocol: receipt object, canonicalization, signing, the verification algorithm, chain semantics, MCP/A2A bindings, threat model.
-- **[Conformance vectors](conformance/vectors/)** — a language-agnostic suite (94 vectors, positive + negative classes); any implementation that passes is interoperable. Both reference implementations are held byte-identical against it in CI.
+- **[Conformance vectors](conformance/vectors/)**: a language-agnostic suite (positive + negative classes; the harness prints the count); any implementation that passes is interoperable. Both reference implementations are held byte-identical against it in CI.
 
 ## License
 

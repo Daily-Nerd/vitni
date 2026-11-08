@@ -1,6 +1,6 @@
 # vitni conformance suite
 
-**The interoperability bar for vitni implementations.** 94 language-agnostic
+**The interoperability bar for vitni implementations.** Language-agnostic
 vectors that pin every byte the protocol commits to. Any implementation that
 passes them is interoperable with every other implementation that passes them
 — that is the claim this directory exists to make falsifiable.
@@ -71,8 +71,8 @@ implementation:
 GO_VERIFY="./bin/vitni-verify-go" TS_VERIFY="your-verify-cmd" node conformance/compare.mjs
 ```
 
-Byte-identical output against a reference implementation on all 94 vectors
-is the conformance claim. Divergence is a finding: either your
+Byte-identical output against a reference implementation on every vector (the harness prints the count) is the conformance claim.
+Divergence is a finding: either your
 implementation has a bug, or the spec leaked ambiguity — [file an
 issue](https://github.com/Daily-Nerd/vitni/issues) for either; the second
 kind is the more valuable report.
