@@ -50,8 +50,13 @@ func hashStringFromBytes(digest []byte) string {
 
 // Digest computes sha2-256 over raw bytes and returns the pinned hash-string.
 func Digest(raw []byte) (string, error) {
+	return digestString(raw), nil
+}
+
+// digestString is Digest without the error that can never occur.
+func digestString(raw []byte) string {
 	h := sha256.Sum256(raw)
-	return hashStringFromBytes(h[:]), nil
+	return hashStringFromBytes(h[:])
 }
 
 // DecodeStdBase64 decodes a standard-alphabet base64 string, accepting exactly
