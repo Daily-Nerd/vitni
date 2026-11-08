@@ -1,0 +1,1 @@
+{"name": "member/hashstring-missing-digest-hex", "command": "hashstring", "input_raw": "{\"algo\":\"sha2-256\"}", "anchor": {"error": "invalid_input"}}

@@ -15,11 +15,12 @@ import (
 
 // vectorFile represents a test vector loaded from disk.
 type vectorFile struct {
-	Name     string          `json:"name"`
-	Command  string          `json:"command"`
-	Input    json.RawMessage `json:"input"`
-	InputRaw string          `json:"input_raw"`
-	Anchor   json.RawMessage `json:"anchor"`
+	Name        string          `json:"name"`
+	Command     string          `json:"command"`
+	Input       json.RawMessage `json:"input"`
+	InputRaw    *string         `json:"input_raw"`
+	InputRawB64 *string         `json:"input_raw_b64"`
+	Anchor      json.RawMessage `json:"anchor"`
 }
 
 // isErrorVectorRaw reports whether a vector's anchor asserts an error.
@@ -30,6 +31,21 @@ func isErrorVectorRaw(anchor json.RawMessage) bool {
 	}
 	_, ok := a["error"]
 	return ok
+}
+
+// loadLibraryVectors returns the vectors that drive the LIBRARY: those with a
+// structured `input`. Vectors that pin raw stdin (`input_raw`, `input_raw_b64`)
+// exercise the CLI stdin gate, not the library; they run in the cmd package
+// (TestRespond_AllVectors) and in conformance/compare.mjs.
+func loadLibraryVectors(t *testing.T) []vectorFile {
+	t.Helper()
+	var out []vectorFile
+	for _, v := range loadVectors(t) {
+		if v.InputRaw == nil && v.InputRawB64 == nil {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // loadVectors loads all *.json files from the vectors directory relative to the module root.
@@ -262,15 +278,12 @@ func TestCostCanon_NumberError(t *testing.T) {
 // -------------------------------------------------------------------
 
 func TestVectors_JCS(t *testing.T) {
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "jcs" {
 			continue
 		}
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
-			if v.InputRaw != "" {
-				t.Skip("input_raw duplicate-key vector; CLI-layer, covered by compare.mjs")
-			}
 			var inp struct {
 				Value json.RawMessage `json:"value"`
 			}
@@ -304,7 +317,7 @@ func TestVectors_JCS(t *testing.T) {
 }
 
 func TestVectors_Digest(t *testing.T) {
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "digest" {
 			continue
 		}
@@ -346,15 +359,12 @@ func TestVectors_Digest(t *testing.T) {
 }
 
 func TestVectors_ReceiptID(t *testing.T) {
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "receipt-id" {
 			continue
 		}
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
-			if v.InputRaw != "" {
-				t.Skip("input_raw duplicate-key vector; CLI-layer, covered by compare.mjs")
-			}
 			var inp struct {
 				Receipt json.RawMessage `json:"receipt"`
 			}
@@ -383,7 +393,7 @@ func TestVectors_ReceiptID(t *testing.T) {
 }
 
 func TestVectors_SSEOutputsHash(t *testing.T) {
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "sse-outputs-hash" {
 			continue
 		}
@@ -446,7 +456,7 @@ func TestVectors_SSEOutputsHash(t *testing.T) {
 // -------------------------------------------------------------------
 
 func TestVectors_Sign(t *testing.T) {
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "sign" {
 			continue
 		}
@@ -541,15 +551,12 @@ func TestSign_Errors(t *testing.T) {
 }
 
 func TestVectors_CostCanon(t *testing.T) {
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "cost-canon" {
 			continue
 		}
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
-			if v.InputRaw != "" {
-				t.Skip("input_raw duplicate-key vector; CLI-layer, covered by compare.mjs")
-			}
 			var inp struct {
 				Cost json.RawMessage `json:"cost"`
 			}
@@ -616,5 +623,38 @@ func TestExtField(t *testing.T) {
 	}
 	if !bytes.Contains(got, []byte(`"ext":{"dev.daimon/prompt_version":"3"}`)) {
 		t.Errorf("Ext not serialized, got %s", got)
+	}
+}
+
+// TestCanonicalizersRejectSurrogateEscapes pins the strict-text rule at every
+// entry that canonicalizes caller-supplied JSON: a surrogate escape is
+// well-formed only as a high escape immediately followed by a low escape.
+// gowebpki/jcs alone turns "\ud800\ud800" into U+FFFD without an error.
+func TestCanonicalizersRejectSurrogateEscapes(t *testing.T) {
+	bad := []string{
+		`"\ud800"`, `"\uD800"`, `"\udc00"`, `"\uDC00"`,
+		`"\ud800A"`, `"\ud800\u0041"`,
+		`"\ud800\ud800"`, `"\uD800\uD800"`, `"\ude00\ud83d"`,
+	}
+	good := map[string]string{
+		`"\ud83d\ude00"`: "\"\U0001F600\"",
+		`"\uD83D\uDE00"`: "\"\U0001F600\"",
+	}
+	for _, in := range bad {
+		if _, err := vitni.JCS(json.RawMessage(in)); err == nil {
+			t.Errorf("JCS(%s) accepted a lone surrogate escape", in)
+		}
+		if _, _, err := vitni.ReceiptID(json.RawMessage(`{"x":` + in + `}`)); err == nil {
+			t.Errorf("ReceiptID({x:%s}) accepted a lone surrogate escape", in)
+		}
+		if _, err := vitni.CostCanon(json.RawMessage(`{"rail_ref":` + in + `}`)); err == nil {
+			t.Errorf("CostCanon({rail_ref:%s}) accepted a lone surrogate escape", in)
+		}
+	}
+	for in, want := range good {
+		got, err := vitni.JCS(json.RawMessage(in))
+		if err != nil || string(got) != want {
+			t.Errorf("JCS(%s) = %q, %v; want %q", in, got, err, want)
+		}
 	}
 }

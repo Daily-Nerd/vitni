@@ -16,16 +16,17 @@
  *   each dispatched message data is a JSON-RPC message;
  *   committed unit = JCS(inner result), joined across messages with "\n".
  *   Messages without a "result" key are skipped.
- *   A present "result" whose tree contains a non-finite number (e.g. 1e400,
- *   parsed by JSON.parse as Infinity) rejects the whole command with
- *   invalid_input — raw_b64 hides this JSON from the stdin-level non-finite
- *   guard in cli.ts, and JCS-serializing Infinity would emit the bytes "null"
- *   (#58). Unparseable messages keep their existing skip behavior.
+ *   raw_b64 hides this JSON from the stdin gate in cli.ts, so each message goes
+ *   through the same strict text function (parseStrict): a lone-surrogate
+ *   escape, a non-finite number (JCS-serializing Infinity would emit the bytes
+ *   "null", #58) or nesting over 128 ANYWHERE in the message rejects the whole
+ *   command with invalid_input. Duplicate keys stay last-wins. Messages that
+ *   are not JSON at all keep their existing skip behavior.
  */
 import { digestBytes } from './digest.js';
 import { jcsBytes } from './jcs.js';
 import { decodeStdBase64 } from './decode.js';
-import { hasNonFinite } from './non-finite.js';
+import { parseStrict, withinDepth } from './strict-json.js';
 
 export interface SseInput {
   raw_b64: string;
@@ -137,7 +138,7 @@ function splitLines(text: string): string[] {
 
 export function sseOutputsHash(input: SseInput): SseOutput | { error: string } {
   if (input.mode !== 'sse' && input.mode !== 'sse-jsonrpc') {
-    return { error: 'unsupported_mode' };
+    return { error: 'invalid_input' };
   }
 
   const raw = decodeStdBase64(input.raw_b64);
@@ -154,13 +155,24 @@ export function sseOutputsHash(input: SseInput): SseOutput | { error: string } {
     // Join JCS bytes with "\n"
     const parts: Buffer[] = [];
     for (const msg of messages) {
-      let parsed: unknown;
+      // Nesting over the limit is rejected before the "is it JSON at all" test:
+      // no host parser limit decides between skipped and rejected.
+      if (!withinDepth(msg)) return { error: 'invalid_input' };
+      // Text that is not JSON at all is skipped (CONTRACT section 5).
       try {
-        parsed = JSON.parse(msg);
+        JSON.parse(msg);
       } catch {
-        // Not valid JSON — skip
         continue;
       }
+      // The message is JSON hidden inside raw_b64, so the stdin gate never saw
+      // it: it goes through the same strict text function, judged over the WHOLE
+      // message (not only the result member). Duplicate keys stay last-wins.
+      const strict = parseStrict(Buffer.from(msg, 'utf8'), {
+        rejectDuplicates: false,
+        rejectNonFinite: true,
+      });
+      if (!strict.ok) return { error: 'invalid_input' };
+      const parsed = strict.value;
       if (
         parsed !== null &&
         typeof parsed === 'object' &&
@@ -168,10 +180,6 @@ export function sseOutputsHash(input: SseInput): SseOutput | { error: string } {
         Object.prototype.hasOwnProperty.call(parsed, 'result')
       ) {
         const result = (parsed as Record<string, unknown>)['result'];
-        // #58: raw_b64 hides this JSON from the stdin-level non-finite guard in
-        // cli.ts. Without this check, a 1e400 inner result would JCS-serialize
-        // to the bytes "null" and collide with a genuine null result.
-        if (hasNonFinite(result)) return { error: 'invalid_input' };
         parts.push(jcsBytes(result));
       }
       // No result key → skip

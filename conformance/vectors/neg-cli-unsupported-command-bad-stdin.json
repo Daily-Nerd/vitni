@@ -1,0 +1,1 @@
+{"name": "cli/unsupported-command-bad-stdin", "command": "not-a-command", "input_raw": ")(", "anchor": {"error": "unsupported_command"}}

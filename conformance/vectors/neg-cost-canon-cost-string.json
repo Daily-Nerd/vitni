@@ -1,0 +1,1 @@
+{"name": "member/cost-canon-cost-string", "command": "cost-canon", "input_raw": "{\"cost\":\"x\"}", "anchor": {"error": "invalid_input"}}

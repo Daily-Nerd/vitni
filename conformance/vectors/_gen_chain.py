@@ -62,8 +62,11 @@ def sign(performer_id, payload_bytes):
     return f"{h}.{p}.{b64u(sig)}", sig
 
 
+ABSENT = object()  # build/receipt: leave the claim out of the payload entirely
+
+
 def receipt(performer_id, method, parent_hash, parent_perf):
-    return {
+    r = {
         "v": "vitni/0.2", "binding": "mcp", "action_ref": None,
         "performer_id": performer_id, "requester_id": None, "method": method,
         "inputs_hash": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
@@ -74,6 +77,9 @@ def receipt(performer_id, method, parent_hash, parent_perf):
         "log_policy": "best_effort", "ts": "2026-05-28T00:00:00Z",
         "nonce": "uEiDjsMRCmPwcFJr79MiZb7kkJ65B5GSbk0yklZkbeFK4VQ",
     }
+    if parent_perf is ABSENT:
+        del r["parent_performer_id"]
+    return r
 
 
 def build(performer_id, method, parent_hash, parent_perf):
@@ -149,6 +155,13 @@ ni_root_jws, ni_root_id = build("srv-ed", "mcp:orchestrate", None, None)
 ni_leaf_jws, _ = build("srv-ec", "mcp:tool", ni_root_id, None)
 write("chain-null-parent-identity.json", "chain/null-parent-identity-valid",
       [ni_leaf_jws, ni_root_jws], True, "ok")
+
+# 10. valid chain, parent_performer_id ABSENT (not null): the claim is simply not
+#     made, which is the same weaker structural-only lineage as an explicit null.
+ab_root_jws, ab_root_id = build("srv-ed", "mcp:orchestrate", None, None)
+ab_leaf_jws, _ = build("srv-ec", "mcp:tool", ab_root_id, ABSENT)
+write("chain-absent-parent-identity.json", "chain/absent-parent-identity-valid",
+      [ab_leaf_jws, ab_root_jws], True, "ok")
 
 print("wrote chain vectors:")
 for q in sorted(OUT.glob("chain-*.json")):

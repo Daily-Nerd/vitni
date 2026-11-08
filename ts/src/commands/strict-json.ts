@@ -7,8 +7,6 @@
  * nesting depth <= MAX_DEPTH. Per-site options: duplicate keys, non-finite
  * numbers.
  */
-import { hasNonFinite } from './non-finite.js';
-
 /** Pinned JSON nesting limit (DESIGN.md section 12 step 1). Top level is depth 1. */
 export const MAX_DEPTH = 128;
 
@@ -71,8 +69,25 @@ export function decodeJsonObject(bytes: Uint8Array): Record<string, unknown> | n
   return v as Record<string, unknown>;
 }
 
-/** One raw scan with string state; text is not yet known to be valid JSON. */
-function withinDepth(text: string): boolean {
+/**
+ * Whether a parsed value contains a number that overflowed to +-Infinity.
+ * JSON.parse admits 1e400 as Infinity; serializing it would emit the bytes
+ * "null", silent corruption that collides with a genuine null. Recursion is
+ * bounded: callers run it only on values parseStrict already depth-limited.
+ */
+export function hasNonFinite(v: unknown): boolean {
+  if (typeof v === 'number') return !Number.isFinite(v);
+  if (Array.isArray(v)) return v.some(hasNonFinite);
+  if (v !== null && typeof v === 'object') return Object.values(v).some(hasNonFinite);
+  return false;
+}
+
+/**
+ * One raw scan with string state; text is not yet known to be valid JSON. It
+ * needs no syntactically valid input, so a site that skips text that is not JSON
+ * at all can run it first: nesting over MAX_DEPTH is rejected, never "skipped".
+ */
+export function withinDepth(text: string): boolean {
   let depth = 0;
   let inString = false;
   for (let i = 0; i < text.length; i++) {
@@ -130,15 +145,7 @@ function hasLoneSurrogate(root: unknown): boolean {
  * at exactly these three; verify/digest/a2a/etc. keep-last, so they must NOT
  * reject here or the divergence flips the other way).
  */
-const DUP_REJECT_COMMANDS = new Set(['jcs', 'receipt-id', 'cost-canon']);
-
-/**
- * Whether the raw stdin for `command` must be rejected for a duplicate key.
- * True only for the JCS-canonicalizing commands with a duplicate present.
- */
-export function rejectsForDuplicateKeys(command: string, raw: string): boolean {
-  return DUP_REJECT_COMMANDS.has(command) && hasDuplicateKeys(raw);
-}
+export const DUP_REJECT_COMMANDS: ReadonlySet<string> = new Set(['jcs', 'receipt-id', 'cost-canon']);
 
 export function hasDuplicateKeys(text: string): boolean {
   let i = 0;

@@ -1,0 +1,1 @@
+{"name": "sse/jsonrpc-inner-nonfinite-ignored-member", "command": "sse-outputs-hash", "input": {"mode": "sse-jsonrpc", "raw_b64": "ZGF0YTogeyJqc29ucnBjIjoiMi4wIiwiaWQiOjFlNDAwLCJyZXN1bHQiOjF9Cgo="}, "anchor": {"error": "invalid_input"}}

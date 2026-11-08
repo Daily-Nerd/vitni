@@ -1,0 +1,1 @@
+{"name": "stdin/receipt-id-dup-envelope", "command": "receipt-id", "input_raw": "{\"receipt\":{\"v\":\"vitni/0.2\"},\"receipt\":{\"v\":\"x\"}}", "anchor": {"error": "invalid_input"}}

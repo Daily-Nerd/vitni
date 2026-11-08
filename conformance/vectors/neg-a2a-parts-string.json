@@ -1,0 +1,1 @@
+{"name": "member/a2a-parts-string", "command": "a2a-artifact-hash", "input_raw": "{\"artifact\":{\"parts\":\"x\"}}", "anchor": {"error": "invalid_input"}}

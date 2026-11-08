@@ -1,0 +1,1 @@
+{"name": "member/sign-missing-receipt", "command": "sign", "input_raw": "{\"kid\":\"ed-1\",\"private_key_b64\":\"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=\"}", "anchor": {"error": "invalid_input"}}

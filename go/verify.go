@@ -69,22 +69,36 @@ var forbiddenHeaderKeys = []string{"jwk", "jku", "x5u", "x5c", "x5t", "x5t#S256"
 // Verify runs the §7 verification algorithm. First failing check wins, in the
 // documented order. Returns (valid, reasonCode).
 func Verify(in VerifyInput) (bool, string) {
+	reason, _ := verifyDecoded(in)
+	return reason == "ok", reason
+}
+
+// decodedReceipt is the payload Verify accepted: the transmitted bytes (equal to
+// their JCS form once step 7 passes) and the parsed object.
+type decodedReceipt struct {
+	bytes  []byte
+	object map[string]json.RawMessage
+}
+
+// verifyDecoded is Verify's body. On "ok" it also hands back the payload it
+// already decoded, so a caller (VerifyChain) never decodes the same bytes twice.
+func verifyDecoded(in VerifyInput) (string, decodedReceipt) {
 	// --- Step 1: malformed ---
 	segs := strings.Split(in.SignedReceipt, ".")
 	if len(segs) != 3 {
-		return false, "malformed"
+		return "malformed", decodedReceipt{}
 	}
 	headerBytes, err := DecodeB64URLStrict(segs[0])
 	if err != nil {
-		return false, "malformed"
+		return "malformed", decodedReceipt{}
 	}
 	payloadBytes, err := DecodeB64URLStrict(segs[1])
 	if err != nil {
-		return false, "malformed"
+		return "malformed", decodedReceipt{}
 	}
 	sigBytes, err := DecodeB64URLStrict(segs[2])
 	if err != nil {
-		return false, "malformed"
+		return "malformed", decodedReceipt{}
 	}
 
 	// header: strict text (no BOM, valid UTF-8, no lone-surrogate escape, depth
@@ -92,13 +106,13 @@ func Verify(in VerifyInput) (bool, string) {
 	// and non-finite numbers are accepted: the header is never serialized.
 	header, ok := decodeObject(headerBytes)
 	if !ok {
-		return false, "malformed"
+		return "malformed", decodedReceipt{}
 	}
 	// RFC 7797: b64 absent or true is fine; false or any non-boolean is malformed.
 	if raw, present := header["b64"]; present {
 		var b64 *bool
 		if err := json.Unmarshal(raw, &b64); err != nil || b64 == nil || !*b64 {
-			return false, "malformed"
+			return "malformed", decodedReceipt{}
 		}
 	}
 	// payload: same strict text and exactly one object. Duplicate keys are
@@ -106,7 +120,7 @@ func Verify(in VerifyInput) (bool, string) {
 	// (the re-serialization cannot equal the transmitted bytes).
 	payload, ok := decodeObject(payloadBytes)
 	if !ok {
-		return false, "malformed"
+		return "malformed", decodedReceipt{}
 	}
 	performerID := stringClaim(payload, "performer_id")
 	binding := stringClaim(payload, "binding")
@@ -115,33 +129,33 @@ func Verify(in VerifyInput) (bool, string) {
 	// --- Step 2: header_key_material ---
 	for _, k := range forbiddenHeaderKeys {
 		if _, ok := header[k]; ok {
-			return false, "header_key_material"
+			return "header_key_material", decodedReceipt{}
 		}
 	}
 
 	// --- Step 3: resolve key ---
 	kid := stringClaim(header, "kid")
 	if performerID == "" || kid == "" {
-		return false, "unknown_key"
+		return "unknown_key", decodedReceipt{}
 	}
 	perfKeys, ok := in.Keys[performerID]
 	if !ok {
-		return false, "unknown_key"
+		return "unknown_key", decodedReceipt{}
 	}
 	key, ok := perfKeys[kid]
 	if !ok {
-		return false, "unknown_key"
+		return "unknown_key", decodedReceipt{}
 	}
 
 	// --- Step 4: revoked_key ---
 	if key.Status == "revoked" {
-		return false, "revoked_key"
+		return "revoked_key", decodedReceipt{}
 	}
 
 	// --- Step 5: alg_not_allowed ---
 	headerAlg := stringClaim(header, "alg")
 	if headerAlg == "" || headerAlg == "none" || headerAlg != key.Alg {
-		return false, "alg_not_allowed"
+		return "alg_not_allowed", decodedReceipt{}
 	}
 	// The registry key must be the key type its alg requires. An alg outside the
 	// table, and a missing or null kty/crv, fail here, before any key material is
@@ -149,40 +163,40 @@ func Verify(in VerifyInput) (bool, string) {
 	// header/registry alg equality above.
 	spec, known := algs[key.Alg]
 	if !known || key.Kty != spec.kty || key.Crv != spec.crv {
-		return false, "alg_not_allowed"
+		return "alg_not_allowed", decodedReceipt{}
 	}
 
 	// --- Step 6: bad_signature ---
 	// signing input is the ASCII bytes b64url(header).b64url(payload)
 	signingInput := []byte(segs[0] + "." + segs[1])
 	if !spec.verify(key, signingInput, sigBytes) {
-		return false, "bad_signature"
+		return "bad_signature", decodedReceipt{}
 	}
 
 	// --- Step 7: non_canonical_payload ---
 	// payload bytes (as transmitted) must equal JCS(parse(payload)) byte-for-byte.
 	canon, err := jcs.Transform(payloadBytes)
 	if err != nil {
-		return false, "non_canonical_payload"
+		return "non_canonical_payload", decodedReceipt{}
 	}
 	if !bytes.Equal(payloadBytes, canon) {
-		return false, "non_canonical_payload"
+		return "non_canonical_payload", decodedReceipt{}
 	}
 
 	// --- Step 8: context_mismatch ---
 	if in.Policy.ExpectedBinding != nil {
 		if binding != *in.Policy.ExpectedBinding {
-			return false, "context_mismatch"
+			return "context_mismatch", decodedReceipt{}
 		}
 	}
 	if in.Policy.ExpectedMethod != nil {
 		if method != *in.Policy.ExpectedMethod {
-			return false, "context_mismatch"
+			return "context_mismatch", decodedReceipt{}
 		}
 	}
 
 	// --- Step 9: ok ---
-	return true, "ok"
+	return "ok", decodedReceipt{bytes: payloadBytes, object: payload}
 }
 
 // stringClaim extracts a string-valued claim from a raw-message map.

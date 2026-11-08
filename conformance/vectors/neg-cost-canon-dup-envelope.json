@@ -1,0 +1,1 @@
+{"name": "stdin/cost-canon-dup-envelope", "command": "cost-canon", "input_raw": "{\"cost\":{\"tokens\":\"1\",\"usd_micros\":\"0\",\"wall_ms\":\"0\",\"rail_ref\":null},\"cost\":{\"tokens\":\"2\",\"usd_micros\":\"0\",\"wall_ms\":\"0\",\"rail_ref\":null}}", "anchor": {"error": "invalid_input"}}

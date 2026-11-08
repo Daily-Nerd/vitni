@@ -61,8 +61,8 @@ function isKnownAlg(alg: unknown): alg is AlgName {
 
 const FORBIDDEN_HEADER_KEYS = ['jwk', 'jku', 'x5u', 'x5c', 'x5t', 'x5t#S256'];
 
-function fail(reason: string): VerifyOutput {
-  return { valid: false, reason };
+function rejected(reason: string): { result: VerifyOutput; decoded: null } {
+  return { result: { valid: false, reason }, decoded: null };
 }
 
 /**
@@ -74,13 +74,13 @@ function fail(reason: string): VerifyOutput {
  * caller reports as `bad_signature` (a JWS segment failing the same decoder is
  * `malformed`: same decoder, different code at the call site).
  */
-function buildPublicKey(jwk: RegistryJwk, alg: string): KeyObject | null {
+function buildPublicKey(jwk: RegistryJwk, alg: AlgName): KeyObject | null {
   const x = decodeB64UrlStrict(jwk.x);
   if (x === null || x.length !== 32) return null;
   let jwkFields: Record<string, string>;
   if (alg === 'EdDSA') {
     jwkFields = { ...ALGS.EdDSA, x: x.toString('base64url') };
-  } else if (alg === 'ES256') {
+  } else {
     const y = decodeB64UrlStrict(jwk.y as string);
     if (y === null || y.length !== 32) return null;
     jwkFields = {
@@ -88,8 +88,6 @@ function buildPublicKey(jwk: RegistryJwk, alg: string): KeyObject | null {
       x: x.toString('base64url'),
       y: y.toString('base64url'),
     };
-  } else {
-    return null;
   }
   try {
     return createPublicKey({ key: jwkFields, format: 'jwk' });
@@ -98,64 +96,76 @@ function buildPublicKey(jwk: RegistryJwk, alg: string): KeyObject | null {
   }
 }
 
+/**
+ * Verify the signature with a key built for the same alg. Never throws: the
+ * kty/crv/alg binding (step 5) and buildPublicKey (which returns null for any
+ * key Node cannot import) leave only inputs on which crypto.verify returns a
+ * boolean, whatever the signature length or content. A genuine bug must reach
+ * the CLI as internal_error, not be swallowed into bad_signature.
+ */
 function verifySignature(
-  alg: string,
+  alg: AlgName,
   signingInput: Buffer,
   keyObj: KeyObject,
   sig: Buffer
 ): boolean {
-  try {
-    if (alg === 'EdDSA') {
-      // Ed25519: algorithm is null (the curve determines the hash).
-      return cryptoVerify(null, signingInput, keyObj, sig);
-    }
-    if (alg === 'ES256') {
-      // JWS ES256 signature is raw R||S (64 bytes) — ieee-p1363 encoding.
-      return cryptoVerify(
-        'sha256',
-        signingInput,
-        { key: keyObj, dsaEncoding: 'ieee-p1363' },
-        sig
-      );
-    }
-    return false;
-  } catch {
-    return false;
+  if (alg === 'EdDSA') {
+    // Ed25519: algorithm is null (the curve determines the hash).
+    return cryptoVerify(null, signingInput, keyObj, sig);
   }
+  // ES256: JWS signature is raw R||S (64 bytes), ieee-p1363 encoding.
+  return cryptoVerify('sha256', signingInput, { key: keyObj, dsaEncoding: 'ieee-p1363' }, sig);
 }
 
 export function verify(input: VerifyInput): VerifyOutput {
+  return verifyDecoded(input).result;
+}
+
+/** The payload verify accepted: transmitted bytes (JCS-equal after step 7) and the parsed object. */
+export interface DecodedReceipt {
+  payloadBytes: Buffer;
+  payload: Record<string, unknown>;
+}
+
+/**
+ * verify's body. On success it also hands back the payload it already decoded,
+ * so verify-chain never decodes the same bytes twice.
+ */
+export function verifyDecoded(input: VerifyInput): {
+  result: VerifyOutput;
+  decoded: DecodedReceipt | null;
+} {
   const jws = input.signed_receipt;
 
   // --- Step 1: malformed (structure) ---
-  if (typeof jws !== 'string') return fail('malformed');
+  if (typeof jws !== 'string') return rejected('malformed');
   const parts = jws.split('.');
-  if (parts.length !== 3) return fail('malformed');
+  if (parts.length !== 3) return rejected('malformed');
   const [headerSeg, payloadSeg, sigSeg] = parts;
 
   const headerBuf = decodeB64UrlStrict(headerSeg);
   const payloadBuf = decodeB64UrlStrict(payloadSeg);
   const sigBuf = decodeB64UrlStrict(sigSeg);
   if (headerBuf === null || payloadBuf === null || sigBuf === null) {
-    return fail('malformed');
+    return rejected('malformed');
   }
 
   // header: strict text that is exactly one JSON object.
   const header = decodeJsonObject(headerBuf);
-  if (header === null) return fail('malformed');
+  if (header === null) return rejected('malformed');
   // RFC 7797: b64 absent or true is fine; false or any non-boolean is malformed.
   if (Object.prototype.hasOwnProperty.call(header, 'b64') && header['b64'] !== true) {
-    return fail('malformed');
+    return rejected('malformed');
   }
 
   // payload: same strict text, exactly one object (§7 step 1, fail fast).
   const payload = decodeJsonObject(payloadBuf);
-  if (payload === null) return fail('malformed');
+  if (payload === null) return rejected('malformed');
 
   // --- Step 2: header_key_material ---
   for (const k of FORBIDDEN_HEADER_KEYS) {
     if (Object.prototype.hasOwnProperty.call(header, k)) {
-      return fail('header_key_material');
+      return rejected('header_key_material');
     }
   }
 
@@ -163,16 +173,16 @@ export function verify(input: VerifyInput): VerifyOutput {
   const performerId = payload['performer_id'];
   const kid = header['kid'];
   if (typeof performerId !== 'string' || typeof kid !== 'string') {
-    return fail('unknown_key');
+    return rejected('unknown_key');
   }
   const perfKeys = input.keys?.[performerId];
-  if (!perfKeys) return fail('unknown_key');
+  if (!perfKeys) return rejected('unknown_key');
   const jwk = perfKeys[kid];
-  if (!jwk) return fail('unknown_key');
+  if (!jwk) return rejected('unknown_key');
 
   // --- Step 4: revoked_key ---
   if (jwk.status === 'revoked') {
-    return fail('revoked_key');
+    return rejected('revoked_key');
   }
 
   // --- Step 5: alg_not_allowed ---
@@ -183,7 +193,7 @@ export function verify(input: VerifyInput): VerifyOutput {
     headerAlg === '' ||
     headerAlg !== jwk.alg
   ) {
-    return fail('alg_not_allowed');
+    return rejected('alg_not_allowed');
   }
   // The registry key must be the key type its alg requires. An alg outside the
   // table, and a missing or null kty/crv, fail here, before any key material is
@@ -194,23 +204,23 @@ export function verify(input: VerifyInput): VerifyOutput {
     jwk.kty !== ALGS[jwk.alg].kty ||
     jwk.crv !== ALGS[jwk.alg].crv
   ) {
-    return fail('alg_not_allowed');
+    return rejected('alg_not_allowed');
   }
 
   // --- Step 6: bad_signature ---
-  const keyObj = buildPublicKey(jwk, headerAlg);
-  if (keyObj === null) return fail('bad_signature');
+  const keyObj = buildPublicKey(jwk, jwk.alg);
+  if (keyObj === null) return rejected('bad_signature');
   // signingInput = ASCII b64u(header).b64u(payload)
   const signingInput = Buffer.from(`${headerSeg}.${payloadSeg}`, 'ascii');
-  if (!verifySignature(headerAlg, signingInput, keyObj, sigBuf)) {
-    return fail('bad_signature');
+  if (!verifySignature(jwk.alg, signingInput, keyObj, sigBuf)) {
+    return rejected('bad_signature');
   }
 
   // --- Step 7: non_canonical_payload ---
   // payload bytes (as transmitted) must equal JCS(parse(payload)) byte-for-byte.
   const canonical = jcsBytes(payload);
   if (!canonical.equals(payloadBuf)) {
-    return fail('non_canonical_payload');
+    return rejected('non_canonical_payload');
   }
 
   // --- Step 8: context_mismatch ---
@@ -221,16 +231,16 @@ export function verify(input: VerifyInput): VerifyOutput {
     expectedBinding !== null &&
     payload['binding'] !== expectedBinding
   ) {
-    return fail('context_mismatch');
+    return rejected('context_mismatch');
   }
   if (
     expectedMethod !== undefined &&
     expectedMethod !== null &&
     payload['method'] !== expectedMethod
   ) {
-    return fail('context_mismatch');
+    return rejected('context_mismatch');
   }
 
   // --- Step 9: ok ---
-  return { valid: true, reason: 'ok' };
+  return { result: { valid: true, reason: 'ok' }, decoded: { payloadBytes: payloadBuf, payload } };
 }

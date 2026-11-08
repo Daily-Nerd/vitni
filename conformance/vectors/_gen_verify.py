@@ -240,6 +240,31 @@ write("verify-local-context-mismatch.json", "verify/local-context-mismatch",
       reg(), {"expected_binding": "mcp", "expected_method": None},
       False, "context_mismatch")
 
+# 14b. policy expects a method the receipt does not carry -> context_mismatch
+#      (the expected_binding arm is vector 10; this is the expected_method arm)
+write("verify-method-mismatch.json", "verify/method-mismatch",
+      jws({"alg": "EdDSA", "kid": "ed-1"}, ed_payload, "EdDSA"),
+      reg(), {"expected_binding": None, "expected_method": "mcp:other"},
+      False, "context_mismatch")
+
+# 14c. both constraints present and both satisfied -> ok
+write("verify-policy-match.json", "verify/policy-match",
+      jws({"alg": "EdDSA", "kid": "ed-1"}, ed_payload, "EdDSA"),
+      reg(), {"expected_binding": "mcp", "expected_method": "mcp:echo"},
+      True, "ok")
+
+# 14d. the performer is not a registry key at all (kid ed-1 exists under srv-ed,
+#      but the receipt names srv-stranger) -> unknown_key
+write("verify-unknown-performer.json", "verify/unknown-performer",
+      jws({"alg": "EdDSA", "kid": "ed-1"}, jcs(receipt("srv-stranger")).encode(), "EdDSA"),
+      reg(), NO_POLICY, False, "unknown_key")
+
+# 14e. a header with no kid cannot resolve a key -> unknown_key (an absent kid
+#      is not an empty one: the signature here is valid over the header as sent)
+write("verify-header-no-kid.json", "verify/header-no-kid",
+      jws({"alg": "EdDSA"}, ed_payload, "EdDSA"),
+      reg(), NO_POLICY, False, "unknown_key")
+
 # 15. ext present, still valid (ext never affects verification)
 r_ext = receipt("srv-ed")
 r_ext["ext"] = {"dev.daimon/prompt_version": "3"}
@@ -611,6 +636,150 @@ edge_vec("verify-ed-r-noncanonical.json", "verify/ed-r-noncanonical", IDENT, Y_P
 edge_vec("verify-ed-order8-a-r-eq-a.json", "verify/ed-order8-a-r-eq-a", ORDER8_A, ORDER8_A, BAD_SIG)
 edge_vec("verify-ed-order8-b-r-eq-a.json", "verify/ed-order8-b-r-eq-a", ORDER8_B, ORDER8_B, OK)
 
+# ---------------------------------------------------------------------------
+# PR 0b, batch 3: member names are exact and case-sensitive (D4). A name that
+# differs only in case is an UNKNOWN member and is ignored, never a match (Go's
+# encoding/json matches case-insensitively). The receipt carries a valid
+# signature, so every verdict below is decided by the name rule alone.
+# ---------------------------------------------------------------------------
+def write_input(fname, name, command, input_obj, anchor):
+    (OUT / fname).write_text(json.dumps({
+        "name": name, "command": command, "input": input_obj, "anchor": anchor}) + "\n")
+
+
+def key_case(entry, old, new):
+    """Registry entry with member `old` renamed to `new` (same value)."""
+    return {(new if k == old else k): v for k, v in entry.items()}
+
+
+_ed_entry = reg()["srv-ed"]["ed-1"]
+write_input("neg-verify-member-case-signed-receipt.json", "member/verify-case-signed-receipt",
+            "verify", {"Signed_Receipt": ed_receipt, "keys": reg(), "policy": NO_POLICY},
+            {"valid": False, "reason": "malformed"})
+write_input("verify-member-case-keys.json", "member/verify-case-keys", "verify",
+            {"signed_receipt": ed_receipt, "KEYS": reg(), "policy": NO_POLICY},
+            {"valid": False, "reason": "unknown_key"})
+write_input("verify-member-case-policy.json", "member/verify-case-policy", "verify",
+            {"signed_receipt": ed_receipt, "keys": reg(),
+             "POLICY": {"expected_method": "mcp:other", "expected_binding": "local"}},
+            {"valid": True, "reason": "ok"})
+write_input("verify-key-member-case-kty.json", "member/verify-key-case-kty", "verify",
+            {"signed_receipt": ed_receipt,
+             "keys": {"srv-ed": {"ed-1": key_case(_ed_entry, "kty", "KTY")}}, "policy": NO_POLICY},
+            {"valid": False, "reason": "alg_not_allowed"})
+write_input("verify-key-member-case-alg.json", "member/verify-key-case-alg", "verify",
+            {"signed_receipt": ed_receipt,
+             "keys": {"srv-ed": {"ed-1": key_case(_ed_entry, "alg", "ALG")}}, "policy": NO_POLICY},
+            {"valid": False, "reason": "alg_not_allowed"})
+write_input("verify-key-member-case-x.json", "member/verify-key-case-x", "verify",
+            {"signed_receipt": ed_receipt,
+             "keys": {"srv-ed": {"ed-1": key_case(_ed_entry, "x", "X")}}, "policy": NO_POLICY},
+            {"valid": False, "reason": "bad_signature"})
+write_input("verify-key-member-case-status.json", "member/verify-key-case-status", "verify",
+            {"signed_receipt": ed_receipt,
+             "keys": {"srv-ed": {"ed-1": key_case(_ed_entry, "status", "STATUS") | {"STATUS": "revoked"}}},
+             "policy": NO_POLICY},
+            {"valid": True, "reason": "ok"})
+
+# ---------------------------------------------------------------------------
+# PR 0b, batch 4: the verify envelope is typed (R0.3, Q1, N8, N10). The WHOLE
+# `keys` tree is typed, not only the entry a receipt resolves to: a wrong JSON
+# type anywhere in it is invalid_input (a command error, never a verdict). A
+# JSON null registry entry is absent (unknown_key). Unknown members anywhere
+# are ignored, so a registry entry may grow (rpId, origins) without breaking a
+# verifier. Every receipt carries a valid signature.
+# ---------------------------------------------------------------------------
+INVALID_INPUT = {"error": "invalid_input"}
+
+
+def envelope(**override):
+    """A valid verify input with top-level members replaced; None leaves the member null."""
+    base = {"signed_receipt": ed_receipt, "keys": reg(), "policy": NO_POLICY}
+    base.update(override)
+    return base
+
+
+def ed_entry_with(**members):
+    return {"srv-ed": {"ed-1": {**reg()["srv-ed"]["ed-1"], **members}}}
+
+
+def neg_verify(fname, name, input_obj):
+    write_input(fname, name, "verify", input_obj, INVALID_INPUT)
+
+
+neg_verify("neg-verify-signed-receipt-number.json", "verify-envelope/signed-receipt-number",
+           envelope(signed_receipt=5))
+for _member in ("x", "y", "alg", "kty", "crv", "status"):
+    neg_verify(f"neg-verify-key-{_member}-number.json", f"verify-envelope/key-{_member}-number",
+               envelope(keys=ed_entry_with(**{_member: 5})))
+neg_verify("neg-verify-key-entry-string.json", "verify-envelope/key-entry-string",
+           envelope(keys={"srv-ed": {"ed-1": "x"}}))
+neg_verify("neg-verify-key-entry-array.json", "verify-envelope/key-entry-array",
+           envelope(keys={"srv-ed": {"ed-1": []}}))
+neg_verify("neg-verify-keys-array.json", "verify-envelope/keys-array", envelope(keys=[]))
+neg_verify("neg-verify-keys-number.json", "verify-envelope/keys-number", envelope(keys=5))
+neg_verify("neg-verify-keys-performer-array.json", "verify-envelope/keys-performer-array",
+           envelope(keys={"srv-ed": []}))
+neg_verify("neg-verify-policy-binding-number.json", "verify-envelope/policy-binding-number",
+           envelope(policy={"expected_binding": 5, "expected_method": None}))
+neg_verify("neg-verify-policy-method-number.json", "verify-envelope/policy-method-number",
+           envelope(policy={"expected_binding": None, "expected_method": 5}))
+neg_verify("neg-verify-policy-array.json", "verify-envelope/policy-array", envelope(policy=[]))
+# Q1: the lookup hits srv-ed and would succeed; the bad type is in an unrelated entry
+neg_verify("neg-verify-unrelated-entry-bad-type.json", "verify-envelope/unrelated-entry-bad-type",
+           envelope(keys={**reg(), "other": {"k": {**_ed_entry, "x": 5}}}))
+# N10: a null entry is absent
+write_input("verify-key-entry-null.json", "verify-envelope/key-entry-null", "verify",
+            envelope(keys={"srv-ed": {"ed-1": None}}), {"valid": False, "reason": "unknown_key"})
+write_input("verify-key-performer-null.json", "verify-envelope/key-performer-null", "verify",
+            envelope(keys={"srv-ed": None}), {"valid": False, "reason": "unknown_key"})
+# unknown members are ignored: guards against an over-strict verifier that would
+# break forward-compatible registry growth
+write_input("verify-extra-members-ignored.json", "verify-envelope/extra-members-ignored", "verify",
+            {**envelope(keys=ed_entry_with(rpId="example.com", origins=["https://example.com"])),
+             "extra": {"nested": [1, 2, 3]}, "policy": {**NO_POLICY, "future_member": True}},
+            {"valid": True, "reason": "ok"})
+# verify-chain types the same registry tree and policy
+write_input("neg-verify-chain-keys-array.json", "verify-envelope/chain-keys-array", "verify-chain",
+            {"receipts": [], "keys": [], "policy": None}, INVALID_INPUT)
+write_input("neg-verify-chain-key-x-number.json", "verify-envelope/chain-key-x-number",
+            "verify-chain",
+            {"receipts": [ed_receipt], "keys": ed_entry_with(x=5), "policy": None}, INVALID_INPUT)
+write_input("neg-verify-chain-policy-binding-number.json",
+            "verify-envelope/chain-policy-binding-number", "verify-chain",
+            {"receipts": [], "keys": {}, "policy": {"expected_binding": 5}}, INVALID_INPUT)
+
+# U4: signed_receipt absent or null is the one required-looking member whose
+# absence stays a VERDICT (malformed), while a wrong type is invalid_input. The
+# asymmetry is existing behavior on both impls; these vectors keep it from
+# drifting while the rest of the envelope is typed.
+write_input("verify-signed-receipt-null.json", "verify-envelope/signed-receipt-null", "verify",
+            envelope(signed_receipt=None), {"valid": False, "reason": "malformed"})
+_no_receipt = envelope()
+del _no_receipt["signed_receipt"]
+write_input("verify-signed-receipt-absent.json", "verify-envelope/signed-receipt-absent", "verify",
+            _no_receipt, {"valid": False, "reason": "malformed"})
+
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)
+
+# ---------------------------------------------------------------------------
+# #69 follow-ups. (1) Surrogate escapes are case-insensitive hex: the uppercase
+# lone and high-high forms are malformed, the uppercase valid pair is merely
+# non-canonical (same as lowercase). (2) An Ed25519 registry key whose 32 bytes
+# are not a curve point (y = 2 has no square root) is a key-material problem:
+# bad_signature in every implementation, never a crash and never a pass.
+# ---------------------------------------------------------------------------
+text_vec("verify-payload-lone-surrogate-upper.json", "verify/payload-lone-surrogate-uppercase",
+         ED_HDR_BYTES, ext_payload(b'"\\uD800"'), MALFORMED)
+text_vec("verify-payload-high-then-high-surrogate.json", "verify/payload-high-then-high-surrogate",
+         ED_HDR_BYTES, ext_payload(b'"\\uD800\\uD800"'), MALFORMED)
+text_vec("verify-payload-surrogate-pair-escape-upper.json",
+         "verify/payload-surrogate-pair-escape-uppercase",
+         ED_HDR_BYTES, ext_payload(b'"\\uD83D\\uDE00"'), NON_CANON)
+
+ED_OFFCURVE_X = b64u(b"\x02" + b"\x00" * 31)
+assert ED_OFFCURVE_X == "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+key_vec("verify-key-eddsa-offcurve.json", "verify/key-eddsa-offcurve", ed_receipt,
+        reg_with(ed={"x": ED_OFFCURVE_X}))

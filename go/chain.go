@@ -2,7 +2,8 @@ package vitni
 
 import (
 	"encoding/json"
-	"strings"
+
+	"github.com/Daily-Nerd/vitni/go/internal/hashstr"
 )
 
 // VerifyChainInput is the input object for the verify-chain command.
@@ -24,6 +25,9 @@ func VerifyChain(in VerifyChainInput) (bool, string, int) {
 
 	// --- Step 2: receipt_invalid (run §7 verify on every hop) ---
 	// policy applies to the leaf (i=0) only; all other hops use an empty policy.
+	// Each accepted hop hands back its decoded payload, so nothing is decoded twice.
+	receiptIDs := make([]string, n)
+	payloads := make([]map[string]json.RawMessage, n)
 	for i, jws := range in.Receipts {
 		vi := VerifyInput{
 			SignedReceipt: jws,
@@ -32,28 +36,15 @@ func VerifyChain(in VerifyChainInput) (bool, string, int) {
 		if i == 0 {
 			vi.Policy = in.Policy
 		}
-		if ok, _ := Verify(vi); !ok {
+		reason, hop := verifyDecoded(vi)
+		if reason != "ok" {
 			return false, "receipt_invalid", n
 		}
-	}
-
-	// --- Step 3: compute receipt_id[i] for each hop ---
-	// Every hop passed §7 verify, so its payload is valid canonical JSON; the raw
-	// payload bytes therefore equal JCS(payload) and receipt_id = Digest(bytes).
-	receiptIDs := make([]string, n)
-	payloads := make([]map[string]json.RawMessage, n)
-	for i, jws := range in.Receipts {
-		payloadBytes, payload, ok := decodePayload(jws)
-		if !ok {
-			// Unreachable in practice: §7 verify already guaranteed a valid payload.
-			return false, "receipt_invalid", n
-		}
-		rid, err := Digest(payloadBytes)
-		if err != nil {
-			return false, "receipt_invalid", n
-		}
-		receiptIDs[i] = rid
-		payloads[i] = payload
+		// --- Step 3: receipt_id[i] ---
+		// The hop passed §7 verify, so its payload is valid canonical JSON: the raw
+		// payload bytes equal JCS(payload) and receipt_id = Digest(bytes).
+		receiptIDs[i] = hashstr.Sum(hop.bytes)
+		payloads[i] = hop.object
 	}
 
 	// --- Step 4: malformed_chain ---
@@ -103,24 +94,6 @@ func VerifyChain(in VerifyChainInput) (bool, string, int) {
 
 	// --- Step 8: ok ---
 	return true, "ok", n
-}
-
-// decodePayload splits a JWS compact string and returns the raw payload bytes
-// plus the parsed payload object. ok=false if structure/JSON is invalid.
-func decodePayload(jws string) ([]byte, map[string]json.RawMessage, bool) {
-	segs := strings.Split(jws, ".")
-	if len(segs) != 3 {
-		return nil, nil, false
-	}
-	payloadBytes, err := DecodeB64URLStrict(segs[1])
-	if err != nil {
-		return nil, nil, false
-	}
-	payload, ok := decodeObject(payloadBytes)
-	if !ok {
-		return nil, nil, false
-	}
-	return payloadBytes, payload, true
 }
 
 // claimIsNull reports whether a claim is absent OR explicitly JSON null.

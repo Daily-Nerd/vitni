@@ -30,7 +30,7 @@ type keygenOut struct {
 
 func mustKeygen(t *testing.T, stdin string) keygenOut {
 	t.Helper()
-	raw, err := runKeygen([]byte(stdin))
+	raw, err := runOn(runKeygen, stdin)
 	if err != nil {
 		t.Fatalf("runKeygen(%s): %v", stdin, err)
 	}
@@ -77,7 +77,7 @@ func TestKeygen_Errors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := runKeygen([]byte(tt.stdin))
+			_, err := runOn(runKeygen, tt.stdin)
 			if err == nil {
 				t.Fatal("expected error, got nil")
 			}
@@ -106,7 +106,7 @@ func TestKeygen_RandomPath(t *testing.T) {
 func signWith(t *testing.T, seedB64 string) string {
 	t.Helper()
 	receipt := `{"v":"vitni/0.2","binding":"mcp","action_ref":null,"performer_id":"srv-ed","requester_id":null,"method":"mcp:echo","inputs_hash":"uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA","outputs_hash":"uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA","cost":{"tokens":"10","usd_micros":"0","wall_ms":"3","rail_ref":null},"status":"OK","reason":null,"parent_receipt_hash":null,"log_policy":"best_effort","ts":"2026-05-28T00:00:00Z","nonce":"uEiDjsMRCmPwcFJr79MiZb7kkJ65B5GSbk0yklZkbeFK4VQ"}`
-	raw, err := runSign([]byte(`{"receipt":` + receipt + `,"kid":"ed-1","private_key_b64":"` + seedB64 + `"}`))
+	raw, err := runOn(runSign, `{"receipt":`+receipt+`,"kid":"ed-1","private_key_b64":"`+seedB64+`"}`)
 	if err != nil {
 		t.Fatalf("runSign: %v", err)
 	}

@@ -1,0 +1,1 @@
+{"name": "jcs/high-then-high-surrogate-uppercase", "command": "jcs", "input_raw": "{\"value\":\"\\uD800\\uD800\"}", "anchor": {"error": "invalid_input"}}

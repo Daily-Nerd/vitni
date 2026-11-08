@@ -1,0 +1,1 @@
+{"name": "stdin/jcs-lone-surrogate-key", "command": "jcs", "input_raw": "{\"value\":{\"\\ud800\":\"x\"}}", "anchor": {"error": "invalid_input"}}

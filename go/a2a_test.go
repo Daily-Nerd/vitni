@@ -3,15 +3,17 @@ package vitni_test
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/Daily-Nerd/vitni/go"
+	"github.com/Daily-Nerd/vitni/go/internal/fields"
 )
 
 // TestVectors_A2AArtifactHash drives the a2a-artifact-hash command against every a2a-*.json vector.
 func TestVectors_A2AArtifactHash(t *testing.T) {
 	count := 0
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "a2a-artifact-hash" {
 			continue
 		}
@@ -77,5 +79,24 @@ func TestA2A_UnknownKind(t *testing.T) {
 	_, _, err := vitni.A2AArtifactHash(artifact)
 	if err == nil {
 		t.Fatal("expected error for unknown kind")
+	}
+}
+
+// The library boundary: an artifact that is not a JSON object is ErrShape,
+// whatever the CLI gate in front of it does.
+func TestA2A_NonObjectArtifactIsShapeError(t *testing.T) {
+	for _, in := range []string{`[]`, `5`, `null`, `"x"`} {
+		_, _, err := vitni.A2AArtifactHash(json.RawMessage(in))
+		if !errors.Is(err, fields.ErrShape) {
+			t.Errorf("%s: err = %v, want fields.ErrShape", in, err)
+		}
+	}
+}
+
+// A non-object `file` member is a shape error, not an unsupported part.
+func TestA2A_FileMemberMustBeObject(t *testing.T) {
+	_, _, err := vitni.A2AArtifactHash(json.RawMessage(`{"parts":[{"kind":"file","file":5}]}`))
+	if !errors.Is(err, fields.ErrShape) {
+		t.Errorf("err = %v, want fields.ErrShape", err)
 	}
 }
