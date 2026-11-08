@@ -360,3 +360,120 @@ write("neg-sse-lone-surrogate-result.json", {
 write("neg-stdin-empty.json", {
     "name": "stdin/empty", "command": "jcs",
     "input_raw_b64": "", "anchor": {"error": "invalid_input"}})
+
+# =====================================================================
+# Stdin strictness (R0.8, R0.9, D5, D6, D8, D9). One stdin gate per impl serves
+# every command, before dispatch: strict UTF-8, no BOM, no lone-surrogate
+# escape, exactly one JSON value, an object, depth <= 128, no non-finite number
+# anywhere in the text; duplicate keys rejected over the WHOLE text for jcs,
+# receipt-id and cost-canon only. Violations are {"error":"invalid_input"}.
+#
+# `input_raw` carries the escape TEXT (six ASCII characters for a lone
+# surrogate); `input_raw_b64` carries bytes a JSON string cannot (invalid UTF-8,
+# BOM, NUL). Raw stdin is built from byte strings so nothing is re-encoded.
+# =====================================================================
+_INVALID = {"error": "invalid_input"}
+_LONE_HI = "\\ud800"   # backslash-u-d800 as TEXT, not a surrogate character
+_LONE_LO = "\\udc00"
+
+
+def _b64(raw: bytes) -> str:
+    return base64.b64encode(raw).decode()
+
+
+def _neg(fname: str, name: str, command: str, anchor=_INVALID, *, text=None, raw=None):
+    """One stdin vector: `text` becomes input_raw, `raw` (bytes) becomes input_raw_b64."""
+    assert (text is None) != (raw is None)
+    vec = {"name": name, "command": command}
+    if text is not None:
+        vec["input_raw"] = text
+    else:
+        vec["input_raw_b64"] = _b64(raw)
+    vec["anchor"] = anchor
+    write(f"{fname}.json", vec)
+
+
+def _receipt_text(**override) -> str:
+    """The base receipt as JSON text with `override` members replaced by a marker."""
+    return json.dumps({"receipt": dict(receipt, **{k: "PLACEHOLDER" for k in override})})
+
+
+# lone surrogate escape (N1): TS keeps the lone surrogate and re-serializes it
+# as an escape, Go turns it into U+FFFD; neither may answer.
+_neg("neg-jcs-lone-surrogate-value", "stdin/jcs-lone-surrogate-value", "jcs",
+     text='{"value":{"a":"' + _LONE_HI + '"}}')
+_neg("neg-jcs-lone-surrogate-key", "stdin/jcs-lone-surrogate-key", "jcs",
+     text='{"value":{"' + _LONE_HI + '":"x"}}')
+# A lone LOW surrogate inside the envelope. Spec S0.61 sends the bare string
+# "\udc00", which is invalid_input for being a non-object too; wrapping it in
+# {"value": ...} makes the surrogate the only defect.
+_neg("neg-jcs-lone-low-surrogate", "stdin/jcs-lone-low-surrogate", "jcs",
+     text='{"value":"' + _LONE_LO + '"}')
+_neg("neg-receipt-id-lone-surrogate", "stdin/receipt-id-lone-surrogate", "receipt-id",
+     text=_receipt_text(method=0).replace("PLACEHOLDER", _LONE_HI))
+_neg("neg-cost-canon-lone-surrogate", "stdin/cost-canon-lone-surrogate", "cost-canon",
+     text='{"cost":{"tokens":"1","usd_micros":"0","wall_ms":"0","rail_ref":"' + _LONE_HI + '"}}')
+# a member the command never reads is still parsed under the same policy
+_neg("neg-digest-lone-surrogate-extra-member", "stdin/digest-lone-surrogate-extra-member", "digest",
+     text='{"bytes_b64":"","x":"' + _LONE_HI + '"}')
+
+# invalid UTF-8 (N2): Go echoes the raw byte, TS echoes U+FFFD.
+_neg("neg-jcs-invalid-utf8", "stdin/jcs-invalid-utf8", "jcs",
+     raw=b'{"value":{"a":"\xff"}}')
+_neg("neg-receipt-id-invalid-utf8", "stdin/receipt-id-invalid-utf8", "receipt-id",
+     raw=_receipt_text(method=0).encode().replace(b"PLACEHOLDER", b"\xff"))
+_neg("neg-cost-canon-invalid-utf8", "stdin/cost-canon-invalid-utf8", "cost-canon",
+     raw=b'{"cost":{"tokens":"1","usd_micros":"0","wall_ms":"0","rail_ref":"\xff"}}')
+
+# BOM: both reject today (guards); the same rule must hold at the verify edge.
+_neg("neg-jcs-bom", "stdin/jcs-bom", "jcs", raw=b'\xef\xbb\xbf{"value":1}')
+_VERIFY_STUB = '{"signed_receipt":"a.b.c","keys":{},"policy":null'
+_neg("neg-verify-stdin-bom", "stdin/verify-bom", "verify",
+     raw=b'\xef\xbb\xbf' + (_VERIFY_STUB + '}').encode())
+_neg("neg-verify-chain-stdin-bom", "stdin/verify-chain-bom", "verify-chain",
+     raw=b'\xef\xbb\xbf{"receipts":[],"keys":{},"policy":null}')
+
+# the envelope of verify is stdin text, not the signed envelope: a problem in it
+# is a command error, never a {valid:false} verdict (R0.11)
+_neg("neg-verify-stdin-lone-surrogate", "stdin/verify-lone-surrogate", "verify",
+     text=_VERIFY_STUB + ',"x":"' + _LONE_HI + '"}')
+_neg("neg-verify-nonfinite-extra-member", "stdin/verify-nonfinite-extra-member", "verify",
+     text=_VERIFY_STUB + ',"x":1e400}')
+_neg("neg-digest-nonfinite-extra-member", "stdin/digest-nonfinite-extra-member", "digest",
+     text='{"bytes_b64":"","x":1e400}')
+
+# one JSON value that is an object, and nothing after it
+for _cmd in ("jcs", "hashstring", "digest", "verify", "verify-chain", "receipt-id", "cost-canon"):
+    _neg(f"neg-stdin-array-{_cmd}", f"stdin/array-{_cmd}", _cmd, text="[]")
+_neg("neg-stdin-trailing-garbage", "stdin/trailing-garbage", "digest",
+     text='{"bytes_b64":""} x')
+_neg("neg-stdin-nul-suffix", "stdin/nul-suffix", "digest", raw=b'{"bytes_b64":""}\x00')
+
+# D5: a duplicate key in the ENVELOPE (not only inside the value) is rejected for
+# the three canonicalizing commands; every other command keeps last-wins.
+_neg("neg-jcs-dup-value-member", "stdin/jcs-dup-envelope-member", "jcs",
+     text='{"value":1,"value":2}')
+_neg("neg-receipt-id-dup-envelope", "stdin/receipt-id-dup-envelope", "receipt-id",
+     text='{"receipt":{"v":"vitni/0.2"},"receipt":{"v":"x"}}')
+_neg("neg-cost-canon-dup-envelope", "stdin/cost-canon-dup-envelope", "cost-canon",
+     text='{"cost":{"tokens":"1","usd_micros":"0","wall_ms":"0","rail_ref":null},'
+          '"cost":{"tokens":"2","usd_micros":"0","wall_ms":"0","rail_ref":null}}')
+write("digest-dup-envelope-last-wins.json", {
+    "name": "stdin/digest-dup-envelope-last-wins", "command": "digest",
+    "input_raw": '{"bytes_b64":"","bytes_b64":"' + base64.b64encode(b"hello").decode() + '"}',
+    "anchor": {"hashstr": hashstr(b"hello")}})
+
+# D8: the command resolves before stdin is parsed
+_neg("neg-cli-unsupported-command-bad-stdin", "cli/unsupported-command-bad-stdin",
+     "not-a-command", {"error": "unsupported_command"}, text=")(")
+
+# D9: nesting depth. The top-level object is depth 1; `value` adds the rest.
+# 128 is accepted (guard), 129 is invalid_input. Neither host parser limit is
+# relied on (Go 10000, V8 stack overflow).
+_d128 = "[" * 127 + "]" * 127
+_neg("neg-jcs-depth-129", "stdin/jcs-depth-129", "jcs",
+     text='{"value":' + "[" * 128 + "]" * 128 + "}")
+write("jcs-depth-128.json", {
+    "name": "stdin/jcs-depth-128", "command": "jcs",
+    "input_raw": '{"value":' + _d128 + "}",
+    "anchor": {"canonical_hex": _d128.encode().hex(), "byte_len": len(_d128)}})

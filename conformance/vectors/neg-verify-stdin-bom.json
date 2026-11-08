@@ -1,0 +1,1 @@
+{"name": "stdin/verify-bom", "command": "verify", "input_raw_b64": "77u/eyJzaWduZWRfcmVjZWlwdCI6ImEuYi5jIiwia2V5cyI6e30sInBvbGljeSI6bnVsbH0=", "anchor": {"error": "invalid_input"}}

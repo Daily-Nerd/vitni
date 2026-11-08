@@ -1,0 +1,1 @@
+{"name": "stdin/verify-lone-surrogate", "command": "verify", "input_raw": "{\"signed_receipt\":\"a.b.c\",\"keys\":{},\"policy\":null,\"x\":\"\\ud800\"}", "anchor": {"error": "invalid_input"}}
