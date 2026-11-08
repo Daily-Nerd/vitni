@@ -476,6 +476,141 @@ text_vec("verify-header-null.json", "verify/header-null", b"null", ed_payload, M
 text_vec("verify-payload-null.json", "verify/payload-null", ED_HDR_BYTES, b"null", MALFORMED)
 text_vec("verify-header-array.json", "verify/header-array", b"[]", ed_payload, MALFORMED)
 
+# ---------------------------------------------------------------------------
+# PR 0a, batch 5a: existing PARSE and signature-shape rules, pinned so that a
+# third verifier cannot choose a lenient default. GREEN on Go and TS today.
+# ---------------------------------------------------------------------------
+text_vec("verify-payload-array.json", "verify/payload-array", ED_HDR_BYTES, b"[]", MALFORMED)
+text_vec("verify-kid-non-string.json", "verify/kid-non-string",
+         b'{"alg":"EdDSA","kid":5}', ed_payload, (False, "unknown_key"))
+perf5 = receipt("srv-ed")
+perf5["performer_id"] = 5
+text_vec("verify-performer-non-string.json", "verify/performer-non-string",
+         ED_HDR_BYTES, jcs(perf5).encode(), (False, "unknown_key"))
+# only the exact string "revoked" revokes; anything else counts as active
+write("verify-status-odd-is-active.json", "verify/status-odd-is-active", ed_receipt,
+      reg_with(ed={"status": "Revoked"}), NO_POLICY, *OK)
+
+EC_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+ED_L = 2**252 + 27742317777372353535851937790883648493
+
+
+def sig_edit(fn):
+    """mutate_seg for the signature segment: decode, edit the raw bytes, re-encode."""
+    def edit(seg):
+        raw = base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4))
+        return b64u(fn(raw))
+    return edit
+
+
+def es_rs(raw):
+    return int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big")
+
+
+def es_pack(r, s):
+    return r.to_bytes(32, "big") + s.to_bytes(32, "big")
+
+
+def ec_vec(fname, name, fn, verdict):
+    signed = jws_raw(json.dumps({"alg": "ES256", "kid": "ec-1"}, separators=(",", ":"),
+                                sort_keys=True).encode(), ec_payload, "ES256",
+                     mutate_seg={2: sig_edit(fn)})
+    write(fname, name, signed, reg(), NO_POLICY, *verdict)
+
+
+def high_s(raw):
+    r, s = es_rs(raw)
+    return es_pack(r, EC_N - s if s <= EC_N // 2 else s)
+
+
+# ES256: a high-S signature is accepted (no malleability rule in v1); r=s=0, r=n,
+# s=0 and any length other than 64 bytes are bad_signature
+assert es_rs(high_s(base64.urlsafe_b64decode(ec_receipt.split(".")[2] + "==")))[1] > EC_N // 2
+ec_vec("verify-es256-high-s.json", "verify/es256-high-s", high_s, OK)
+ec_vec("verify-es256-r-s-zero.json", "verify/es256-r-s-zero", lambda raw: bytes(64), BAD_SIG)
+ec_vec("verify-es256-r-equals-n.json", "verify/es256-r-equals-n",
+       lambda raw: es_pack(EC_N, es_rs(raw)[1]), BAD_SIG)
+ec_vec("verify-es256-s-zero.json", "verify/es256-s-zero",
+       lambda raw: es_pack(es_rs(raw)[0], 0), BAD_SIG)
+ec_vec("verify-es256-sig-63.json", "verify/es256-sig-63", lambda raw: raw[:-1], BAD_SIG)
+ec_vec("verify-es256-sig-65.json", "verify/es256-sig-65", lambda raw: raw + b"\x00", BAD_SIG)
+
+
+def ed_vec(fname, name, fn, verdict):
+    signed = jws_raw(ED_HDR_BYTES, ed_payload, "EdDSA", mutate_seg={2: sig_edit(fn)})
+    write(fname, name, signed, reg(), NO_POLICY, *verdict)
+
+
+def s_plus_l(raw):
+    s_val = int.from_bytes(raw[32:], "little")
+    assert s_val < ED_L
+    return raw[:32] + (s_val + ED_L).to_bytes(32, "little")
+
+
+# Ed25519: S >= L is rejected (S+L would verify under a cofactored or lenient check
+# that reduces S), and a 63-byte signature is bad_signature
+ed_vec("verify-eddsa-s-plus-l.json", "verify/eddsa-s-plus-l", s_plus_l, BAD_SIG)
+ed_vec("verify-eddsa-sig-63.json", "verify/eddsa-sig-63", lambda raw: raw[:-1], BAD_SIG)
+
+# ---------------------------------------------------------------------------
+# PR 0a, batch 5b: Ed25519 small-order and non-canonical points. Go and TS agree
+# on every combination today; the vectors pin the verdicts so a third verifier
+# cannot add identity/small-order rejection or a stricter decode. All use
+# S = 0 and a literal A and R: no private key exists for these points.
+# The rule pinned (cofactorless, R compared by its 32-byte encoding):
+#   accept iff encode([S]B - [k]A) == R_bytes, k = SHA512(R || A || msg) mod L.
+# ---------------------------------------------------------------------------
+IDENT = bytes([1]) + bytes(31)                       # y=1, x=0 (neutral element)
+IDENT_SIGNBIT = bytes([1]) + bytes(30) + bytes([0x80])  # same point, sign bit set
+Y_P_PLUS_1 = bytes([0xEE]) + b"\xff" * 30 + bytes([0x7F])  # y = p+1 (non-canonical y=1)
+ORDER2_SIGNBIT = bytes([0xEC]) + b"\xff" * 30 + bytes([0xFF])  # y = p-1 (order 2), sign bit set
+ORDER8_A = bytes.fromhex("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a")
+ORDER8_B = bytes.fromhex("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa")
+
+
+def ed_k(r_bytes, a_bytes, signing_input):
+    return int.from_bytes(hashlib.sha512(r_bytes + a_bytes + signing_input).digest(), "little") % ED_L
+
+
+def order8_self_equal_ok(a_bytes, signing_input):
+    """R = A, S = 0: [0]B == A + [k]A iff (k+1) * A is the identity iff (k+1) % 8 == 0
+    for an order-8 A (k is already reduced mod L, as every verifier does)."""
+    return (ed_k(a_bytes, a_bytes, signing_input) + 1) % 8 == 0
+
+
+def ed_edge_signing_input(i):
+    payload = jcs({**receipt("srv-ed"), "ext": {"e": i}}).encode()
+    return payload, f"{b64u(ED_HDR_BYTES)}.{b64u(payload)}".encode()
+
+
+# Payload bytes are searched ONCE (smallest i) so the pinned verdicts are the ones the
+# group equation yields: order8-b R=A verifies (ok), order8-a R=A does not
+# (bad_signature), and for the order-2 key (R = identity) k is even so [k]A is the
+# identity and the signature verifies. The verdict set stays {ok, bad_signature}.
+for _i in range(1000):
+    _payload, _si = ed_edge_signing_input(_i)
+    if (order8_self_equal_ok(ORDER8_B, _si) and not order8_self_equal_ok(ORDER8_A, _si)
+            and ed_k(IDENT, ORDER2_SIGNBIT, _si) % 2 == 0):
+        ED_EDGE_PAYLOAD, ED_EDGE_SI = _payload, _si
+        break
+else:
+    raise SystemExit("no payload found for the order-8 pair")
+
+
+def edge_vec(fname, name, a_bytes, r_bytes, verdict):
+    signed = ".".join([b64u(ED_HDR_BYTES), b64u(ED_EDGE_PAYLOAD), b64u(r_bytes + bytes(32))])
+    write(fname, name, signed, reg_with(ed={"x": b64u(a_bytes)}), NO_POLICY, *verdict)
+
+
+edge_vec("verify-ed-smallorder-identity.json", "verify/ed-smallorder-identity", IDENT, IDENT, OK)
+edge_vec("verify-ed-identity-signbit.json", "verify/ed-identity-signbit", IDENT_SIGNBIT, IDENT, OK)
+edge_vec("verify-ed-identity-noncanonical-y.json", "verify/ed-identity-noncanonical-y",
+         Y_P_PLUS_1, IDENT, OK)
+edge_vec("verify-ed-order2-signbit.json", "verify/ed-order2-signbit", ORDER2_SIGNBIT, IDENT, OK)
+edge_vec("verify-ed-r-noncanonical.json", "verify/ed-r-noncanonical", IDENT, Y_P_PLUS_1, BAD_SIG)
+edge_vec("verify-ed-order8-a-r-eq-a.json", "verify/ed-order8-a-r-eq-a", ORDER8_A, ORDER8_A, BAD_SIG)
+edge_vec("verify-ed-order8-b-r-eq-a.json", "verify/ed-order8-b-r-eq-a", ORDER8_B, ORDER8_B, OK)
+
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)
