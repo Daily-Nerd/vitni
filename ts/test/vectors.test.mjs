@@ -28,12 +28,16 @@ const { verifyChain } = await import(`${DIST}/commands/verify-chain.js`);
 const { a2aArtifactHash } = await import(`${DIST}/commands/a2a-artifact-hash.js`);
 const { sign } = await import(`${DIST}/commands/sign.js`);
 const { keygen } = await import(`${DIST}/commands/keygen.js`);
+const { validateInput } = await import(`${DIST}/commands/schema.js`);
 
 function loadVector(filename) {
   return JSON.parse(readFileSync(join(VECTORS_DIR, filename), 'utf8'));
 }
 
 function runCommand(cmd, input) {
+  // The same typing step the CLI applies before a command runs (cli.ts): a
+  // wrong shape is a command error, never a verdict or a canonical form.
+  if (!validateInput(cmd, input)) return { error: 'invalid_input' };
   switch (cmd) {
     case 'jcs': return jcs(input);
     case 'hashstring': return hashstring(input);
