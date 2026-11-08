@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+
+	"github.com/gowebpki/jcs"
 )
 
 // ErrCostMustBeStringInt is returned when a cost magnitude is a JSON number.
@@ -221,16 +223,33 @@ func SSEOutputsHash(raw []byte, mode string) (string, string, error) {
 		// Extract the inner `result` value, JCS it, join with "\n".
 		var parts [][]byte
 		for _, msg := range messages {
+			b := []byte(msg)
+			if exceedsMaxDepth(b) {
+				return "", "", ErrNotStrictJSON
+			}
+			if !json.Valid(b) {
+				// Text that is not JSON at all is skipped (CONTRACT section 5).
+				continue
+			}
+			// The message is JSON hidden inside raw_b64, so the stdin gate never
+			// saw it: it goes through the same strict text function, judged over
+			// the WHOLE message (not only the result member). Duplicate keys stay
+			// last-wins.
+			if err := ValidateJSONText(b, TextPolicy{RejectNonFinite: true}); err != nil {
+				return "", "", err
+			}
 			var rpc map[string]json.RawMessage
-			if err := json.Unmarshal([]byte(msg), &rpc); err != nil {
-				// Skip malformed messages
+			if err := json.Unmarshal(b, &rpc); err != nil {
+				// Valid JSON that is not an object has no result: skipped.
 				continue
 			}
 			result, ok := rpc["result"]
 			if !ok {
 				continue
 			}
-			canon, err := canonicalJSON(result)
+			// The whole message already passed the strict text rule above, so the
+			// result needs no second scan before it is canonicalized.
+			canon, err := jcs.Transform(result)
 			if err != nil {
 				return "", "", err
 			}
