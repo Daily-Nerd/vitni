@@ -286,6 +286,7 @@ Given a `SignedReceipt` R, optionally a transport-observed payload, optionally a
 
 ```
 1.  PARSE        decode the JWS; reject if malformed; reject RFC 7797 b64:false / detached payloads.
+                 A header or payload whose JSON nesting depth exceeds 128 is malformed.
 2.  KEY+ALG      resolve performer_id + header.kid -> published key (§10).
                  Take alg/curve FROM the resolved key's metadata, NOT the header.
                  Reject: 'none'; any jwk/jku/x5u/x5c/x5t header; header.alg vs key-type mismatch;
