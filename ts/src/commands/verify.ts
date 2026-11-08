@@ -74,13 +74,13 @@ function rejected(reason: string): { result: VerifyOutput; decoded: null } {
  * caller reports as `bad_signature` (a JWS segment failing the same decoder is
  * `malformed`: same decoder, different code at the call site).
  */
-function buildPublicKey(jwk: RegistryJwk, alg: string): KeyObject | null {
+function buildPublicKey(jwk: RegistryJwk, alg: AlgName): KeyObject | null {
   const x = decodeB64UrlStrict(jwk.x);
   if (x === null || x.length !== 32) return null;
   let jwkFields: Record<string, string>;
   if (alg === 'EdDSA') {
     jwkFields = { ...ALGS.EdDSA, x: x.toString('base64url') };
-  } else if (alg === 'ES256') {
+  } else {
     const y = decodeB64UrlStrict(jwk.y as string);
     if (y === null || y.length !== 32) return null;
     jwkFields = {
@@ -88,8 +88,6 @@ function buildPublicKey(jwk: RegistryJwk, alg: string): KeyObject | null {
       x: x.toString('base64url'),
       y: y.toString('base64url'),
     };
-  } else {
-    return null;
   }
   try {
     return createPublicKey({ key: jwkFields, format: 'jwk' });
@@ -98,30 +96,25 @@ function buildPublicKey(jwk: RegistryJwk, alg: string): KeyObject | null {
   }
 }
 
+/**
+ * Verify the signature with a key built for the same alg. Never throws: the
+ * kty/crv/alg binding (step 5) and buildPublicKey (which returns null for any
+ * key Node cannot import) leave only inputs on which crypto.verify returns a
+ * boolean, whatever the signature length or content. A genuine bug must reach
+ * the CLI as internal_error, not be swallowed into bad_signature.
+ */
 function verifySignature(
-  alg: string,
+  alg: AlgName,
   signingInput: Buffer,
   keyObj: KeyObject,
   sig: Buffer
 ): boolean {
-  try {
-    if (alg === 'EdDSA') {
-      // Ed25519: algorithm is null (the curve determines the hash).
-      return cryptoVerify(null, signingInput, keyObj, sig);
-    }
-    if (alg === 'ES256') {
-      // JWS ES256 signature is raw R||S (64 bytes) — ieee-p1363 encoding.
-      return cryptoVerify(
-        'sha256',
-        signingInput,
-        { key: keyObj, dsaEncoding: 'ieee-p1363' },
-        sig
-      );
-    }
-    return false;
-  } catch {
-    return false;
+  if (alg === 'EdDSA') {
+    // Ed25519: algorithm is null (the curve determines the hash).
+    return cryptoVerify(null, signingInput, keyObj, sig);
   }
+  // ES256: JWS signature is raw R||S (64 bytes), ieee-p1363 encoding.
+  return cryptoVerify('sha256', signingInput, { key: keyObj, dsaEncoding: 'ieee-p1363' }, sig);
 }
 
 export function verify(input: VerifyInput): VerifyOutput {
@@ -215,11 +208,11 @@ export function verifyDecoded(input: VerifyInput): {
   }
 
   // --- Step 6: bad_signature ---
-  const keyObj = buildPublicKey(jwk, headerAlg);
+  const keyObj = buildPublicKey(jwk, jwk.alg);
   if (keyObj === null) return rejected('bad_signature');
   // signingInput = ASCII b64u(header).b64u(payload)
   const signingInput = Buffer.from(`${headerSeg}.${payloadSeg}`, 'ascii');
-  if (!verifySignature(headerAlg, signingInput, keyObj, sigBuf)) {
+  if (!verifySignature(jwk.alg, signingInput, keyObj, sigBuf)) {
     return rejected('bad_signature');
   }
 
