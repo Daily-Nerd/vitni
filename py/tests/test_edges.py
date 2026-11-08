@@ -40,6 +40,11 @@ class NullRequiredMember(unittest.TestCase):
             rc, out, err = main_in_process([command], stdin)
             self.assertEqual((rc, out, err), (0, b'{"error":"invalid_input"}\n', b""), (command, stdin))
 
+    def test_every_shape_member_is_required_so_the_table_carries_no_required_flag(self):
+        for command, members in V._SHAPES.items():
+            for member in members:
+                self.assertEqual(len(member), 2, (command, member))
+
 
 class CommandLine(unittest.TestCase):
     def test_no_command_at_all_is_missing_command(self):
