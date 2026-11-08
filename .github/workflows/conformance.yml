@@ -54,7 +54,7 @@ jobs:
         env:
           VITNI_REQUIRE_NODE: "1"
         run: |
-          uv run --no-project --python 3.13 --with coverage coverage run --branch --include=py/vitni_verify.py -m unittest discover -t py -s py/tests
+          uv run --no-project --python 3.13 --with coverage coverage run --branch --include=py/vitni_verify.py -m unittest discover -s py/tests -t py
           uv run --no-project --python 3.13 --with coverage coverage xml -o py/coverage.xml
 
       - name: Cross-implementation conformance (Go, TS and Python, byte-identical in scope)
