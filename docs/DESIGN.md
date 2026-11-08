@@ -461,7 +461,7 @@ Status: non-normative. This appendix describes how a deployment can hold the key
 
 ### A.1 Shape
 
-The registry is a JSON object keyed by `performer_id`, then by `kid`. The members of an entry are listed in the `verify` input of `conformance/CONTRACT.md` section 7. A registry that works looks like this. It is the registry of `vectors/verify-extra-members-ignored`, including the two reserved members described in A.3:
+The registry is a JSON object keyed by `performer_id`, then by `kid`. The members of an entry are listed in the `verify` input of `conformance/CONTRACT.md` section 7. A registry that works looks like this. It is the registry of `vectors/verify-extra-members-ignored`, including two members, `rpId` and `origins`, that a verifier does not know and ignores (A.3):
 
 ```json
 {
@@ -489,7 +489,7 @@ Only the exact string `"revoked"` in `status` revokes a key. `vectors/verify-key
 
 A verifier MUST ignore registry members it does not know, so a registry can grow without breaking an older verifier (`vectors/verify-extra-members-ignored`). Member names are case-sensitive: `vectors/verify-key-member-case-alg` and `vectors/verify-key-member-case-x` show that a differently-cased name is simply not the member.
 
-Two names are reserved for later use and carry no meaning today: `rpId` and `origins`. They appear in the example above only to show that they are ignored. WA-ES256 (a WebAuthn-style ES256 profile) is deferred and not part of this release. If it is added, it is expected to arrive as a new profile tag and a new registry `alg` value, in a protocol revision with its own vectors. Nothing in this appendix defines it.
+The members `rpId` and `origins` in the example above are only examples of unknown members. They have no meaning here and none is implied; a verifier ignores them like any other name it does not know.
 
 ### A.4 Where each outcome is defined
 

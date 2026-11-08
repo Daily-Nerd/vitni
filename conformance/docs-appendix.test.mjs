@@ -68,10 +68,11 @@ test("S3.2 the appendix adds exactly one MUST, and says so is non-normative", ()
   assert.match(text, /CONTRACT\.md/, "points at the normative source");
 });
 
-test("WA-ES256 is reserved room only and stated as not part of this release", () => {
+test("the appendix reserves nothing: no profile, no reserved member names, no future promise", () => {
   const text = appendix().replace(/\s+/g, " ");
-  assert.match(text, /WA-ES256/);
-  assert.match(text, /not part of this release/);
+  assert.ok(!/WA-ES256/i.test(text), "no WA-ES256");
+  assert.ok(!/web\s?authn|passkey/i.test(text), "no WebAuthn or passkey mention");
+  assert.ok(!/reserved|deferred|later use|not part of this release/i.test(text), "no reservation or deferral wording");
 });
 
 test("S3.3 the appendix and the section 10 pointer carry no em-dash, attribution or vector count", () => {
