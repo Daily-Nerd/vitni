@@ -7,6 +7,7 @@ receipts and a registry, then hand-sets the expected verdict per vector by const
 Run: uv run --with cryptography --with ecdsa --no-project python vectors/_gen_verify.py
 """
 import base64
+import copy
 import hashlib
 import json
 import pathlib
@@ -46,21 +47,38 @@ ec_y = ec_nums.y.to_bytes(32, "big")
 ec_sk = SigningKey.from_secret_exponent(EC_D, curve=NIST256p)
 
 
-def jws(header: dict, payload_bytes: bytes, alg: str, priv=None) -> str:
-    h = b64u(json.dumps(header, separators=(",", ":"), sort_keys=True).encode())
+def jws_raw(header_bytes: bytes, payload_bytes: bytes, alg: str, *, priv=None, mutate_seg=None) -> str:
+    """Build a JWS compact string from ARBITRARY header and payload bytes.
+
+    The signature is computed over the base64url of those exact bytes, so it is
+    VALID over whatever the caller passes in (BOM, invalid UTF-8, lone-surrogate
+    escapes, odd `b64` members). `mutate_seg` is applied AFTER signing, as a dict
+    {segment_index: fn(str) -> str}, to corrupt a segment without touching the
+    signature (CR/LF, trailing-bit flips, extra characters).
+    """
+    h = b64u(header_bytes)
     p = b64u(payload_bytes)
     signing_input = f"{h}.{p}".encode()
     if alg == "none":
-        return f"{h}.{p}."
-    if alg == "EdDSA":
-        sig = (priv or ed_priv).sign(signing_input)
-    elif alg == "ES256":
-        # RFC 6979 deterministic nonce; sigencode_string yields JWS raw R||S (64 bytes)
-        sig = (priv or ec_sk).sign_deterministic(
-            signing_input, hashfunc=hashlib.sha256, sigencode=sigencode_string)
+        segs = [h, p, ""]
     else:
-        raise ValueError(alg)
-    return f"{h}.{p}.{b64u(sig)}"
+        if alg == "EdDSA":
+            sig = (priv or ed_priv).sign(signing_input)
+        elif alg == "ES256":
+            # RFC 6979 deterministic nonce; sigencode_string yields JWS raw R||S (64 bytes)
+            sig = (priv or ec_sk).sign_deterministic(
+                signing_input, hashfunc=hashlib.sha256, sigencode=sigencode_string)
+        else:
+            raise ValueError(alg)
+        segs = [h, p, b64u(sig)]
+    for idx, fn in (mutate_seg or {}).items():
+        segs[idx] = fn(segs[idx])
+    return ".".join(segs)
+
+
+def jws(header: dict, payload_bytes: bytes, alg: str, priv=None) -> str:
+    header_bytes = json.dumps(header, separators=(",", ":"), sort_keys=True).encode()
+    return jws_raw(header_bytes, payload_bytes, alg, priv=priv)
 
 
 def receipt(performer_id: str, binding: str = "mcp", method: str = "mcp:echo") -> dict:
@@ -83,6 +101,34 @@ def reg(status_ed="active", status_ec="active") -> dict:
         "srv-ec": {"ec-1": {"kty": "EC", "crv": "P-256", "x": b64u(ec_x), "y": b64u(ec_y),
                             "alg": "ES256", "status": status_ec}},
     }
+
+
+def reg_with(*, ed=None, ec=None, status_ed="active", status_ec="active", extra=None) -> dict:
+    """Deep copy of reg() with per-key overrides.
+
+    `ed` / `ec` are dicts merged into the srv-ed/ed-1 and srv-ec/ec-1 entries; a
+    value of DELETE removes that member. `extra` is merged into the top level.
+    """
+    out = copy.deepcopy(reg(status_ed, status_ec))
+    for entry, patch in ((out["srv-ed"]["ed-1"], ed), (out["srv-ec"]["ec-1"], ec)):
+        for k, v in (patch or {}).items():
+            if v is DELETE:
+                entry.pop(k, None)
+            else:
+                entry[k] = v
+    out.update(extra or {})
+    return out
+
+
+DELETE = object()  # sentinel for reg_with: remove this member
+
+# builder self-checks (run on every regeneration)
+_h = b'{"alg":"EdDSA","kid":"ed-1"}'
+assert jws_raw(_h, b"{}", "EdDSA") == jws({"alg": "EdDSA", "kid": "ed-1"}, b"{}", "EdDSA")
+assert jws_raw(_h, b"{}", "EdDSA", mutate_seg={2: lambda t: t + "A"}).split(".")[2] == \
+    jws_raw(_h, b"{}", "EdDSA").split(".")[2] + "A"
+assert reg_with(ed={"kty": "EC"})["srv-ed"]["ed-1"]["kty"] == "EC" and reg()["srv-ed"]["ed-1"]["kty"] == "OKP"
+assert "kty" not in reg_with(ed={"kty": DELETE})["srv-ed"]["ed-1"]
 
 
 NO_POLICY = {"expected_binding": None, "expected_method": None}
