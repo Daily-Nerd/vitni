@@ -61,8 +61,6 @@ _HEX = re.compile(r"(?:[0-9a-fA-F]{2})*")
 
 def utf8_decode_strict(data):
     """Strict UTF-8 text: no BOM, no overlong forms, no encoded surrogates."""
-    if not isinstance(data, (bytes, bytearray)):
-        raise _Reject("not bytes")
     if bytes(data[:3]) == b"\xef\xbb\xbf":
         raise _Reject("BOM")
     try:
@@ -75,10 +73,9 @@ def b64url_decode_strict(s):
     """Unpadded base64url, alphabet A-Za-z0-9-_ only, canonical trailing bits."""
     if not isinstance(s, str) or _B64URL.fullmatch(s) is None or len(s) % 4 == 1:
         raise _Reject("base64url")
-    try:
-        raw = base64.b64decode(s + "=" * (-len(s) % 4), altchars=b"-_", validate=True)
-    except ValueError:
-        raise _Reject("base64url") from None
+    # Total on this input: the alphabet gate, len % 4 != 1 and the computed
+    # padding leave nothing for b64decode to refuse.
+    raw = base64.b64decode(s + "=" * (-len(s) % 4), altchars=b"-_", validate=True)
     if base64.urlsafe_b64encode(raw).rstrip(b"=") != s.encode("ascii"):
         raise _Reject("base64url trailing bits")
     return raw
@@ -122,9 +119,6 @@ class _NonFinite:
     """Stands in for a number that overflowed to infinity, under nonfinite="defer"."""
 
     __slots__ = ()
-
-    def __repr__(self):
-        return "<non-finite>"
 
 
 _NONFINITE = _NonFinite()
@@ -638,26 +632,24 @@ PROFILES = tuple(sorted(["alg:" + a for a in ALGS] + ["canon:b64-strict", "canon
 # Whole-text duplicate keys are rejected for the commands whose value flows into JCS.
 _DUP_REJECT = frozenset(("jcs", "receipt-id"))
 
-# name, JSON type (None: any, key presence is what counts and null is a value), required
+# name, JSON type (None: any, key presence is what counts and null is a value).
+# Every member is required.
 _SHAPES = {
-    "jcs": (("value", None, True),),
-    "hashstring": (("algo", str, True), ("digest_hex", str, True)),
-    "digest": (("bytes_b64", str, True),),
-    "receipt-id": (("receipt", dict, True),),
+    "jcs": (("value", None),),
+    "hashstring": (("algo", str), ("digest_hex", str)),
+    "digest": (("bytes_b64", str),),
+    "receipt-id": (("receipt", dict),),
 }
 
 
 def _shape_ok(command, obj):
     """Exact member names; a required member that is absent or null, or any
     member of the wrong JSON type, is invalid. Unknown members are ignored."""
-    for name, kind, required in _SHAPES[command]:
+    for name, kind in _SHAPES[command]:
         if kind is None:
-            if required and name not in obj:
+            if name not in obj:
                 return False
-        elif obj.get(name) is None:
-            if required:
-                return False
-        elif not isinstance(obj[name], kind):
+        elif not isinstance(obj.get(name), kind):
             return False
     return True
 
