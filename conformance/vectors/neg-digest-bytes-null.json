@@ -1,0 +1,1 @@
+{"name": "member/digest-bytes-null", "command": "digest", "input_raw": "{\"bytes_b64\":null}", "anchor": {"error": "invalid_input"}}

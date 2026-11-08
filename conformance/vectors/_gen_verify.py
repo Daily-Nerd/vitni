@@ -636,6 +636,51 @@ edge_vec("verify-ed-r-noncanonical.json", "verify/ed-r-noncanonical", IDENT, Y_P
 edge_vec("verify-ed-order8-a-r-eq-a.json", "verify/ed-order8-a-r-eq-a", ORDER8_A, ORDER8_A, BAD_SIG)
 edge_vec("verify-ed-order8-b-r-eq-a.json", "verify/ed-order8-b-r-eq-a", ORDER8_B, ORDER8_B, OK)
 
+# ---------------------------------------------------------------------------
+# PR 0b, batch 3: member names are exact and case-sensitive (D4). A name that
+# differs only in case is an UNKNOWN member and is ignored, never a match (Go's
+# encoding/json matches case-insensitively). The receipt carries a valid
+# signature, so every verdict below is decided by the name rule alone.
+# ---------------------------------------------------------------------------
+def write_input(fname, name, command, input_obj, anchor):
+    (OUT / fname).write_text(json.dumps({
+        "name": name, "command": command, "input": input_obj, "anchor": anchor}) + "\n")
+
+
+def key_case(entry, old, new):
+    """Registry entry with member `old` renamed to `new` (same value)."""
+    return {(new if k == old else k): v for k, v in entry.items()}
+
+
+_ed_entry = reg()["srv-ed"]["ed-1"]
+write_input("neg-verify-member-case-signed-receipt.json", "member/verify-case-signed-receipt",
+            "verify", {"Signed_Receipt": ed_receipt, "keys": reg(), "policy": NO_POLICY},
+            {"valid": False, "reason": "malformed"})
+write_input("verify-member-case-keys.json", "member/verify-case-keys", "verify",
+            {"signed_receipt": ed_receipt, "KEYS": reg(), "policy": NO_POLICY},
+            {"valid": False, "reason": "unknown_key"})
+write_input("verify-member-case-policy.json", "member/verify-case-policy", "verify",
+            {"signed_receipt": ed_receipt, "keys": reg(),
+             "POLICY": {"expected_method": "mcp:other", "expected_binding": "local"}},
+            {"valid": True, "reason": "ok"})
+write_input("verify-key-member-case-kty.json", "member/verify-key-case-kty", "verify",
+            {"signed_receipt": ed_receipt,
+             "keys": {"srv-ed": {"ed-1": key_case(_ed_entry, "kty", "KTY")}}, "policy": NO_POLICY},
+            {"valid": False, "reason": "alg_not_allowed"})
+write_input("verify-key-member-case-alg.json", "member/verify-key-case-alg", "verify",
+            {"signed_receipt": ed_receipt,
+             "keys": {"srv-ed": {"ed-1": key_case(_ed_entry, "alg", "ALG")}}, "policy": NO_POLICY},
+            {"valid": False, "reason": "alg_not_allowed"})
+write_input("verify-key-member-case-x.json", "member/verify-key-case-x", "verify",
+            {"signed_receipt": ed_receipt,
+             "keys": {"srv-ed": {"ed-1": key_case(_ed_entry, "x", "X")}}, "policy": NO_POLICY},
+            {"valid": False, "reason": "bad_signature"})
+write_input("verify-key-member-case-status.json", "member/verify-key-case-status", "verify",
+            {"signed_receipt": ed_receipt,
+             "keys": {"srv-ed": {"ed-1": key_case(_ed_entry, "status", "STATUS") | {"STATUS": "revoked"}}},
+             "policy": NO_POLICY},
+            {"valid": True, "reason": "ok"})
+
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)

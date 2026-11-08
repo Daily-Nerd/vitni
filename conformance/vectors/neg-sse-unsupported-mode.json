@@ -1,0 +1,1 @@
+{"name": "member/sse-unsupported-mode", "command": "sse-outputs-hash", "input_raw": "{\"mode\":\"xml\",\"raw_b64\":\"\"}", "anchor": {"error": "invalid_input"}}

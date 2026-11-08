@@ -1,0 +1,1 @@
+{"name": "member/sse-raw-b64-number", "command": "sse-outputs-hash", "input_raw": "{\"mode\":\"sse\",\"raw_b64\":5}", "anchor": {"error": "invalid_input"}}

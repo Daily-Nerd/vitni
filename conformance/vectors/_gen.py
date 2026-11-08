@@ -477,3 +477,133 @@ write("jcs-depth-128.json", {
     "name": "stdin/jcs-depth-128", "command": "jcs",
     "input_raw": '{"value":' + _d128 + "}",
     "anchor": {"canonical_hex": _d128.encode().hex(), "byte_len": len(_d128)}})
+
+# =====================================================================
+# Exact member names and required members (D4, D7, N3, Q8; sweep 0b.16).
+# Member names are exact and case-sensitive: a name that differs only in case
+# is an UNKNOWN member (ignored), never a match (Go's encoding/json matches
+# case-insensitively). A required member that is absent or null, or has the
+# wrong JSON type, is invalid_input. Absent-but-optional members keep their
+# existing outcome (sign kid / private_key_b64, verify signed_receipt).
+#
+# Per-command input table (PR body of 0b):
+#   jcs                value:any(required, null allowed)
+#   hashstring         algo:string(required, == "sha2-256")  digest_hex:string(required)
+#   digest             bytes_b64:string(required)
+#   receipt-id         receipt:object(required)
+#   sse-outputs-hash   raw_b64:string(required)  mode:string(required, sse | sse-jsonrpc)
+#   cost-canon         cost:object(required)
+#   verify             signed_receipt:string|null  keys:object|null  policy:object|null
+#   verify-chain       receipts:array<string>|null  keys:object|null  policy:object|null
+#   a2a-artifact-hash  artifact:object(required)  artifact.parts:array<object>(required)
+#                      part.kind:string|null  part.file:object|null
+#   sign               receipt:object(required)  kid:string|null  private_key_b64:string|null
+#   keygen             seed_b64: any, judged by the command (non-string is invalid_seed)
+# =====================================================================
+_SHA_HELLO = hashlib.sha256(b"hello").hexdigest()
+_MCP_TEXT = json.dumps(receipt)
+
+# D4: names that differ only in case
+_neg("neg-jcs-member-case-value", "member/jcs-case-value", "jcs", text='{"VALUE":{"a":1}}')
+_neg("neg-digest-member-case-bytes-b64", "member/digest-case-bytes-b64", "digest",
+     text='{"BYTES_B64":"aGVsbG8="}')
+_neg("neg-hashstring-member-case-algo", "member/hashstring-case-algo", "hashstring",
+     text='{"ALGO":"sha2-256","digest_hex":"' + _SHA_HELLO + '"}')
+_neg("neg-receipt-id-member-case-receipt", "member/receipt-id-case-receipt", "receipt-id",
+     text='{"Receipt":' + _MCP_TEXT + '}')
+_neg("neg-cost-canon-member-case-cost", "member/cost-canon-case-cost", "cost-canon",
+     text='{"COST":{"tokens":"1","usd_micros":"0","wall_ms":"0","rail_ref":null}}')
+_neg("neg-sse-member-case-mode", "member/sse-case-mode", "sse-outputs-hash",
+     text='{"MODE":"sse","raw_b64":""}')
+_neg("neg-a2a-member-case-artifact", "member/a2a-case-artifact", "a2a-artifact-hash",
+     text='{"ARTIFACT":{"parts":[]}}')
+_neg("neg-a2a-member-case-parts", "member/a2a-case-parts", "a2a-artifact-hash",
+     text='{"artifact":{"PARTS":[]}}')
+_neg("neg-a2a-member-case-kind", "member/a2a-case-kind", "a2a-artifact-hash",
+     text='{"artifact":{"parts":[{"KIND":"text","text":"x"}]}}', anchor={"error": "unsupported_part"})
+_neg("neg-sign-member-case-receipt", "member/sign-case-receipt", "sign",
+     text='{"Receipt":' + _MCP_TEXT + ',"kid":"ed-1","private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}')
+write("verify-chain-member-case-receipts.json", {
+    "name": "member/verify-chain-case-receipts", "command": "verify-chain",
+    "input_raw": '{"Receipts":["a.b.c"],"keys":{},"policy":null}',
+    "anchor": {"valid": False, "reason": "empty_chain", "chain_len": 0}})
+
+# D7: absent required members (Q8: jcs {} is invalid_input, not a printed null)
+_neg("neg-jcs-value-missing", "member/jcs-value-missing", "jcs", text="{}")
+_neg("neg-digest-missing-bytes", "member/digest-missing-bytes", "digest", text="{}")
+_neg("neg-receipt-id-missing-receipt", "member/receipt-id-missing-receipt", "receipt-id", text="{}")
+_neg("neg-cost-canon-missing-cost", "member/cost-canon-missing-cost", "cost-canon", text="{}")
+_neg("neg-hashstring-missing-digest-hex", "member/hashstring-missing-digest-hex", "hashstring",
+     text='{"algo":"sha2-256"}')
+_neg("neg-sse-missing-raw-b64", "member/sse-missing-raw-b64", "sse-outputs-hash",
+     text='{"mode":"sse"}')
+_neg("neg-sse-missing-mode", "member/sse-missing-mode", "sse-outputs-hash", text='{"raw_b64":""}')
+_neg("neg-a2a-missing-artifact", "member/a2a-missing-artifact", "a2a-artifact-hash", text="{}")
+_neg("neg-a2a-missing-parts", "member/a2a-missing-parts", "a2a-artifact-hash",
+     text='{"artifact":{}}')
+_neg("neg-sign-missing-receipt", "member/sign-missing-receipt", "sign",
+     text='{"kid":"ed-1","private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}')
+# null is "absent" for a required member
+_neg("neg-digest-bytes-null", "member/digest-bytes-null", "digest", text='{"bytes_b64":null}')
+# a JSON null IS a value for jcs (canonical form "null"): guard against reading
+# "null is absent" into the one member whose domain includes null
+write("jcs-value-null.json", {
+    "name": "member/jcs-value-null", "command": "jcs", "input_raw": '{"value":null}',
+    "anchor": {"canonical_hex": b"null".hex(), "byte_len": 4}})
+# optional members keep their existing outcome when absent or null
+_neg("neg-sign-kid-null", "member/sign-kid-null", "sign",
+     {"error": "kid_required"},
+     text='{"receipt":' + _MCP_TEXT + ',"kid":null,"private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}')
+_neg("neg-sign-private-key-missing", "member/sign-private-key-missing", "sign",
+     {"error": "invalid_private_key"}, text='{"receipt":' + _MCP_TEXT + ',"kid":"ed-1"}')
+
+# N3: hashstring algo, exactly "sha2-256"; the retired `unsupported_algo` code is gone
+_neg("neg-hashstring-unsupported-algo", "member/hashstring-unsupported-algo", "hashstring",
+     text='{"algo":"sha3","digest_hex":"' + _SHA_HELLO + '"}')
+_neg("neg-hashstring-algo-missing", "member/hashstring-algo-missing", "hashstring",
+     text='{"digest_hex":"' + _SHA_HELLO + '"}')
+_neg("neg-hashstring-algo-number", "member/hashstring-algo-number", "hashstring",
+     text='{"algo":1,"digest_hex":"' + _SHA_HELLO + '"}')
+_neg("neg-sse-unsupported-mode", "member/sse-unsupported-mode", "sse-outputs-hash",
+     text='{"mode":"xml","raw_b64":""}')
+
+# wrong JSON types
+_neg("neg-digest-bytes-number", "member/digest-bytes-number", "digest", text='{"bytes_b64":5}')
+_neg("neg-hashstring-digest-hex-number", "member/hashstring-digest-hex-number", "hashstring",
+     text='{"algo":"sha2-256","digest_hex":5}')
+_neg("neg-receipt-id-receipt-number", "member/receipt-id-receipt-number", "receipt-id",
+     text='{"receipt":5}')
+_neg("neg-receipt-id-receipt-array", "member/receipt-id-receipt-array", "receipt-id",
+     text='{"receipt":[]}')
+_neg("neg-cost-canon-cost-array", "member/cost-canon-cost-array", "cost-canon", text='{"cost":[]}')
+_neg("neg-cost-canon-cost-string", "member/cost-canon-cost-string", "cost-canon", text='{"cost":"x"}')
+_neg("neg-sse-raw-b64-number", "member/sse-raw-b64-number", "sse-outputs-hash",
+     text='{"mode":"sse","raw_b64":5}')
+_neg("neg-sse-mode-number", "member/sse-mode-number", "sse-outputs-hash",
+     text='{"mode":5,"raw_b64":""}')
+_neg("neg-a2a-artifact-array", "member/a2a-artifact-array", "a2a-artifact-hash",
+     text='{"artifact":[]}')
+_neg("neg-a2a-parts-string", "member/a2a-parts-string", "a2a-artifact-hash",
+     text='{"artifact":{"parts":"x"}}')
+_neg("neg-a2a-part-number", "member/a2a-part-number", "a2a-artifact-hash",
+     text='{"artifact":{"parts":[5]}}')
+_neg("neg-a2a-kind-number", "member/a2a-kind-number", "a2a-artifact-hash",
+     text='{"artifact":{"parts":[{"kind":5}]}}')
+_neg("neg-a2a-file-string", "member/a2a-file-string", "a2a-artifact-hash",
+     text='{"artifact":{"parts":[{"kind":"file","file":"x"}]}}')
+_neg("neg-a2a-file-bytes-number", "member/a2a-file-bytes-number", "a2a-artifact-hash",
+     text='{"artifact":{"parts":[{"kind":"file","file":{"bytes":5}}]}}')
+_neg("neg-sign-receipt-string", "member/sign-receipt-string", "sign",
+     text='{"receipt":"x","kid":"ed-1","private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}')
+_neg("neg-sign-kid-number", "member/sign-kid-number", "sign",
+     text='{"receipt":' + _MCP_TEXT + ',"kid":5,"private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}')
+_neg("neg-sign-private-key-number", "member/sign-private-key-number", "sign",
+     text='{"receipt":' + _MCP_TEXT + ',"kid":"ed-1","private_key_b64":5}')
+_neg("neg-verify-chain-receipts-string", "member/verify-chain-receipts-string", "verify-chain",
+     text='{"receipts":"x","keys":{},"policy":null}')
+_neg("neg-verify-chain-receipt-number", "member/verify-chain-receipt-number", "verify-chain",
+     text='{"receipts":[5],"keys":{},"policy":null}')
+write("verify-chain-receipts-null.json", {
+    "name": "member/verify-chain-receipts-null", "command": "verify-chain",
+    "input_raw": '{"receipts":null,"keys":{},"policy":null}',
+    "anchor": {"valid": False, "reason": "empty_chain", "chain_len": 0}})

@@ -1,0 +1,1 @@
+{"name": "member/a2a-missing-parts", "command": "a2a-artifact-hash", "input_raw": "{\"artifact\":{}}", "anchor": {"error": "invalid_input"}}
