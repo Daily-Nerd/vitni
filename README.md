@@ -1,4 +1,9 @@
-<h1 align="center">vitni</h1>
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/brand/vitni-lockup-dark.svg">
+    <img src=".github/brand/vitni-lockup-light.svg" alt="vitni" width="320">
+  </picture>
+</h1>
 <p align="center"><em>The witness to agent actions.</em> (Old Norse: <em>vitni</em>, witness.)</p>
 <p align="center">Signed, tamper-evident execution receipts for AI agents — under MCP and beside A2A.</p>
 
