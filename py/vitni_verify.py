@@ -484,3 +484,130 @@ def _p256_verify(x, y, sig, msg):
     w = pow(s, -1, n)
     point = _p256_mul_add(_p256_digest_int(msg) * w % n, r * w % n, (qx, qy))
     return point is not None and point[0] % n == r
+
+
+# --------------------------------------------------------------------------
+# The algorithm table: the single owner of alg -> (kty, crv, key coordinates,
+# verify function). Key-type binding, key decoding and the declared alg atoms
+# all derive from it.
+# --------------------------------------------------------------------------
+
+ALGS = {
+    "EdDSA": ("OKP", "Ed25519", ("x",), _ed25519_verify),
+    "ES256": ("EC", "P-256", ("x", "y"), _p256_verify),
+}
+
+
+# --------------------------------------------------------------------------
+# verify: CONTRACT steps 1 to 8, the first failing step wins.
+# --------------------------------------------------------------------------
+
+_FORBIDDEN_HEADER = ("jwk", "jku", "x5u", "x5c", "x5t", "x5t#S256")
+_ENTRY_MEMBERS = ("kty", "crv", "x", "y", "alg", "status")
+_POLICY_MEMBERS = ("expected_binding", "expected_method")
+
+
+def _typed(obj, members):
+    """obj is a dict whose named members are each a string, None or absent."""
+    return isinstance(obj, dict) and all(obj.get(m) is None or isinstance(obj[m], str) for m in members)
+
+
+def _verify_shape(signed_receipt, keys, policy):
+    """The whole keys tree and the policy are typed, not only the entry a receipt
+    resolves to. A wrong type is a command error, never a verdict."""
+    if signed_receipt is not None and not isinstance(signed_receipt, str):
+        return False
+    if policy is not None and not _typed(policy, _POLICY_MEMBERS):
+        return False
+    if keys is None:
+        return True
+    if not isinstance(keys, dict):
+        return False
+    for performer in keys.values():
+        if performer is None:
+            continue
+        if not isinstance(performer, dict):
+            return False
+        if not all(entry is None or _typed(entry, _ENTRY_MEMBERS) for entry in performer.values()):
+            return False
+    return True
+
+
+def _decode_object(segment):
+    """A base64url segment that must hold one JSON object (header and payload
+    policy: last-wins duplicates, non-finite deferred to step 7)."""
+    raw = b64url_decode_strict(segment)
+    obj = parse_json(raw, dup="last", nonfinite="defer")
+    if not isinstance(obj, dict):
+        raise _Reject("not an object")
+    return raw, obj
+
+
+def _verify_reason(signed_receipt, keys, policy):
+    # 1. malformed
+    if signed_receipt is None:
+        return "malformed"
+    parts = signed_receipt.split(".")
+    if len(parts) != 3:
+        return "malformed"
+    try:
+        sig = b64url_decode_strict(parts[2])
+        _, header = _decode_object(parts[0])
+        if "b64" in header and header["b64"] is not True:
+            return "malformed"
+        payload_bytes, payload = _decode_object(parts[1])
+    except _Reject:
+        return "malformed"
+    # 2. header_key_material
+    if any(m in header for m in _FORBIDDEN_HEADER):
+        return "header_key_material"
+    # 3. unknown_key
+    performer_id, kid = payload.get("performer_id"), header.get("kid")
+    if not isinstance(performer_id, str) or not isinstance(kid, str):
+        return "unknown_key"
+    entry = ((keys or {}).get(performer_id) or {}).get(kid)
+    if entry is None:
+        return "unknown_key"
+    # 4. revoked_key
+    if entry.get("status") == "revoked":
+        return "revoked_key"
+    # 5. alg_not_allowed
+    alg = header.get("alg")
+    if not isinstance(alg, str) or alg in ("", "none") or alg != entry.get("alg"):
+        return "alg_not_allowed"
+    if alg not in ALGS:
+        return "alg_not_allowed"
+    kty, crv, coords, verify_fn = ALGS[alg]
+    if entry.get("kty") != kty or entry.get("crv") != crv:
+        return "alg_not_allowed"
+    # 6. bad_signature: key material goes through the same decoder as the segments
+    try:
+        material = [b64url_decode_strict(entry.get(c)) for c in coords]
+    except _Reject:
+        return "bad_signature"
+    if any(len(m) != 32 for m in material):
+        return "bad_signature"
+    if not verify_fn(*material, sig, (parts[0] + "." + parts[1]).encode("ascii")):
+        return "bad_signature"
+    # 7. non_canonical_payload (a duplicate key collapses at parse, so it always differs here)
+    try:
+        if jcs(payload) != payload_bytes:
+            return "non_canonical_payload"
+    except _NotCanonical:
+        return "non_canonical_payload"
+    # 8. context_mismatch
+    policy = policy or {}
+    for member, claim in (("expected_binding", "binding"), ("expected_method", "method")):
+        expected = policy.get(member)
+        if expected is not None and payload.get(claim) != expected:
+            return "context_mismatch"
+    return "ok"
+
+
+def verify(signed_receipt, keys=None, policy=None):
+    """Verdict dict for one compact JWS: {"reason": ..., "valid": ...}, or
+    {"error": "invalid_input"} when an argument has the wrong JSON type."""
+    if not _verify_shape(signed_receipt, keys, policy):
+        return {"error": "invalid_input"}
+    reason = _verify_reason(signed_receipt, keys, policy)
+    return {"reason": reason, "valid": reason == "ok"}

@@ -21,7 +21,8 @@ def base_case():
     return {
         "header": {"alg": "EdDSA", "kid": KID},
         "payload": V.jcs(payload_dict()),
-        "keys": registry(),
+        "drop_key": False,
+        "status": "active",
         "policy": {"expected_binding": None, "expected_method": None},
         "jws_override": None,
         "tamper_sig": False,
@@ -29,7 +30,9 @@ def base_case():
 
 
 def build(case):
-    token = case["jws_override"] or jws(case["header"], case["payload"])
+    if case["jws_override"]:
+        return case["jws_override"]
+    token = jws(case["header"], case["payload"])
     if case["tamper_sig"]:
         h, p, s = token.split(".")
         token = ".".join((h, p, b64u(bytes(64))))
@@ -46,11 +49,11 @@ def inj_key_material(c):
 
 
 def inj_unknown_key(c):
-    c["keys"] = {}
+    c["drop_key"] = True
 
 
 def inj_revoked(c):
-    c["keys"] = registry(status="revoked")
+    c["status"] = "revoked"
 
 
 def inj_alg(c):
@@ -73,7 +76,8 @@ INJECTORS = [inj_malformed, inj_key_material, inj_unknown_key, inj_revoked, inj_
 
 
 def run_case(case):
-    return V.verify(build(case), case["keys"], case["policy"])
+    keys = {} if case["drop_key"] else registry(status=case["status"])
+    return V.verify(build(case), keys, case["policy"])
 
 
 class Baseline(unittest.TestCase):
@@ -105,7 +109,7 @@ class StepOrder(unittest.TestCase):
 
 class OutputShape(unittest.TestCase):
     def test_keys_and_bool(self):
-        for case in (base_case(), dict(base_case(), keys={})):
+        for case in (base_case(), dict(base_case(), drop_key=True)):
             r = run_case(case)
             self.assertEqual(sorted(r), ["reason", "valid"])
             self.assertIn(r["valid"], (True, False))
@@ -126,10 +130,15 @@ class Segments(unittest.TestCase):
 
     def test_alphabet_whitespace_padding_and_length(self):
         h, p, s = jws().split(".")
-        for bad in (s + "=", s[:-1] + "+", s[:-1] + "/", s[:10] + "\n" + s[10:], s[:10] + "\r" + s[10:], s + " ", " " + s, s[:-1] + "é", s + "A"):
+        for bad in (s + "=", s[:-1] + "+", s[:-1] + "/", s[:10] + "\n" + s[10:], s[:10] + "\r" + s[10:], s + " ", " " + s, s[:-1] + "é"):
             self.assertEqual(self.verdict_of(f"{h}.{p}.{bad}"), "malformed", repr(bad))
             self.assertEqual(self.verdict_of(f"{bad}.{p}.{s}"), "malformed", repr(bad))
             self.assertEqual(self.verdict_of(f"{h}.{bad}.{s}"), "malformed", repr(bad))
+
+    def test_a_well_formed_signature_of_the_wrong_length_is_bad_signature(self):
+        h, p, s = jws().split(".")
+        for sig in (b64u(bytes(65)), b64u(bytes(63)), b64u(bytes(3)), ""):
+            self.assertEqual(self.verdict_of(f"{h}.{p}.{sig}"), "bad_signature", sig)
 
     def test_trailing_bits_are_malformed_for_segments(self):
         h, p, s = jws().split(".")
@@ -199,7 +208,10 @@ class HeaderAndPayload(unittest.TestCase):
             self.assertEqual(self.run_with(header, payload), "unknown_key", (header, payload))
         self.assertEqual(self.run_with(None, None, keys={PERFORMER: None}), "unknown_key")
         self.assertEqual(self.run_with(None, None, keys={PERFORMER: {KID: None}}), "unknown_key")
-        self.assertEqual(self.run_with(None, None, keys=None), "unknown_key")
+        # an empty entry exists (it is not absent): it fails at the alg binding, as in Go and TS
+        self.assertEqual(self.run_with(None, None, keys={PERFORMER: {KID: {}}}), "alg_not_allowed")
+        self.assertEqual(self.run_with(None, None, keys={PERFORMER: {}}), "unknown_key")
+        self.assertEqual(verdict(V.verify(jws(), None, None)), "unknown_key")
         self.assertEqual(self.run_with(None, None, keys={}), "unknown_key")
 
     def test_prototype_names_are_ordinary_unknown_keys(self):
