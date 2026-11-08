@@ -1,0 +1,1 @@
+{"name": "member/sse-case-mode", "command": "sse-outputs-hash", "input_raw": "{\"MODE\":\"sse\",\"raw_b64\":\"\"}", "anchor": {"error": "invalid_input"}}

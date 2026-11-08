@@ -1,0 +1,1 @@
+{"name": "member/verify-chain-receipt-number", "command": "verify-chain", "input_raw": "{\"receipts\":[5],\"keys\":{},\"policy\":null}", "anchor": {"error": "invalid_input"}}

@@ -1,0 +1,1 @@
+{"name": "stdin/digest-lone-surrogate-extra-member", "command": "digest", "input_raw": "{\"bytes_b64\":\"\",\"x\":\"\\ud800\"}", "anchor": {"error": "invalid_input"}}

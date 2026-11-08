@@ -159,7 +159,8 @@ func scanText(b []byte, maxDepth int) error {
 }
 
 // canonicalJSON is the single entry for canonicalizing caller-supplied JSON
-// (the jcs, receipt-id, cost-canon and sse-jsonrpc inputs). gowebpki/jcs does
+// (the JCS, ReceiptID and CostCanon inputs; SSEOutputsHash validates each
+// whole message with ValidateJSONText instead). gowebpki/jcs does
 // not reject every surrogate misuse (a high escape followed by any other \u
 // escape becomes U+FFFD), so the text rule runs first. No depth limit: the
 // protocol pins MaxDepth for JWS header and payload text only.
@@ -168,6 +169,39 @@ func canonicalJSON(raw json.RawMessage) ([]byte, error) {
 		return nil, ErrNotStrictJSON
 	}
 	return jcs.Transform(raw)
+}
+
+// exceedsMaxDepth reports whether the text nests deeper than MaxDepth. Unlike
+// scanText it needs no syntactically valid input, so it can run BEFORE the
+// "is this JSON at all" decision: encoding/json stops calling text JSON beyond
+// its own depth cap (10000), which would otherwise turn a huge nesting into
+// "not JSON, skipped" where the policy says rejected.
+func exceedsMaxDepth(b []byte) bool {
+	depth := 0
+	inString := false
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		if inString {
+			if c == '\\' {
+				i++
+			} else if c == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inString = true
+		case '{', '[':
+			depth++
+			if depth > MaxDepth {
+				return true
+			}
+		case '}', ']':
+			depth--
+		}
+	}
+	return false
 }
 
 // decodeObject is the single entry for header and payload bytes: strict JSON

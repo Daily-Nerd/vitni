@@ -5,7 +5,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const DIST = new URL('../dist', import.meta.url).pathname;
-const { hasDuplicateKeys, rejectsForDuplicateKeys } = await import(`${DIST}/commands/strict-json.js`);
+const { hasDuplicateKeys, DUP_REJECT_COMMANDS } = await import(`${DIST}/commands/strict-json.js`);
+const { dispatch } = await import(`${DIST}/cli.js`);
 const { sign } = await import(`${DIST}/commands/sign.js`);
 
 test('hasDuplicateKeys: flat duplicate', () => {
@@ -77,11 +78,11 @@ test('sign: valid receipt still signs', () => {
   assert.ok('signed_receipt' in sign({ receipt: RECEIPT, ...KEY }));
 });
 
-test('rejectsForDuplicateKeys: only the three JCS commands, only with a dup', () => {
-  assert.equal(rejectsForDuplicateKeys('jcs', '{"value":{"a":1,"a":2}}'), true);
-  assert.equal(rejectsForDuplicateKeys('receipt-id', '{"receipt":{"v":1,"v":2}}'), true);
-  assert.equal(rejectsForDuplicateKeys('cost-canon', '{"cost":{"tokens":"1","tokens":"2"}}'), true);
-  assert.equal(rejectsForDuplicateKeys('jcs', '{"value":{"a":1,"b":2}}'), false);   // no dup
-  assert.equal(rejectsForDuplicateKeys('digest', '{"a":1,"a":2}'), false);          // command keeps-last in Go
-  assert.equal(rejectsForDuplicateKeys('verify', '{"a":1,"a":2}'), false);
+test('DUP_REJECT_COMMANDS: exactly the three JCS commands reject duplicates (whole text)', () => {
+  assert.deepEqual([...DUP_REJECT_COMMANDS].sort(), ['cost-canon', 'jcs', 'receipt-id']);
+  // every other command keeps last-wins, matching Go
+  assert.equal(dispatch('digest', '{"bytes_b64":"","bytes_b64":"aGVsbG8="}').includes('error'), false);
+  // envelope-level duplicates (not only inside the value) are rejected for the three
+  assert.equal(dispatch('jcs', '{"value":1,"value":2}'), '{"error":"invalid_input"}');
+  assert.equal(dispatch('receipt-id', '{"receipt":{"v":"a"},"receipt":{"v":"b"}}'), '{"error":"invalid_input"}');
 });

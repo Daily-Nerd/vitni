@@ -28,12 +28,16 @@ const { verifyChain } = await import(`${DIST}/commands/verify-chain.js`);
 const { a2aArtifactHash } = await import(`${DIST}/commands/a2a-artifact-hash.js`);
 const { sign } = await import(`${DIST}/commands/sign.js`);
 const { keygen } = await import(`${DIST}/commands/keygen.js`);
+const { validateInput } = await import(`${DIST}/commands/schema.js`);
 
 function loadVector(filename) {
   return JSON.parse(readFileSync(join(VECTORS_DIR, filename), 'utf8'));
 }
 
 function runCommand(cmd, input) {
+  // The same typing step the CLI applies before a command runs (cli.ts): a
+  // wrong shape is a command error, never a verdict or a canonical form.
+  if (!validateInput(cmd, input)) return { error: 'invalid_input' };
   switch (cmd) {
     case 'jcs': return jcs(input);
     case 'hashstring': return hashstring(input);
@@ -184,8 +188,8 @@ test('cost/number-must-error', () => {
 // --- verify, verify-chain, a2a-artifact-hash: directory-driven ---
 // Every vector file whose `command` matches runs here; there is no hand-kept
 // list, so a new vector cannot be silently untested. Vectors that pin raw stdin
-// bytes (`input_raw*`) have no structured `input` and are exercised through the
-// CLI (compare.mjs), not this in-process runner.
+// bytes (`input_raw*`) have no structured `input`; dispatch.test.mjs runs them
+// (and every other vector) through the CLI pipeline with the exact bytes.
 const DIR_COMMANDS = new Set(['verify', 'verify-chain', 'a2a-artifact-hash']);
 const dirVectors = readdirSync(VECTORS_DIR)
   .filter((f) => f.endsWith('.json') && !f.startsWith('_'))

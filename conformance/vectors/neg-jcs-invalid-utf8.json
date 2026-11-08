@@ -1,0 +1,1 @@
+{"name": "stdin/jcs-invalid-utf8", "command": "jcs", "input_raw_b64": "eyJ2YWx1ZSI6eyJhIjoi/yJ9fQ==", "anchor": {"error": "invalid_input"}}

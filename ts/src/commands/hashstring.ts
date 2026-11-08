@@ -32,8 +32,10 @@ export function encodeHashstring(digestBytes: Buffer): string {
 }
 
 export function hashstring(input: HashstringInput): HashstringOutput | { error: string } {
+  // An algo other than sha2-256 is an input problem, like any other bad member:
+  // the contract has no `unsupported_algo` code.
   if (input.algo !== 'sha2-256') {
-    return { error: 'unsupported_algo' };
+    return { error: 'invalid_input' };
   }
   const digestBytes = decodeHex(input.digest_hex);
   if (digestBytes === null) return { error: 'invalid_input' };

@@ -5,12 +5,14 @@ package vitni
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
+
+	"github.com/Daily-Nerd/vitni/go/internal/hashstr"
+	"github.com/gowebpki/jcs"
 )
 
 // ErrCostMustBeStringInt is returned when a cost magnitude is a JSON number.
@@ -35,28 +37,13 @@ func HashString(digestHex string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return hashStringFromBytes(digest), nil
-}
-
-// hashStringFromBytes is the internal version that works directly with bytes.
-func hashStringFromBytes(digest []byte) string {
-	// multihash: varint(0x12) || varint(0x20) || digest
-	mh := make([]byte, 2+len(digest))
-	mh[0] = 0x12
-	mh[1] = 0x20
-	copy(mh[2:], digest)
-	return "u" + base64.RawURLEncoding.EncodeToString(mh)
+	return hashstr.Encode(digest), nil
 }
 
 // Digest computes sha2-256 over raw bytes and returns the pinned hash-string.
+// The error is always nil; it is kept because Digest is published with it.
 func Digest(raw []byte) (string, error) {
-	return digestString(raw), nil
-}
-
-// digestString is Digest without the error that can never occur.
-func digestString(raw []byte) string {
-	h := sha256.Sum256(raw)
-	return hashStringFromBytes(h[:])
+	return hashstr.Sum(raw), nil
 }
 
 // DecodeStdBase64 decodes a standard-alphabet base64 string, accepting exactly
@@ -96,9 +83,7 @@ func ReceiptID(receipt json.RawMessage) (string, string, error) {
 	}
 	canonHex := hex.EncodeToString(canon)
 
-	h := sha256.Sum256(canon)
-	receiptID := hashStringFromBytes(h[:])
-	return canonHex, receiptID, nil
+	return canonHex, hashstr.Sum(canon), nil
 }
 
 // SSEDecode parses a raw SSE byte stream per WHATWG §9.2 and returns the
@@ -221,16 +206,33 @@ func SSEOutputsHash(raw []byte, mode string) (string, string, error) {
 		// Extract the inner `result` value, JCS it, join with "\n".
 		var parts [][]byte
 		for _, msg := range messages {
+			b := []byte(msg)
+			if exceedsMaxDepth(b) {
+				return "", "", ErrNotStrictJSON
+			}
+			if !json.Valid(b) {
+				// Text that is not JSON at all is skipped (CONTRACT section 5).
+				continue
+			}
+			// The message is JSON hidden inside raw_b64, so the stdin gate never
+			// saw it: it goes through the same strict text function, judged over
+			// the WHOLE message (not only the result member). Duplicate keys stay
+			// last-wins.
+			if err := ValidateJSONText(b, TextPolicy{RejectNonFinite: true}); err != nil {
+				return "", "", err
+			}
 			var rpc map[string]json.RawMessage
-			if err := json.Unmarshal([]byte(msg), &rpc); err != nil {
-				// Skip malformed messages
+			if err := json.Unmarshal(b, &rpc); err != nil {
+				// Valid JSON that is not an object has no result: skipped.
 				continue
 			}
 			result, ok := rpc["result"]
 			if !ok {
 				continue
 			}
-			canon, err := canonicalJSON(result)
+			// The whole message already passed the strict text rule above, so the
+			// result needs no second scan before it is canonicalized.
+			canon, err := jcs.Transform(result)
 			if err != nil {
 				return "", "", err
 			}
@@ -242,11 +244,7 @@ func SSEOutputsHash(raw []byte, mode string) (string, string, error) {
 		return "", "", errors.New("unsupported mode: " + mode)
 	}
 
-	hashStr, err := Digest(committed)
-	if err != nil {
-		return "", "", err
-	}
-	return hex.EncodeToString(committed), hashStr, nil
+	return hex.EncodeToString(committed), hashstr.Sum(committed), nil
 }
 
 // CostCanon validates that tokens, usd_micros, and wall_ms are JSON strings

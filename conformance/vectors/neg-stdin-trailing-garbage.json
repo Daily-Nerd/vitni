@@ -1,0 +1,1 @@
+{"name": "stdin/trailing-garbage", "command": "digest", "input_raw": "{\"bytes_b64\":\"\"} x", "anchor": {"error": "invalid_input"}}

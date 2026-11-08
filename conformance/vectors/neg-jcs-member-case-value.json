@@ -1,0 +1,1 @@
+{"name": "member/jcs-case-value", "command": "jcs", "input_raw": "{\"VALUE\":{\"a\":1}}", "anchor": {"error": "invalid_input"}}
