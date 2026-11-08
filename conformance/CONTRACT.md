@@ -130,12 +130,17 @@ Output:
 ```
 
 **Verification algorithm (MUST follow exactly; first failing check wins, in THIS order):**
-1. `malformed` — JWS not three base64url segments / header or payload not valid JSON / payload not valid UTF-8.
+1. `malformed`: any of the following, checked in this order.
+   - The JWS is not exactly three `.`-separated segments.
+   - A segment is not strict unpadded base64url: alphabet `A-Za-z0-9-_` only (so no `=`, `+`, `/`, space, CR or LF), length not 1 mod 4, and every trailing bit zero (one canonical encoding per byte string).
+   - The header bytes are not strict JSON text that is exactly one object. Strict text means valid UTF-8 (no overlong forms, no encoded surrogates), no leading BOM (`EF BB BF`), no lone-surrogate `\uXXXX` escape in any key or string (a valid surrogate pair escape is fine), one value with nothing after it, and JSON nesting depth at most 128 (the top-level object is depth 1). Duplicate header keys are last-wins and a non-finite number in an ignored header member is accepted.
+   - The header has a `b64` member that is not boolean `true` (`false` and every non-boolean value, `null` included, are malformed; `true` is the same as absent).
+   - The payload bytes are not strict JSON text that is exactly one object, by the same rules. A duplicate payload key or a non-finite payload number is not decided here: it is last-wins at parse (or deferred) and fails step 7 as `non_canonical_payload`.
 2. `header_key_material` — header contains ANY of `jwk`, `jku`, `x5u`, `x5c`, `x5t`, `x5t#S256` (key material MUST come from the registry, never the token — §12).
 3. Resolve key: read `performer_id` from the **payload**, `kid` from the **header**. If `performer_id`/`kid` absent or not in `keys` → `unknown_key`.
 4. `revoked_key` — resolved key has `status:"revoked"`.
-5. `alg_not_allowed` — header `alg` is `none`/absent, OR header `alg` != the resolved key's `alg` (no alg-substitution; `none` always rejected).
-6. `bad_signature` — signature does not verify under the resolved key over `b64url(header).b64url(payload)`. (ES256 signature is raw R‖S, 64 bytes, per JWS; Ed25519 is EdDSA.)
+5. `alg_not_allowed`: header `alg` is `none`/absent, OR header `alg` != the resolved key's `alg` (no alg-substitution; `none` always rejected), OR the resolved key's `alg` is not a row of the algorithm table, OR its `kty`/`crv` are not the ones that row requires. The table is exactly `EdDSA` requires `kty=OKP`, `crv=Ed25519`, and `ES256` requires `kty=EC`, `crv=P-256`; a missing or `null` `kty`/`crv` fails. This runs after step 4 (a revoked key stays `revoked_key`) and after the header/registry `alg` equality check.
+6. `bad_signature`: the key material is unusable, or the signature does not verify under the resolved key over `b64url(header).b64url(payload)`. Registry `x` (and `y` for EC) go through the same strict base64url decoder as the JWS segments and must decode to exactly 32 bytes; padding, the standard alphabet, whitespace or a newline, non-zero trailing bits, a wrong length, or a point not on the curve is `bad_signature` (a key is never repaired). The same decoder failing on a JWS segment is `malformed` (step 1): the call site, not the decoder, picks the code. ES256 signature is raw R||S, 64 bytes, per JWS; a high-S signature is accepted. Ed25519 is cofactorless (`[S]B == R + [k]A`), compares R by its 32-byte encoding, rejects `S >= L`, and adds no small-order or identity-key rejection: A is accepted if it decodes with `y` reduced mod p (and `x=0` with the sign bit set accepted).
 7. `non_canonical_payload` — `base64url-decode(payload)` != `JCS(parse(payload))` byte-for-byte (the §3 JWS≡JCS invariant — reject a validly-signed but non-canonical payload).
 8. `context_mismatch` — `policy.expected_binding`/`expected_method` set and != the payload's `binding`/`method`.
 9. Else `{ "valid": true, "reason": "ok" }`.
