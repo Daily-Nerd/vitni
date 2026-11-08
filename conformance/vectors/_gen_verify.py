@@ -134,12 +134,17 @@ assert "kty" not in reg_with(ed={"kty": DELETE})["srv-ed"]["ed-1"]
 NO_POLICY = {"expected_binding": None, "expected_method": None}
 
 
+def emit(fname, vec):
+    """The one place this generator writes a vector file."""
+    (OUT / fname).write_text(json.dumps(vec) + "\n")
+
+
 def write(fname, name, signed, keys, policy, valid, reason):
-    (OUT / fname).write_text(json.dumps({
+    emit(fname, {
         "name": name, "command": "verify",
         "input": {"signed_receipt": signed, "keys": keys, "policy": policy},
         "anchor": {"valid": valid, "reason": reason},
-    }) + "\n")
+    })
 
 
 ed_payload = jcs(receipt("srv-ed")).encode()
@@ -220,12 +225,12 @@ sign_priv = ed25519.Ed25519PrivateKey.from_private_bytes(SIGN_SEED)
 sign_receipt = receipt("srv-ed")
 sign_payload = jcs(sign_receipt).encode()
 signed_sign_vector = jws({"alg": "EdDSA", "kid": "ed-1"}, sign_payload, "EdDSA", priv=sign_priv)
-(OUT / "sign-ed25519.json").write_text(json.dumps({
+emit("sign-ed25519.json", {
     "name": "sign/ed25519", "command": "sign",
     "input": {"receipt": sign_receipt, "kid": "ed-1",
               "private_key_b64": base64.b64encode(SIGN_SEED).decode()},
     "anchor": {"signed_receipt": signed_sign_vector},
-}) + "\n")
+})
 
 # 13. local binding, valid
 r_local = receipt("srv-ed", binding="local", method="local:daimon.serialize")
@@ -643,8 +648,8 @@ edge_vec("verify-ed-order8-b-r-eq-a.json", "verify/ed-order8-b-r-eq-a", ORDER8_B
 # signature, so every verdict below is decided by the name rule alone.
 # ---------------------------------------------------------------------------
 def write_input(fname, name, command, input_obj, anchor):
-    (OUT / fname).write_text(json.dumps({
-        "name": name, "command": command, "input": input_obj, "anchor": anchor}) + "\n")
+    emit(fname, {
+        "name": name, "command": command, "input": input_obj, "anchor": anchor})
 
 
 def key_case(entry, old, new):
