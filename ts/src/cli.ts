@@ -23,6 +23,7 @@ import { keygen } from './commands/keygen.js';
 import { jcsString } from './commands/jcs.js';
 import { DUP_REJECT_COMMANDS, parseStrict } from './commands/strict-json.js';
 import { validateInput } from './commands/schema.js';
+import { ALGS } from './commands/verify.js';
 
 async function readStdin(): Promise<Buffer> {
   // Robust across platforms: async-iterate the stream. Avoids the
@@ -58,6 +59,26 @@ const COMMANDS: CommandTable = {
 };
 
 /**
+ * `profiles` is infrastructure, not a vector command: it prints the conformance
+ * profile atoms this verifier implements and ignores stdin, so it sits outside
+ * COMMANDS and its stdin gate.
+ */
+const PROFILES_COMMAND = 'profiles';
+
+/**
+ * The one declaration line: the gating atoms of conformance/profiles.json,
+ * sorted by code point, as a JCS array. The alg atoms come from the same ALGS
+ * table `verify` dispatches on, so the algs we declare and the algs we verify
+ * cannot drift; the two canon atoms are the strict-decoding and JCS behavior
+ * this CLI always has. Gating atoms only: a non-gating atom can never change a
+ * vector's scope and is not declared.
+ */
+function profilesDeclaration(): string {
+  const atoms = ['canon:b64-strict', 'canon:jcs', ...Object.keys(ALGS).map((alg) => `alg:${alg}`)];
+  return jcsString(atoms.sort());
+}
+
+/**
  * Run one command over its raw stdin bytes and return the JCS-canonical output
  * string (no trailing newline). Pure and side-effect-free so it is unit-testable
  * independently of stdin/argv wiring. Counterpart of Go's `respond`. Order:
@@ -82,6 +103,7 @@ export function dispatch(
   stdin: Uint8Array | string,
   commands: CommandTable = COMMANDS,
 ): string {
+  if (command === PROFILES_COMMAND) return profilesDeclaration();
   if (!Object.prototype.hasOwnProperty.call(commands, command)) {
     return jcsString({ error: 'unsupported_command' });
   }
@@ -118,6 +140,10 @@ export async function main(
   const command = argv[2];
   if (!command) {
     write(JSON.stringify({ error: 'missing_command' }) + '\n');
+    return;
+  }
+  if (command === PROFILES_COMMAND) {
+    write(profilesDeclaration() + '\n');
     return;
   }
   let raw: Uint8Array | string;
