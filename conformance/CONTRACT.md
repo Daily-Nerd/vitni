@@ -26,6 +26,45 @@ Both verifiers MUST:
 
 ---
 
+## Input strictness (normative)
+
+Every external byte string enters through ONE strict decoder per format, and the CLI judges stdin once, before any command logic. The order is fixed:
+
+1. **Missing command**: no command argument is `{"error":"missing_command"}`.
+2. **The command resolves first.** An unknown command is `{"error":"unsupported_command"}` whatever the stdin is; stdin is never parsed for it.
+3. **The stdin gate**, the same for EVERY command (`jcs hashstring digest receipt-id sse-outputs-hash cost-canon verify verify-chain a2a-artifact-hash sign keygen`), `verify` and `verify-chain` included. The stdin bytes must be strict UTF-8 text (no overlong forms, no encoded surrogates), without a leading BOM (`EF BB BF`), free of lone-surrogate `\uXXXX` escapes in any key or string (a valid surrogate pair escape is fine), exactly one JSON value followed only by optional ASCII whitespace (so no trailing garbage or NUL), nested at most 128 deep (the top-level object is depth 1), without a number that overflows a float64 to infinity, and the value must be a JSON object. Duplicate object keys are rejected over the whole text for `jcs`, `receipt-id` and `cost-canon`, and are last-wins for every other command. Any violation is `{"error":"invalid_input"}`. Empty stdin is invalid input too: it is not a JSON value.
+4. **Member names and types.** Member names are exact and case-sensitive; a name that differs only in case is an unknown member and is ignored. A required member that is absent or `null`, or any member of the wrong JSON type, is `{"error":"invalid_input"}`. Unknown members are ignored, so the input can grow. The one required member whose domain includes `null` is `jcs` `value`: the key must be present, `null` is a value. For `verify` and `verify-chain` the WHOLE `keys` tree is typed (every performer an object or `null`, every entry an object or `null`, `kty crv x y alg status` each a string, `null` or absent) and `policy` (an object or `null`, `expected_binding` and `expected_method` each a string, `null` or absent), not only the entry a receipt resolves to. A `null` registry entry is absent: `unknown_key`. The members each command reads, their types and which are required are in the table below; what a command does with a member stays in the command.
+5. The command runs on input that has passed 3 and 4.
+
+| Command | Members (R = required, absent or `null` is `invalid_input`) |
+|---|---|
+| `jcs` | `value` any JSON value (R, key presence, `null` is a value) |
+| `hashstring` | `algo` string (R, exactly `sha2-256`), `digest_hex` string (R) |
+| `digest` | `bytes_b64` string (R) |
+| `receipt-id` | `receipt` object (R) |
+| `sse-outputs-hash` | `raw_b64` string (R), `mode` string (R, `sse` or `sse-jsonrpc`) |
+| `cost-canon` | `cost` object (R) |
+| `verify` | `signed_receipt` string or `null` (absent is `malformed`), `keys` object or `null`, `policy` object or `null` |
+| `verify-chain` | `receipts` array of strings or `null` (absent is `empty_chain`), `keys`, `policy` as `verify` |
+| `a2a-artifact-hash` | `artifact` object (R) with `parts` array of objects (R); each part `kind` string or `null`, `file` object or `null` with `bytes`, `uri`, `mimeType`, `name` each string or `null` |
+| `sign` | `receipt` object (R), `kid` string or `null` (absent is `kid_required`), `private_key_b64` string or `null` (absent is `invalid_private_key`) |
+| `keygen` | `seed_b64` judged by the command (a non-string is `invalid_seed`, any other member is `invalid_input`) |
+
+A problem in the stdin text or in its shape is a **command error** (`invalid_input`), never a verdict. A problem inside the signed envelope (the JWS segments, header, payload) is a `verify` verdict (`malformed`, `alg_not_allowed`, ...). `internal_error` and `jcs_output_error` MUST be unreachable from any stdin bytes.
+
+Text policy by site (the contract all implementations follow):
+
+| Site | Encoding | Lone surrogate escape | Duplicate keys | Non-finite number | Depth over 128 | Top level | Error |
+|---|---|---|---|---|---|---|---|
+| stdin, every command | UTF-8, no BOM, strict | reject | reject for `jcs`, `receipt-id`, `cost-canon` over the WHOLE text; last-wins otherwise | reject anywhere in the text | reject | object | `invalid_input` |
+| JWS header (verify step 1) | same | reject | last-wins | accept (never serialized) | reject | object | `malformed` |
+| JWS payload (verify step 1) | same | reject | last-wins at parse; step 7 re-serialization differs, so `non_canonical_payload` | defer: step 7 fails, so `non_canonical_payload` | reject | object | `malformed` (step 1) |
+| embedded JSON (`sse-jsonrpc` inner message) | same | reject | last-wins | reject | reject | any | `invalid_input` |
+
+The embedded row covers every re-parse of JSON text hidden inside another input: a guard at one boundary does not cover a second parse site. The depth limit is the protocol's, never the host parser's: nesting over 128 is rejected even where the host parser would stop calling the text JSON at all. An inner message that is not JSON at all is skipped (see `sse-outputs-hash`). `a2a-artifact-hash` parts are members of the stdin object, so the stdin gate already judges them.
+
+---
+
 ## Commands
 
 ### 1. `jcs` — RFC 8785 canonicalization
@@ -93,7 +132,8 @@ Decoding rules (MUST match design §4.3 exactly):
   - Ignore comment lines (starting `:`) and `event:` / `id:` / `retry:` fields entirely.
   - An event is dispatched on a blank line; an event with empty data is NOT dispatched.
 - `committed = UTF8( join(message_data_strings, "\n") )` over dispatched messages, in order.
-- For `mode = "sse-jsonrpc"`: each dispatched message `data` is a JSON-RPC message; the committed unit is the **inner `result` value's** JCS octets, concatenated across messages joined by `\n`. (If a message has no `result`, skip it.)
+- For `mode = "sse-jsonrpc"`: each dispatched message `data` is a JSON-RPC message; the committed unit is the **inner `result` value's** JCS octets, concatenated across messages joined by `\n`. (If a message has no `result`, skip it. If a message is not JSON at all, skip it.) A message that is JSON goes through the strict text policy of the embedded-JSON row above over the WHOLE message, not only `result`: a lone-surrogate escape, a non-finite number or nesting over 128 anywhere in it rejects the command with `invalid_input`. Nesting over 128 is judged before the "is it JSON" question.
+- `mode` is exactly `"sse"` or `"sse-jsonrpc"`; any other value, a missing `mode` or `raw_b64`, or a non-string is `invalid_input` (there is no `unsupported_mode` code).
 - `outputs_hash` = pinned hash-string of `committed`.
 
 ### 6. `cost-canon` — JCS of a cost block with string-encoded integers
@@ -124,6 +164,7 @@ Input:
   "policy": { "expected_binding": "mcp|a2a|null", "expected_method": "<string|null>" }
 }
 ```
+`signed_receipt` is a string; absent or `null` is the verdict `malformed` (the one member whose absence is a verdict), any other type is `invalid_input`. `keys` and `policy` are typed as described under Input strictness.
 Output:
 ```json
 { "valid": <bool>, "reason": "<ReasonCode>" }
@@ -210,6 +251,13 @@ Output:
   "anchor": { "canonical_hex": "7b2261223a322c2262223a317d", "byte_len": 13 }
 }
 ```
+- A vector pins its stdin in EXACTLY ONE of three forms; a vector with none or several is a bad vector:
+  - `input`: structured JSON, serialized by the harness.
+  - `input_raw`: the exact stdin text, verbatim (duplicate keys, escape text such as `\ud800` as six ASCII characters).
+  - `input_raw_b64`: standard base64 of the exact stdin BYTES, for what a JSON string cannot carry (invalid UTF-8, a BOM followed by text, NUL). The harness, the Go CLI test and the TS test decode it to bytes and pipe them unmodified.
+  A present-but-empty `input_raw` or `input_raw_b64` is EMPTY stdin, never "absent".
+- The harness captures stdout as bytes and compares bytes. Output that is not strict UTF-8 fails the vector (`NON-UTF8-OUTPUT`) instead of being repaired to U+FFFD.
+- An `error` anchor means a command error for EVERY command, `verify` and `verify-chain` included; a verdict anchor means a `{valid:false}` result.
 - `anchor` is OPTIONAL. When present it is an externally-known-correct expected output (e.g. an RFC 8785 test value or a hand-computed digest). The harness asserts BOTH verifiers match the anchor AND each other.
 - When `anchor` is absent, the harness asserts only that the two verifiers agree with each other (catches ambiguity; does not catch both-wrong-the-same-way — that is what anchors are for).
 
