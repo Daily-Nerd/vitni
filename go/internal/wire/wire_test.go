@@ -1,8 +1,10 @@
 package wire_test
 
 import (
+	"errors"
 	"testing"
 
+	"github.com/Daily-Nerd/vitni/go/internal/fields"
 	"github.com/Daily-Nerd/vitni/go/internal/wire"
 )
 
@@ -78,5 +80,21 @@ func TestDecodeVerifyChainInput(t *testing.T) {
 	}
 	if in, err := wire.DecodeVerifyChainInput([]byte(`{"receipts":null}`)); err != nil || len(in.Receipts) != 0 {
 		t.Errorf("null receipts is an empty chain: %+v %v", in, err)
+	}
+}
+
+// A stdin that is not an object is ErrShape at the library boundary, whatever
+// the CLI gate in front of it does.
+func TestDecode_NonObjectIsShapeError(t *testing.T) {
+	decoders := map[string]func([]byte) error{
+		"verify":       func(b []byte) error { _, err := wire.DecodeVerifyInput(b); return err },
+		"verify-chain": func(b []byte) error { _, err := wire.DecodeVerifyChainInput(b); return err },
+	}
+	for name, decode := range decoders {
+		for _, in := range []string{`[]`, `5`, `null`} {
+			if err := decode([]byte(in)); !errors.Is(err, fields.ErrShape) {
+				t.Errorf("%s %s: err = %v, want fields.ErrShape", name, in, err)
+			}
+		}
 	}
 }

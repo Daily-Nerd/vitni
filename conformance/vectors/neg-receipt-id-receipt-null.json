@@ -1,0 +1,1 @@
+{"name": "member/receipt-id-receipt-null", "command": "receipt-id", "input_raw": "{\"receipt\":null}", "anchor": {"error": "invalid_input"}}

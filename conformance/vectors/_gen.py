@@ -545,6 +545,23 @@ _neg("neg-sign-missing-receipt", "member/sign-missing-receipt", "sign",
      text='{"kid":"ed-1","private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}')
 # null is "absent" for a required member
 _neg("neg-digest-bytes-null", "member/digest-bytes-null", "digest", text='{"bytes_b64":null}')
+_neg("neg-hashstring-algo-null", "member/hashstring-algo-null", "hashstring",
+     text='{"algo":null,"digest_hex":"' + _SHA_HELLO + '"}')
+_neg("neg-hashstring-digest-hex-null", "member/hashstring-digest-hex-null", "hashstring",
+     text='{"algo":"sha2-256","digest_hex":null}')
+_neg("neg-receipt-id-receipt-null", "member/receipt-id-receipt-null", "receipt-id",
+     text='{"receipt":null}')
+_neg("neg-cost-canon-cost-null", "member/cost-canon-cost-null", "cost-canon", text='{"cost":null}')
+_neg("neg-sse-raw-b64-null", "member/sse-raw-b64-null", "sse-outputs-hash",
+     text='{"mode":"sse","raw_b64":null}')
+_neg("neg-sse-mode-null", "member/sse-mode-null", "sse-outputs-hash",
+     text='{"mode":null,"raw_b64":""}')
+_neg("neg-a2a-artifact-null", "member/a2a-artifact-null", "a2a-artifact-hash",
+     text='{"artifact":null}')
+_neg("neg-a2a-parts-null", "member/a2a-parts-null", "a2a-artifact-hash",
+     text='{"artifact":{"parts":null}}')
+_neg("neg-sign-receipt-null", "member/sign-receipt-null", "sign",
+     text='{"receipt":null,"kid":"ed-1","private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}')
 # a JSON null IS a value for jcs (canonical form "null"): guard against reading
 # "null is absent" into the one member whose domain includes null
 write("jcs-value-null.json", {

@@ -717,6 +717,7 @@ neg_verify("neg-verify-key-entry-string.json", "verify-envelope/key-entry-string
 neg_verify("neg-verify-key-entry-array.json", "verify-envelope/key-entry-array",
            envelope(keys={"srv-ed": {"ed-1": []}}))
 neg_verify("neg-verify-keys-array.json", "verify-envelope/keys-array", envelope(keys=[]))
+neg_verify("neg-verify-keys-number.json", "verify-envelope/keys-number", envelope(keys=5))
 neg_verify("neg-verify-keys-performer-array.json", "verify-envelope/keys-performer-array",
            envelope(keys={"srv-ed": []}))
 neg_verify("neg-verify-policy-binding-number.json", "verify-envelope/policy-binding-number",
