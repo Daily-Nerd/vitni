@@ -17,7 +17,8 @@ byte-identical verdicts and identical recomputed hashes on every vector.*
 |------|-----------|
 | [`CONTRACT.md`](CONTRACT.md) | The verifier CLI contract every implementation under test speaks — 9 commands, stdin JSON → one line of JCS-canonical JSON |
 | [`vectors/`](vectors/) | The vectors, one JSON file each; `_gen*.py` are the deterministic generators |
-| [`compare.mjs`](compare.mjs) | The harness — runs every vector through two implementations, asserts byte equality + anchor match |
+| [`compare.mjs`](compare.mjs), [`harness.mjs`](harness.mjs) | The harness: runs every vector through every registered implementation, asserts byte equality, anchor match, profile scope and coverage floors |
+| [`profiles.json`](profiles.json), [`floors.json`](floors.json) | The catalog of profile atoms and the per-implementation coverage floors |
 
 ## What the vectors cover
 
@@ -50,10 +51,16 @@ cd ts && npm install && npm run build && cd ..
 node conformance/compare.mjs
 ```
 
-Per vector the harness prints `PASS`, `DIVERGE` (implementations disagree —
-both outputs shown), `ANCHOR` (they agree with each other but not with the
-known-correct value), or `NOANCHOR` (an error output with no anchor asserting
-the expected code). Exit is non-zero unless every vector passes.
+The harness prints the registered implementations, a coverage matrix, one line
+per failure (`DIVERGE`, `ANCHOR-FAIL`, `NOANCHOR`, `SILENT-ANSWER`,
+`FLOOR-BREACH` and so on, each naming the vector or atom), the vector count
+(`vectors: N`) and `N/N passed.` Exit is non-zero unless there is no failure.
+The run covers Go and TypeScript, plus Python when `PY_VERIFY` is set. To make an
+implementation mandatory, list it in `REQUIRE_IMPLS` (comma separated, for example
+`REQUIRE_IMPLS=go,ts,py`): a listed implementation that did not run is an
+`IMPL-MISSING` failure. `node --test conformance/*.test.mjs` runs the harness
+self-tests against fake implementations, and `uv run --no-project python conformance/vectors/test_profiles.py`
+tests the tagger.
 
 ## Testing your own implementation
 
@@ -94,13 +101,19 @@ from a shared bug.
 {
   "name": "jcs/sorted-keys",
   "command": "jcs",
+  "profiles": ["canon:jcs"],
   "input": { "value": { "b": 1, "a": 2 } },
   "anchor": { "canonical_hex": "7b2261223a322c2262223a317d", "byte_len": 13 }
 }
 ```
 
-A vector may instead carry `input_raw` — the exact stdin bytes, verbatim —
-for cases a parse→serialize round-trip would destroy (e.g. duplicate JSON
-keys). Vectors are regenerated with `uv run` only; the generators are
+`profiles` lists the catalog atoms ([`profiles.json`](profiles.json)) the vector
+needs; the generators compute it, never a person. An implementation that does
+not declare an atom (see the `profiles` command in [`CONTRACT.md`](CONTRACT.md))
+declines the vector with `unsupported_profile` instead of answering it.
+
+A vector may instead carry `input_raw` (the exact stdin text, verbatim) or
+`input_raw_b64` (the exact stdin bytes, base64) for cases a parse and serialize
+round-trip would destroy (e.g. duplicate JSON keys, invalid UTF-8). Vectors are rebuilt with `uv run` only; the generators are
 deterministic (RFC 6979 for ES256), so a dirty `git status` after
 regeneration is a real change, never noise.
