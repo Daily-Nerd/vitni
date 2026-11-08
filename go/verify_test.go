@@ -10,7 +10,7 @@ import (
 // TestVectors_Verify drives the verify command against every verify-*.json vector.
 func TestVectors_Verify(t *testing.T) {
 	count := 0
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "verify" {
 			continue
 		}

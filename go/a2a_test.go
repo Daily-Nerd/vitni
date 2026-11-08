@@ -11,7 +11,7 @@ import (
 // TestVectors_A2AArtifactHash drives the a2a-artifact-hash command against every a2a-*.json vector.
 func TestVectors_A2AArtifactHash(t *testing.T) {
 	count := 0
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "a2a-artifact-hash" {
 			continue
 		}

@@ -33,6 +33,21 @@ func isErrorVectorRaw(anchor json.RawMessage) bool {
 	return ok
 }
 
+// loadLibraryVectors returns the vectors that drive the LIBRARY: those with a
+// structured `input`. Vectors that pin raw stdin (`input_raw`, `input_raw_b64`)
+// exercise the CLI stdin gate, not the library; they run in the cmd package
+// (TestRespond_AllVectors) and in conformance/compare.mjs.
+func loadLibraryVectors(t *testing.T) []vectorFile {
+	t.Helper()
+	var out []vectorFile
+	for _, v := range loadVectors(t) {
+		if v.InputRaw == nil && v.InputRawB64 == nil {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // loadVectors loads all *.json files from the vectors directory relative to the module root.
 func loadVectors(t *testing.T) []vectorFile {
 	t.Helper()
@@ -263,15 +278,12 @@ func TestCostCanon_NumberError(t *testing.T) {
 // -------------------------------------------------------------------
 
 func TestVectors_JCS(t *testing.T) {
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "jcs" {
 			continue
 		}
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
-			if v.InputRaw != nil || v.InputRawB64 != nil {
-				t.Skip("input_raw / input_raw_b64 vector; CLI-layer, covered by compare.mjs")
-			}
 			var inp struct {
 				Value json.RawMessage `json:"value"`
 			}
@@ -305,7 +317,7 @@ func TestVectors_JCS(t *testing.T) {
 }
 
 func TestVectors_Digest(t *testing.T) {
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "digest" {
 			continue
 		}
@@ -347,15 +359,12 @@ func TestVectors_Digest(t *testing.T) {
 }
 
 func TestVectors_ReceiptID(t *testing.T) {
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "receipt-id" {
 			continue
 		}
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
-			if v.InputRaw != nil || v.InputRawB64 != nil {
-				t.Skip("input_raw / input_raw_b64 vector; CLI-layer, covered by compare.mjs")
-			}
 			var inp struct {
 				Receipt json.RawMessage `json:"receipt"`
 			}
@@ -384,7 +393,7 @@ func TestVectors_ReceiptID(t *testing.T) {
 }
 
 func TestVectors_SSEOutputsHash(t *testing.T) {
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "sse-outputs-hash" {
 			continue
 		}
@@ -447,7 +456,7 @@ func TestVectors_SSEOutputsHash(t *testing.T) {
 // -------------------------------------------------------------------
 
 func TestVectors_Sign(t *testing.T) {
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "sign" {
 			continue
 		}
@@ -542,15 +551,12 @@ func TestSign_Errors(t *testing.T) {
 }
 
 func TestVectors_CostCanon(t *testing.T) {
-	for _, v := range loadVectors(t) {
+	for _, v := range loadLibraryVectors(t) {
 		if v.Command != "cost-canon" {
 			continue
 		}
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
-			if v.InputRaw != nil || v.InputRawB64 != nil {
-				t.Skip("input_raw / input_raw_b64 vector; CLI-layer, covered by compare.mjs")
-			}
 			var inp struct {
 				Cost json.RawMessage `json:"cost"`
 			}

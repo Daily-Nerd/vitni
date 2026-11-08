@@ -28,53 +28,68 @@ var (
 	errInvalidSeed       = errors.New("invalid_seed")
 )
 
+// commands is the single table of CLI commands. Resolving the command here,
+// before any stdin byte is parsed, is what makes an unknown command answer
+// unsupported_command whatever the stdin looks like.
+var commands = map[string]func([]byte) (json.RawMessage, error){
+	"jcs":               runJCS,
+	"hashstring":        runHashString,
+	"digest":            runDigest,
+	"receipt-id":        runReceiptID,
+	"sse-outputs-hash":  runSSEOutputsHash,
+	"cost-canon":        runCostCanon,
+	"verify":            runVerify,
+	"verify-chain":      runVerifyChain,
+	"a2a-artifact-hash": runA2AArtifactHash,
+	"sign":              runSign,
+	"keygen":            runKeygen,
+}
+
+// dupReject lists the commands whose stdin text is rejected for a duplicate
+// object key anywhere in it (the commands whose value flows into JCS). Every
+// other command keeps last-wins.
+var dupReject = map[string]bool{"jcs": true, "receipt-id": true, "cost-canon": true}
+
 func main() {
 	if len(os.Args) < 2 {
-		writeError("missing_command")
+		os.Stdout.Write(errorLine("missing_command"))
 		return
 	}
-	command := os.Args[1]
-
 	stdin, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		writeError("stdin_read_error")
+		os.Stdout.Write(errorLine("stdin_read_error"))
 		return
 	}
+	os.Stdout.Write(respond(os.Args[1], stdin))
+}
 
-	var result json.RawMessage
-	var cmdErr error
-
-	switch command {
-	case "jcs":
-		result, cmdErr = runJCS(stdin)
-	case "hashstring":
-		result, cmdErr = runHashString(stdin)
-	case "digest":
-		result, cmdErr = runDigest(stdin)
-	case "receipt-id":
-		result, cmdErr = runReceiptID(stdin)
-	case "sse-outputs-hash":
-		result, cmdErr = runSSEOutputsHash(stdin)
-	case "cost-canon":
-		result, cmdErr = runCostCanon(stdin)
-	case "verify":
-		result, cmdErr = runVerify(stdin)
-	case "verify-chain":
-		result, cmdErr = runVerifyChain(stdin)
-	case "a2a-artifact-hash":
-		result, cmdErr = runA2AArtifactHash(stdin)
-	case "sign":
-		result, cmdErr = runSign(stdin)
-	case "keygen":
-		result, cmdErr = runKeygen(stdin)
-	default:
-		writeError("unsupported_command")
-		return
+// respond is the whole CLI pipeline after argv and stdin have been read: it
+// returns the one output line (with its trailing newline). Order matters:
+//
+//  1. the command resolves (unknown: unsupported_command, stdin never parsed);
+//  2. the stdin gate, ONCE for every command: strict UTF-8, no BOM, no
+//     lone-surrogate escape, exactly one JSON value, depth <= MaxDepth, no
+//     non-finite number, duplicate keys per dupReject, top level an object;
+//  3. the command runs on text that has already passed the gate.
+//
+// Any gate violation is invalid_input, a command error and never a verdict.
+func respond(command string, stdin []byte) []byte {
+	run, ok := commands[command]
+	if !ok {
+		return errorLine("unsupported_command")
 	}
-
-	if cmdErr != nil {
-		writeError(errorCode(cmdErr))
-		return
+	if err := vitni.ValidateJSONText(stdin, vitni.TextPolicy{
+		RejectDuplicates: dupReject[command],
+		RejectNonFinite:  true,
+	}); err != nil {
+		return errorLine("invalid_input")
+	}
+	if !isJSONObject(stdin) {
+		return errorLine("invalid_input")
+	}
+	result, err := run(stdin)
+	if err != nil {
+		return errorLine(errorCode(err))
 	}
 
 	// The result must itself be JCS-canonical. Since we build it via
@@ -83,19 +98,30 @@ func main() {
 	// we must pass it through jcs.Transform before printing.
 	canonical, err := jcs.Transform(result)
 	if err != nil {
-		writeError("jcs_output_error")
-		return
+		return errorLine("jcs_output_error")
 	}
-	fmt.Fprintf(os.Stdout, "%s\n", canonical)
+	return append(canonical, '\n')
 }
 
-func writeError(code string) {
-	// {"error":"<code>"} — keys already sorted (only one key), so safe to
-	// build manually and put through JCS for byte-exactness.
-	out := map[string]string{"error": code}
-	b, _ := json.Marshal(out)
+// isJSONObject reports whether already-validated JSON text is one object (not
+// null, an array or a scalar).
+func isJSONObject(text []byte) bool {
+	for _, c := range text {
+		switch c {
+		case ' ', '\t', '\n', '\r':
+			continue
+		}
+		return c == '{'
+	}
+	return false
+}
+
+// errorLine renders {"error":"<code>"}: a single key is already sorted, so it
+// is built by hand and passed through JCS for byte-exactness.
+func errorLine(code string) []byte {
+	b, _ := json.Marshal(map[string]string{"error": code})
 	canonical, _ := jcs.Transform(b)
-	fmt.Fprintf(os.Stdout, "%s\n", canonical)
+	return append(canonical, '\n')
 }
 
 func errorCode(err error) string {

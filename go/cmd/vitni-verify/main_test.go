@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -21,20 +22,6 @@ import (
 // matching run* function in-process, covering the dispatch AND the library
 // branches (malformed base64, non-canonical payloads, spliced chains, …) that
 // the negative vectors drive.
-
-var dispatch = map[string]func([]byte) (json.RawMessage, error){
-	"jcs":               runJCS,
-	"hashstring":        runHashString,
-	"digest":            runDigest,
-	"receipt-id":        runReceiptID,
-	"sse-outputs-hash":  runSSEOutputsHash,
-	"cost-canon":        runCostCanon,
-	"verify":            runVerify,
-	"verify-chain":      runVerifyChain,
-	"a2a-artifact-hash": runA2AArtifactHash,
-	"sign":              runSign,
-	"keygen":            runKeygen,
-}
 
 // vec is one conformance vector file. A vector pins its stdin in exactly one of
 // three forms; the raw forms are pointers so that a present-but-empty value is
@@ -107,14 +94,20 @@ func TestVecStdin(t *testing.T) {
 	}
 }
 
-func TestDispatch_AllVectors(t *testing.T) {
+// TestRespond_AllVectors replays every conformance vector through respond, the
+// whole CLI pipeline after argv and stdin reading (command lookup, the stdin
+// gate, the command, JCS output), with the exact stdin bytes the vector pins.
+// End-to-end the CLI is exercised by conformance/compare.mjs (a subprocess),
+// which `go test -coverprofile` cannot observe; this covers the same ground
+// in-process and compares the printed line with the anchor.
+func TestRespond_AllVectors(t *testing.T) {
 	dir := filepath.Join("..", "..", "..", "conformance", "vectors")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("read vectors dir: %v", err)
 	}
 	for _, e := range entries {
-		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".json" || strings.HasPrefix(e.Name(), "_") {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
@@ -125,43 +118,62 @@ func TestDispatch_AllVectors(t *testing.T) {
 		if err := json.Unmarshal(data, &v); err != nil {
 			t.Fatalf("parse %s: %v", e.Name(), err)
 		}
-		fn, ok := dispatch[v.Command]
-		if !ok {
-			continue
-		}
 		t.Run(v.Name, func(t *testing.T) {
-			// Exact stdin bytes, whichever form the vector pins.
 			stdin, err := vecStdin(v)
 			if err != nil {
 				t.Fatal(err)
 			}
-			out, cmdErr := fn(stdin)
-
-			// A vector whose anchor asserts an error must produce a non-nil
-			// error whose mapped code matches; a happy vector must not error.
-			// This holds for every command: an `error` anchor is a command
-			// error, a verdict is a {valid:false} result.
-			var anchor map[string]json.RawMessage
-			_ = json.Unmarshal(v.Anchor, &anchor)
-			_, wantErr := anchor["error"]
-			if wantErr {
-				if cmdErr == nil {
-					t.Fatalf("expected error, got output %s", out)
-				}
-				var wantCode string
-				_ = json.Unmarshal(anchor["error"], &wantCode)
-				if got := errorCode(cmdErr); got != wantCode {
-					t.Errorf("error code = %q, want %q", got, wantCode)
+			line := respond(v.Command, stdin)
+			if !bytes.HasSuffix(line, []byte("\n")) || bytes.Count(line, []byte("\n")) != 1 {
+				t.Fatalf("output is not exactly one line: %q", line)
+			}
+			var got map[string]any
+			if err := json.Unmarshal(line, &got); err != nil {
+				t.Fatalf("output is not a JSON object: %q", line)
+			}
+			if len(v.Anchor) == 0 {
+				// Unanchored vectors only probe cross-impl agreement here.
+				if _, isErr := got["error"]; isErr {
+					t.Fatalf("unanchored vector errored: %s", line)
 				}
 				return
 			}
-			if cmdErr != nil {
-				t.Fatalf("unexpected error: %v", cmdErr)
+			var want map[string]any
+			if err := json.Unmarshal(v.Anchor, &want); err != nil {
+				t.Fatalf("anchor: %v", err)
 			}
-			if len(out) == 0 {
-				t.Errorf("empty output")
+			for k, w := range want {
+				if !reflect.DeepEqual(got[k], w) {
+					t.Errorf("%s: got %v, want %v (line %s)", k, got[k], w, line)
+				}
 			}
 		})
+	}
+}
+
+// TestRespond_ResolvesCommandBeforeParsing pins D8: an unknown command is
+// unsupported_command whatever the stdin is, and a missing command's stdin is
+// never looked at.
+func TestRespond_ResolvesCommandBeforeParsing(t *testing.T) {
+	for _, stdin := range []string{")(", "", "[]", "{\"a\":1e400}"} {
+		if got := string(respond("not-a-command", []byte(stdin))); got != "{\"error\":\"unsupported_command\"}\n" {
+			t.Errorf("stdin %q: got %q", stdin, got)
+		}
+	}
+}
+
+// TestRespond_StdinDepth pins the depth limit at the stdin edge (no host limit
+// is relied on): the top-level object is depth 1, so {"value": <127 arrays>}
+// is exactly 128 and one more array is 129.
+func TestRespond_StdinDepth(t *testing.T) {
+	nest := func(n int) []byte {
+		return []byte(`{"value":` + strings.Repeat("[", n) + strings.Repeat("]", n) + `}`)
+	}
+	if got := string(respond("jcs", nest(127))); strings.Contains(got, "error") {
+		t.Errorf("depth 128 must be accepted, got %s", got)
+	}
+	if got := string(respond("jcs", nest(128))); got != "{\"error\":\"invalid_input\"}\n" {
+		t.Errorf("depth 129 must be invalid_input, got %s", got)
 	}
 }
 
