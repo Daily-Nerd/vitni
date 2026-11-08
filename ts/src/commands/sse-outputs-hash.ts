@@ -26,6 +26,7 @@ import { digestBytes } from './digest.js';
 import { jcsBytes } from './jcs.js';
 import { decodeStdBase64 } from './decode.js';
 import { hasNonFinite } from './non-finite.js';
+import { hasLoneSurrogate } from './strict-json.js';
 
 export interface SseInput {
   raw_b64: string;
@@ -171,7 +172,7 @@ export function sseOutputsHash(input: SseInput): SseOutput | { error: string } {
         // #58: raw_b64 hides this JSON from the stdin-level non-finite guard in
         // cli.ts. Without this check, a 1e400 inner result would JCS-serialize
         // to the bytes "null" and collide with a genuine null result.
-        if (hasNonFinite(result)) return { error: 'invalid_input' };
+        if (hasNonFinite(result) || hasLoneSurrogate(result)) return { error: 'invalid_input' };
         parts.push(jcsBytes(result));
       }
       // No result key → skip

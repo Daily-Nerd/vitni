@@ -11,8 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-
-	"github.com/gowebpki/jcs"
 )
 
 // ErrCostMustBeStringInt is returned when a cost magnitude is a JSON number.
@@ -25,7 +23,7 @@ var ErrReceiptIDMustBeAbsent = errors.New("receipt_id_must_be_absent")
 // It delegates to github.com/gowebpki/jcs which implements the spec correctly:
 // keys sorted lexicographically, numbers per ECMAScript, no Unicode normalization.
 func JCS(v json.RawMessage) ([]byte, error) {
-	return jcs.Transform(v)
+	return canonicalJSON(v)
 }
 
 // HashString computes the pinned hash-string for a raw SHA-256 digest.
@@ -87,7 +85,7 @@ func ReceiptID(receipt json.RawMessage) (string, string, error) {
 		return "", "", ErrReceiptIDMustBeAbsent
 	}
 
-	canon, err := jcs.Transform(receipt)
+	canon, err := canonicalJSON(receipt)
 	if err != nil {
 		return "", "", err
 	}
@@ -227,7 +225,7 @@ func SSEOutputsHash(raw []byte, mode string) (string, string, error) {
 			if !ok {
 				continue
 			}
-			canon, err := jcs.Transform(result)
+			canon, err := canonicalJSON(result)
 			if err != nil {
 				return "", "", err
 			}
@@ -271,5 +269,5 @@ func CostCanon(cost json.RawMessage) ([]byte, error) {
 		}
 	}
 
-	return jcs.Transform(cost)
+	return canonicalJSON(cost)
 }

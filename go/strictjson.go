@@ -9,6 +9,8 @@ import (
 	"math"
 	"strconv"
 	"unicode/utf8"
+
+	"github.com/gowebpki/jcs"
 )
 
 // ErrNotStrictB64URL reports input outside the one accepted base64url form.
@@ -75,7 +77,7 @@ func ValidateJSONText(b []byte, p TextPolicy) error {
 	if bytes.HasPrefix(b, utf8BOM) || !utf8.Valid(b) || !json.Valid(b) {
 		return ErrNotStrictJSON
 	}
-	if err := scanText(b); err != nil {
+	if err := scanText(b, MaxDepth); err != nil {
 		return err
 	}
 	if p.RejectDuplicates || p.RejectNonFinite {
@@ -84,10 +86,9 @@ func ValidateJSONText(b []byte, p TextPolicy) error {
 	return nil
 }
 
-func hex4(b []byte) (rune, bool) {
-	if len(b) < 4 {
-		return 0, false
-	}
+// hex4 reads the four hex digits of a \u escape. json.Valid has already run on
+// every caller's input, so the digits are guaranteed to be there and valid.
+func hex4(b []byte) rune {
 	var r rune
 	for _, c := range b[:4] {
 		var d byte
@@ -98,17 +99,15 @@ func hex4(b []byte) (rune, bool) {
 			d = c - 'a' + 10
 		case c >= 'A' && c <= 'F':
 			d = c - 'A' + 10
-		default:
-			return 0, false
 		}
 		r = r<<4 | rune(d)
 	}
-	return r, true
+	return r
 }
 
 // scanText walks syntactically valid JSON once, tracking string state, to
-// enforce MaxDepth and reject lone-surrogate \u escapes.
-func scanText(b []byte) error {
+// enforce maxDepth (0 means unlimited) and reject lone-surrogate \u escapes.
+func scanText(b []byte, maxDepth int) error {
 	depth := 0
 	inString := false
 	for i := 0; i < len(b); {
@@ -117,7 +116,7 @@ func scanText(b []byte) error {
 			switch c {
 			case '{', '[':
 				depth++
-				if depth > MaxDepth {
+				if maxDepth > 0 && depth > maxDepth {
 					return ErrNotStrictJSON
 				}
 			case '}', ']':
@@ -137,14 +136,14 @@ func scanText(b []byte) error {
 				i += 2
 				continue
 			}
-			cp, _ := hex4(b[i+2:])
+			cp := hex4(b[i+2:])
 			i += 6
 			switch {
 			case cp >= 0xD800 && cp <= 0xDBFF:
 				if i+1 >= len(b) || b[i] != '\\' || b[i+1] != 'u' {
 					return ErrNotStrictJSON
 				}
-				lo, _ := hex4(b[i+2:])
+				lo := hex4(b[i+2:])
 				if lo < 0xDC00 || lo > 0xDFFF {
 					return ErrNotStrictJSON
 				}
@@ -157,6 +156,18 @@ func scanText(b []byte) error {
 		}
 	}
 	return nil
+}
+
+// canonicalJSON is the single entry for canonicalizing caller-supplied JSON
+// (the jcs, receipt-id, cost-canon and sse-jsonrpc inputs). gowebpki/jcs does
+// not reject every surrogate misuse (a high escape followed by any other \u
+// escape becomes U+FFFD), so the text rule runs first. No depth limit: the
+// protocol pins MaxDepth for JWS header and payload text only.
+func canonicalJSON(raw json.RawMessage) ([]byte, error) {
+	if !json.Valid(raw) || scanText(raw, 0) != nil {
+		return nil, ErrNotStrictJSON
+	}
+	return jcs.Transform(raw)
 }
 
 // decodeObject is the single entry for header and payload bytes: strict JSON

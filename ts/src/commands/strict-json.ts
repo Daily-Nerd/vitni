@@ -94,7 +94,7 @@ function withinDepth(text: string): boolean {
 const LONE_SURROGATE = /[\uD800-\uDFFF]/u;
 
 /** Iterative walk over every key and string value (depth already bounded). */
-function hasLoneSurrogate(root: unknown): boolean {
+export function hasLoneSurrogate(root: unknown): boolean {
   const stack: unknown[] = [root];
   while (stack.length > 0) {
     const v = stack.pop();
@@ -130,14 +130,23 @@ function hasLoneSurrogate(root: unknown): boolean {
  * at exactly these three; verify/digest/a2a/etc. keep-last, so they must NOT
  * reject here or the divergence flips the other way).
  */
-const DUP_REJECT_COMMANDS = new Set(['jcs', 'receipt-id', 'cost-canon']);
+const JCS_COMMANDS = new Set(['jcs', 'receipt-id', 'cost-canon']);
 
 /**
  * Whether the raw stdin for `command` must be rejected for a duplicate key.
  * True only for the JCS-canonicalizing commands with a duplicate present.
  */
 export function rejectsForDuplicateKeys(command: string, raw: string): boolean {
-  return DUP_REJECT_COMMANDS.has(command) && hasDuplicateKeys(raw);
+  return JCS_COMMANDS.has(command) && hasDuplicateKeys(raw);
+}
+
+/**
+ * Whether the parsed stdin for `command` must be rejected for a lone surrogate.
+ * JSON.stringify would emit the lone surrogate as an escape, but the Go
+ * reference rejects (or mangles) it, and verify already rejects it as malformed.
+ */
+export function rejectsForLoneSurrogate(command: string, parsed: unknown): boolean {
+  return JCS_COMMANDS.has(command) && hasLoneSurrogate(parsed);
 }
 
 export function hasDuplicateKeys(text: string): boolean {

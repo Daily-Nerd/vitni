@@ -22,7 +22,7 @@ import { a2aArtifactHash } from './commands/a2a-artifact-hash.js';
 import { sign } from './commands/sign.js';
 import { keygen } from './commands/keygen.js';
 import { jcsString } from './commands/jcs.js';
-import { rejectsForDuplicateKeys } from './commands/strict-json.js';
+import { rejectsForDuplicateKeys, rejectsForLoneSurrogate } from './commands/strict-json.js';
 
 async function readStdin(): Promise<string> {
   // Robust across platforms: async-iterate the stream. Avoids the
@@ -50,6 +50,12 @@ export function dispatch(command: string, raw: string): string {
   // §4.1 (strict I-JSON): reject duplicate keys for the JCS-canonicalizing
   // commands, matching the Go reference (JSON.parse above silently kept last).
   if (rejectsForDuplicateKeys(command, raw)) {
+    return jcsString({ error: 'invalid_input' });
+  }
+
+  // Strict text: a lone surrogate escape is not well-formed UTF-8 and cannot be
+  // canonicalized; verify rejects it as malformed, so the JCS commands do too.
+  if (rejectsForLoneSurrogate(command, input)) {
     return jcsString({ error: 'invalid_input' });
   }
 
