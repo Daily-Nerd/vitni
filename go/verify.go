@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"math/big"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -35,6 +36,32 @@ type VerifyInput struct {
 	SignedReceipt string                            `json:"signed_receipt"`
 	Keys          map[string]map[string]RegistryKey `json:"keys"`
 	Policy        VerifyPolicy                      `json:"policy"`
+}
+
+// algSpec is one row of the algorithm table: the key type an alg requires and
+// the function that verifies a signature for it.
+type algSpec struct {
+	kty    string
+	crv    string
+	verify func(key RegistryKey, signingInput, sig []byte) bool
+}
+
+// algs is the SINGLE owner of {alg -> kty, crv, verify fn}. Step 5 (key-type
+// binding), step 6 (verification) and SupportedAlgs (the declared alg set) all
+// derive from it, so "algs we verify" and "algs we declare" cannot drift.
+var algs = map[string]algSpec{
+	"EdDSA": {kty: "OKP", crv: "Ed25519", verify: verifyEd25519},
+	"ES256": {kty: "EC", crv: "P-256", verify: verifyES256},
+}
+
+// SupportedAlgs returns the algorithms Verify accepts, sorted by code point.
+func SupportedAlgs() []string {
+	out := make([]string, 0, len(algs))
+	for a := range algs {
+		out = append(out, a)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // header key-material claims that MUST NOT appear in the JWS header (§12).
@@ -109,11 +136,19 @@ func Verify(in VerifyInput) (bool, string) {
 	if headerAlg == "" || headerAlg == "none" || headerAlg != key.Alg {
 		return false, "alg_not_allowed"
 	}
+	// The registry key must be the key type its alg requires. An alg outside the
+	// table, and a missing or null kty/crv, fail here, before any key material is
+	// decoded. Runs after step 4 (a revoked key stays revoked_key) and after the
+	// header/registry alg equality above.
+	spec, known := algs[key.Alg]
+	if !known || key.Kty != spec.kty || key.Crv != spec.crv {
+		return false, "alg_not_allowed"
+	}
 
 	// --- Step 6: bad_signature ---
 	// signing input is the ASCII bytes b64url(header).b64url(payload)
 	signingInput := []byte(segs[0] + "." + segs[1])
-	if !verifySignature(key, headerAlg, signingInput, sigBytes) {
+	if !spec.verify(key, signingInput, sigBytes) {
 		return false, "bad_signature"
 	}
 
@@ -155,19 +190,6 @@ func stringClaim(m map[string]json.RawMessage, key string) string {
 		return ""
 	}
 	return s
-}
-
-// verifySignature dispatches to the right algorithm and verifies the signature
-// over signingInput. Returns true iff the signature is valid.
-func verifySignature(key RegistryKey, alg string, signingInput, sig []byte) bool {
-	switch alg {
-	case "EdDSA":
-		return verifyEd25519(key, signingInput, sig)
-	case "ES256":
-		return verifyES256(key, signingInput, sig)
-	default:
-		return false
-	}
 }
 
 // verifyEd25519 decodes the registry x through the strict base64url decoder.
