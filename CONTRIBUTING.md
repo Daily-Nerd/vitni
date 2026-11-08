@@ -42,10 +42,16 @@ idempotent, so a dirty `git status` after a re-run means a real change:
 
 ```bash
 cd conformance/vectors
-uv run python _gen.py
-uv run --with cryptography --with ecdsa python _gen_verify.py
-uv run --with cryptography --with ecdsa python _gen_chain.py
+uv run --no-project python _gen.py
+uv run --no-project python _gen_a2a.py
+uv run --no-project --with cryptography==50.0.2 --with ecdsa==0.19.2 python _gen_verify.py
+uv run --no-project --with cryptography==50.0.2 --with ecdsa==0.19.2 python _gen_chain.py
 ```
+
+The `cryptography` and `ecdsa` pins are the single place the generator
+dependency versions live; CI runs the same commands. To check that every
+vector is owned by a generator, delete `conformance/vectors/*.json`, rerun the
+four commands, and require an empty `git status --porcelain conformance/vectors`.
 
 Every wire-visible feature needs a vector; a wire feature without a Go≡TS
 vector is scope creep. Wire literals (`v`, the MCP `_meta` key) flip only in
