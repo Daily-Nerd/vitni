@@ -31,29 +31,67 @@ test("S1.9 Go and TS declare exactly the catalog's gating atoms, with empty stdi
   }
 });
 
-test("S1.23 floors.json holds Go and TS at all vectors (not an integer copy of the count)", () => {
-  assert.deepEqual(JSON.parse(readFileSync(join(HERE, "floors.json"), "utf8")), { go: "all", ts: "all" });
+test("S1.23 floors.json holds Go and TS at all vectors and Python at an integer lower bound", () => {
+  const floors = JSON.parse(readFileSync(join(HERE, "floors.json"), "utf8"));
+  assert.deepEqual(Object.keys(floors).sort(), ["go", "py", "ts"]);
+  assert.equal(floors.go, "all");
+  assert.equal(floors.ts, "all");
+  assert.ok(Number.isInteger(floors.py) && floors.py > 0, "py floor is a positive integer taken from the harness output");
 });
 
-test("S1.25 compare.mjs prints impls, the computed vector count and a clean pass for Go and TS", () => {
+// The run every CI job and every contributor does: all three implementations.
+const PY_VERIFY = process.env.PY_VERIFY?.trim() || "uv run --no-project python -I py/vitni_verify.py";
+
+function rowCells(stdout) {
+  const rows = stdout.split("--- coverage ---")[1].split("\n\n")[0].trim().split("\n");
+  return { header: rows[0].trim().split(/\s+/).slice(1), rows: rows.slice(1).map((r) => r.trim().split(/\s+/)) };
+}
+
+test("S1.25 compare.mjs prints the three impls, the computed vector count and a clean pass", () => {
   requireBuilt();
   const r = spawnSync(process.execPath, [join(HERE, "compare.mjs")], {
-    cwd: ROOT, encoding: "utf8", env: { ...process.env, PY_VERIFY: "" },
+    cwd: ROOT, encoding: "utf8", env: { ...process.env, PY_VERIFY },
   });
   const n = readdirSync(DEFAULT_VECTORS).filter((f) => f.endsWith(".json") && !f.startsWith("_")).length;
   assert.equal(r.status, 0, r.stdout.split("\n").filter((l) => l.startsWith("* ")).join("\n"));
-  assert.match(r.stdout, /^impls: go ts$/m);
+  assert.match(r.stdout, /^impls: go ts py$/m);
   assert.match(r.stdout, new RegExp(`^vectors: ${n}$`, "m"));
   assert.match(r.stdout, new RegExp(`^${n}/${n} passed\\.$`, "m"));
-  // Go and TS are in scope for every vector: each matrix cell is k/k
-  const cells = r.stdout.split("--- coverage ---")[1].split("\n\n")[0].trim().split("\n").slice(1);
-  assert.ok(cells.length > 5);
-  for (const row of cells) {
-    for (const cell of row.trim().split(/\s+/).slice(1)) {
+  // Go and TS are in scope for every vector: each of their matrix cells is k/k
+  const { header, rows } = rowCells(r.stdout);
+  assert.deepEqual(header, ["go", "ts", "py"]);
+  assert.ok(rows.length > 5);
+  let py = 0;
+  for (const [, go, ts, p] of rows) {
+    for (const cell of [go, ts]) {
       const [a, b] = cell.split("/");
-      assert.equal(a, b, `partial scope in row: ${row}`);
+      assert.equal(a, b, `partial Go/TS scope in row: ${rows}`);
     }
+    py += Number(p.split("/")[0]);
   }
+  const floor = JSON.parse(readFileSync(join(HERE, "floors.json"), "utf8")).py;
+  assert.ok(py >= floor, `py answered ${py} < floor ${floor}`);
+});
+
+test("S1.26 a required impl that is not run fails: dropping the Python verifier is not a smaller run", () => {
+  requireBuilt();
+  const r = spawnSync(process.execPath, [join(HERE, "compare.mjs")], {
+    cwd: ROOT, encoding: "utf8", env: { ...process.env, PY_VERIFY: "", REQUIRE_IMPLS: "go,ts,py" },
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /^impls: go ts$/m);
+  assert.match(r.stdout, /IMPL-MISSING py/);
+  assert.doesNotMatch(r.stdout, /FLOOR-KEYS/);
+});
+
+test("S1.27 a bare run with only Go and TS passes: the Python floor applies only when Python runs", () => {
+  requireBuilt();
+  const r = spawnSync(process.execPath, [join(HERE, "compare.mjs")], {
+    cwd: ROOT, encoding: "utf8", env: { ...process.env, PY_VERIFY: "", REQUIRE_IMPLS: "" },
+  });
+  assert.equal(r.status, 0, r.stdout.split("\n").filter((l) => l.startsWith("* ")).join("\n"));
+  assert.match(r.stdout, /^impls: go ts$/m);
+  assert.match(r.stdout, /^(\d+)\/\1 passed\.$/m);
 });
 
 test("compare.mjs exits 1 and names the failure when an impl cannot be spawned", () => {
