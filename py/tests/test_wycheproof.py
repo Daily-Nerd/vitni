@@ -49,7 +49,7 @@ class P1363(unittest.TestCase):
             qy = int(g["publicKey"]["wy"], 16).to_bytes(32, "big")
             for t in g["tests"]:
                 counts[t["result"]] = counts.get(t["result"], 0) + 1
-                got = V._ecdsa_p256_verify(qx, qy, bytes.fromhex(t["sig"]), bytes.fromhex(t["msg"]))
+                got = V._p256_verify(qx, qy, bytes.fromhex(t["sig"]), bytes.fromhex(t["msg"]))
                 self.assertEqual(got, t["result"] == "valid", (t["tcId"], t["comment"], t["flags"]))
         self.assertEqual(counts, manifest(self.NAME)["results"])
         self.assertEqual(counts, {"valid": 173, "invalid": 89})  # no `acceptable` in this file

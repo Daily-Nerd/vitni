@@ -187,7 +187,7 @@ class NoDer(unittest.TestCase):
             elif isinstance(n, ast.Name):
                 words |= set(n.id.lower().split("_"))
         self.assertFalse(words & {"der", "asn1", "asn", "dss"}, words & {"der", "asn1", "asn", "dss"})
-        self.assertTrue(top_level_functions() >= {"_ecdsa_p256_verify"})
+        self.assertTrue(top_level_functions() >= {"_p256_verify"})
 
 
 if __name__ == "__main__":

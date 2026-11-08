@@ -82,27 +82,27 @@ class Verify(unittest.TestCase):
     def test_valid_signature_from_the_conformance_vector(self):
         x, y, sig, msg = vector_es256()
         self.assertEqual(len(sig), 64)
-        self.assertTrue(V._ecdsa_p256_verify(x, y, sig, msg))
-        self.assertFalse(V._ecdsa_p256_verify(x, y, sig, msg + b"x"))
-        self.assertFalse(V._ecdsa_p256_verify(x, y, sig, msg[:-1]))
+        self.assertTrue(V._p256_verify(x, y, sig, msg))
+        self.assertFalse(V._p256_verify(x, y, sig, msg + b"x"))
+        self.assertFalse(V._p256_verify(x, y, sig, msg[:-1]))
 
     def test_high_s_is_accepted(self):
         x, y, sig, msg = vector_es256()
         r, s = int.from_bytes(sig[:32], "big"), int.from_bytes(sig[32:], "big")
         flipped = be(r) + be(N - s)
-        self.assertTrue(V._ecdsa_p256_verify(x, y, flipped, msg))
-        self.assertTrue(V._ecdsa_p256_verify(x, y, sig, msg))
+        self.assertTrue(V._p256_verify(x, y, flipped, msg))
+        self.assertTrue(V._p256_verify(x, y, sig, msg))
 
     def test_r_and_s_range(self):
         x, y, sig, msg = vector_es256()
         r, s = int.from_bytes(sig[:32], "big"), int.from_bytes(sig[32:], "big")
         for bad_r, bad_s in ((0, s), (r, 0), (N, s), (r, N), (N + 1, s), (r, N + 1), (2 ** 256 - 1, s), (r, 2 ** 256 - 1)):
-            self.assertFalse(V._ecdsa_p256_verify(x, y, be(bad_r) + be(bad_s), msg), (hex(bad_r), hex(bad_s)))
+            self.assertFalse(V._p256_verify(x, y, be(bad_r) + be(bad_s), msg), (hex(bad_r), hex(bad_s)))
 
     def test_only_64_byte_raw_signatures(self):
         x, y, sig, msg = vector_es256()
         for bad in (sig[:63], sig + b"\x00", b"", sig[:32], sig + sig):
-            self.assertFalse(V._ecdsa_p256_verify(x, y, bad, msg), len(bad))
+            self.assertFalse(V._p256_verify(x, y, bad, msg), len(bad))
 
     def test_a_wrong_length_signature_that_is_numerically_a_valid_one_is_refused(self):
         # Slicing r = sig[:32], s = sig[32:] reads a 63 or 65 byte string as the
@@ -133,12 +133,12 @@ class Verify(unittest.TestCase):
         body = der_int(sig[:32]) + der_int(sig[32:])
         der = b"\x30" + bytes([len(body)]) + body
         self.assertIn(len(der), (70, 71, 72))
-        self.assertFalse(V._ecdsa_p256_verify(x, y, der, msg))
+        self.assertFalse(V._p256_verify(x, y, der, msg))
 
     def test_public_key_validity(self):
         x, y, sig, msg = vector_es256()
         xi, yi = int.from_bytes(x, "big"), int.from_bytes(y, "big")
-        self.assertTrue(V._ecdsa_p256_verify(x, y, sig, msg))
+        self.assertTrue(V._p256_verify(x, y, sig, msg))
         bad_keys = [
             (be(0), be(0)),                       # the (0, 0) pseudo-point
             (x, be(yi ^ 1)),                      # off the curve
@@ -151,7 +151,27 @@ class Verify(unittest.TestCase):
             (b"", b""),
         ]
         for kx, ky in bad_keys:
-            self.assertFalse(V._ecdsa_p256_verify(kx, ky, sig, msg))
+            self.assertFalse(V._p256_verify(kx, ky, sig, msg))
+
+    def test_a_forgery_that_verifies_under_an_off_curve_key_is_refused(self):
+        # Q = (5, 0) is a point of order 2 on y^2 = x^3 - 3x - 110, not on P-256.
+        # The group formulas never use b, so without an explicit on-curve check
+        # a signature can be built that "verifies": choose s, take r = x(u1*G)
+        # and keep it when u2 = r/s is even (u2*Q is then infinity, R = u1*G).
+        q = (5, 0)
+        msg = b"forged"
+        e = V._p256_digest_int(msg)
+        for s in range(2, 200):
+            w = pow(s, -1, N)
+            r = V._p256_mul_add(e * w % N, 0, G)[0] % N
+            if r * w % N % 2 == 0:
+                break
+        else:
+            self.fail("no forgery parameters found")
+        u1, u2 = e * w % N, r * w % N
+        point = V._p256_mul_add(u1, u2, q)
+        self.assertEqual(point[0] % N, r)  # the arithmetic alone WOULD accept
+        self.assertFalse(V._p256_verify(be(q[0]), be(q[1]), be(r) + be(s), msg))
 
     def test_digest_is_reduced_mod_n_not_truncated(self):
         # e = int(sha256(msg)) % n: for a hash >= n the two differ; the vector

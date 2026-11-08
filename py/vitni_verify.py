@@ -392,3 +392,95 @@ def _ed25519_verify(pub, sig, msg):
     neg_a = ((-x) % _P, y, 1, (-x * y) % _P)
     k = int.from_bytes(hashlib.sha512(sig[:32] + pub + msg).digest(), "little") % _L
     return _ed_encode(_ed_add(_ed_mul(s, _ED_B), _ed_mul(k, neg_a))) == sig[:32]
+
+
+# --------------------------------------------------------------------------
+# P-256 ECDSA (ES256). Jacobian coordinates, a = -3, infinity is Z == 0. Every
+# edge case (equal points, opposite points, infinity operands) goes through one
+# complete _jadd; there is no Shamir trick to special-case. Signatures are the
+# raw 64-byte R||S of JWS and nothing else.
+# --------------------------------------------------------------------------
+
+_P256_P = 0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF
+_P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+_P256_B = 0x5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B
+_P256_G = (0x6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296,
+           0x4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5)
+_JINF = (1, 1, 0)
+
+
+def _jdouble(pt):
+    x, y, z = pt
+    if z == 0 or y == 0:
+        return _JINF
+    p = _P256_P
+    delta, gamma = z * z % p, y * y % p
+    beta = x * gamma % p
+    alpha = 3 * (x - delta) * (x + delta) % p
+    x3 = (alpha * alpha - 8 * beta) % p
+    z3 = ((y + z) ** 2 - gamma - delta) % p
+    y3 = (alpha * (4 * beta - x3) - 8 * gamma * gamma) % p
+    return (x3, y3, z3)
+
+
+def _jadd(a, b):
+    if a[2] == 0:
+        return b
+    if b[2] == 0:
+        return a
+    p = _P256_P
+    x1, y1, z1 = a
+    x2, y2, z2 = b
+    z1z1, z2z2 = z1 * z1 % p, z2 * z2 % p
+    u1, u2 = x1 * z2z2 % p, x2 * z1z1 % p
+    s1, s2 = y1 * z2 * z2z2 % p, y2 * z1 * z1z1 % p
+    if u1 == u2:
+        return _jdouble(a) if s1 == s2 else _JINF
+    h = (u2 - u1) % p
+    i = (2 * h) ** 2 % p
+    j = h * i % p
+    r = 2 * (s2 - s1) % p
+    v = u1 * i % p
+    x3 = (r * r - j - 2 * v) % p
+    y3 = (r * (v - x3) - 2 * s1 * j) % p
+    z3 = (((z1 + z2) ** 2 - z1z1 - z2z2) * h) % p
+    return (x3, y3, z3)
+
+
+def _jmul(k, pt):
+    r = _JINF
+    for i in range(k.bit_length() - 1, -1, -1):
+        r = _jdouble(r)
+        if (k >> i) & 1:
+            r = _jadd(r, pt)
+    return r
+
+
+def _p256_mul_add(u1, u2, q):
+    """Affine u1*G + u2*Q as two multiplications and one complete add, or None
+    for the point at infinity."""
+    gx, gy = _P256_G
+    x, y, z = _jadd(_jmul(u1, (gx, gy, 1)), _jmul(u2, (q[0], q[1], 1)))
+    if z == 0:
+        return None
+    zi = pow(z, -1, _P256_P)
+    return (x * zi * zi % _P256_P, y * zi * zi * zi % _P256_P)
+
+
+def _p256_digest_int(msg):
+    return int.from_bytes(hashlib.sha256(msg).digest(), "big") % _P256_N
+
+
+def _p256_verify(x, y, sig, msg):
+    if len(sig) != 64 or len(x) != 32 or len(y) != 32:
+        return False
+    p, n = _P256_P, _P256_N
+    qx, qy = int.from_bytes(x, "big"), int.from_bytes(y, "big")
+    if qx >= p or qy >= p or (qy * qy - qx ** 3 + 3 * qx - _P256_B) % p:
+        return False  # coordinate out of range, or not on the curve ((0, 0) included)
+    r, s = int.from_bytes(sig[:32], "big"), int.from_bytes(sig[32:], "big")
+    if not (1 <= r <= n - 1 and 1 <= s <= n - 1):
+        return False  # high S is fine: no low-S rule
+    w = pow(s, -1, n)
+    point = _p256_mul_add(_p256_digest_int(msg) * w % n, r * w % n, (qx, qy))
+    return point is not None and point[0] % n == r
