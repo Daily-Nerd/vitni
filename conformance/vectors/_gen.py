@@ -642,6 +642,10 @@ _sse_jsonrpc("neg-sse-jsonrpc-inner-nonfinite-ignored-member",
 # nesting depth is counted from the inner message itself (its own top level is depth 1)
 _sse_jsonrpc("neg-sse-jsonrpc-inner-depth-129", "sse/jsonrpc-inner-depth-129",
              b'{"result":' + b"[" * 128 + b"]" * 128 + b"}", _INVALID)
+# far beyond encoding/json's own depth cap (10000), which stops calling such text
+# JSON at all: the limit is the protocol's, never the host parser's
+_sse_jsonrpc("neg-sse-jsonrpc-inner-depth-20000", "sse/jsonrpc-inner-depth-20000",
+             b'{"result":' + b"[" * 20000 + b"]" * 20000 + b"}", _INVALID)
 _nest127 = b"[" * 127 + b"]" * 127
 _sse_committed("sse-jsonrpc-inner-depth-128", "sse/jsonrpc-inner-depth-128",
                b'{"result":' + _nest127 + b"}", _nest127)
