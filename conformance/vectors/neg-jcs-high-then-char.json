@@ -1,0 +1,1 @@
+{"name": "jcs/high-surrogate-then-char", "command": "jcs", "input_raw": "{\"value\":\"\\uD800A\"}", "anchor": {"error": "invalid_input"}}

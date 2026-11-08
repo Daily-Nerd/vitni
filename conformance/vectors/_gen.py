@@ -312,3 +312,35 @@ write("sse-jsonrpc-nan-message.json", {
     "name": "sse/jsonrpc-nan-message", "command": "sse-outputs-hash",
     "input": {"mode": "sse-jsonrpc", "raw_b64": base64.b64encode(_raw_nan_message).decode()},
     "anchor": {"decoded_hex": _dec_nan_message.hex(), "outputs_hash": hashstr(_dec_nan_message)}})
+
+# --- lone-surrogate escapes at the JCS-canonicalizing commands (#69 follow-up).
+# input_raw keeps the backslash escapes intact through the harness. A surrogate
+# escape is well-formed only as a HIGH (D800-DBFF) immediately followed by a LOW
+# (DC00-DFFF) escape; anything else cannot be UTF-8 and MUST be invalid_input in
+# every implementation. Hex digits are case-insensitive, so both cases are pinned.
+_lone_cases = [
+    ("neg-jcs-lone-high-upper", "jcs/lone-high-surrogate-uppercase", r'{"value":"\uD800"}'),
+    ("neg-jcs-lone-low-upper", "jcs/lone-low-surrogate-uppercase", r'{"value":"\uDC00"}'),
+    ("neg-jcs-high-then-char", "jcs/high-surrogate-then-char", r'{"value":"\uD800A"}'),
+    ("neg-jcs-high-then-bmp-escape", "jcs/high-surrogate-then-bmp-escape", r'{"value":"\uD800\u0041"}'),
+    ("neg-jcs-high-then-high-upper", "jcs/high-then-high-surrogate-uppercase", r'{"value":"\uD800\uD800"}'),
+    ("neg-jcs-high-then-high-lower", "jcs/high-then-high-surrogate-lowercase", r'{"value":"\ud800\ud800"}'),
+]
+for fname, name, raw in _lone_cases:
+    write(f"{fname}.json", {"name": name, "command": "jcs", "input_raw": raw,
+                            "anchor": {"error": "invalid_input"}})
+
+# a well-formed pair escape is accepted and canonicalizes to the raw character
+_pair = '"\U0001F600"'.encode()
+write("jcs-surrogate-pair-escape-upper.json", {
+    "name": "jcs/surrogate-pair-escape-uppercase", "command": "jcs",
+    "input_raw": r'{"value":"\uD83D\uDE00"}',
+    "anchor": {"canonical_hex": _pair.hex(), "byte_len": len(_pair)}})
+
+# surrogate escapes hide inside raw_b64 the same way 1e400 does, so the inner
+# result must get the same strict-text rule as the stdin-level jcs commands.
+_raw_lone = b'data: {"jsonrpc":"2.0","id":1,"result":"\\uD800\\uD800"}\n\n'
+write("neg-sse-lone-surrogate-result.json", {
+    "name": "sse/jsonrpc-lone-surrogate-result", "command": "sse-outputs-hash",
+    "input": {"mode": "sse-jsonrpc", "raw_b64": base64.b64encode(_raw_lone).decode()},
+    "anchor": {"error": "invalid_input"}})

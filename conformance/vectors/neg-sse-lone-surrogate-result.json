@@ -1,0 +1,1 @@
+{"name": "sse/jsonrpc-lone-surrogate-result", "command": "sse-outputs-hash", "input": {"mode": "sse-jsonrpc", "raw_b64": "ZGF0YTogeyJqc29ucnBjIjoiMi4wIiwiaWQiOjEsInJlc3VsdCI6Ilx1RDgwMFx1RDgwMCJ9Cgo="}, "anchor": {"error": "invalid_input"}}

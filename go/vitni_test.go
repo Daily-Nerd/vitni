@@ -618,3 +618,36 @@ func TestExtField(t *testing.T) {
 		t.Errorf("Ext not serialized, got %s", got)
 	}
 }
+
+// TestCanonicalizersRejectSurrogateEscapes pins the strict-text rule at every
+// entry that canonicalizes caller-supplied JSON: a surrogate escape is
+// well-formed only as a high escape immediately followed by a low escape.
+// gowebpki/jcs alone turns "\ud800\ud800" into U+FFFD without an error.
+func TestCanonicalizersRejectSurrogateEscapes(t *testing.T) {
+	bad := []string{
+		`"\ud800"`, `"\uD800"`, `"\udc00"`, `"\uDC00"`,
+		`"\ud800A"`, `"\ud800\u0041"`,
+		`"\ud800\ud800"`, `"\uD800\uD800"`, `"\ude00\ud83d"`,
+	}
+	good := map[string]string{
+		`"\ud83d\ude00"`: "\"\U0001F600\"",
+		`"\uD83D\uDE00"`: "\"\U0001F600\"",
+	}
+	for _, in := range bad {
+		if _, err := vitni.JCS(json.RawMessage(in)); err == nil {
+			t.Errorf("JCS(%s) accepted a lone surrogate escape", in)
+		}
+		if _, _, err := vitni.ReceiptID(json.RawMessage(`{"x":` + in + `}`)); err == nil {
+			t.Errorf("ReceiptID({x:%s}) accepted a lone surrogate escape", in)
+		}
+		if _, err := vitni.CostCanon(json.RawMessage(`{"rail_ref":` + in + `}`)); err == nil {
+			t.Errorf("CostCanon({rail_ref:%s}) accepted a lone surrogate escape", in)
+		}
+	}
+	for in, want := range good {
+		got, err := vitni.JCS(json.RawMessage(in))
+		if err != nil || string(got) != want {
+			t.Errorf("JCS(%s) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+}

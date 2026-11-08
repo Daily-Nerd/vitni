@@ -19,6 +19,18 @@ test('dispatch: unknown command', () => {
 test('dispatch: duplicate key rejected for jcs', () => {
   assert.deepEqual(parse(dispatch('jcs', '{"value":{"a":1,"a":2}}')), { error: 'invalid_input' });
 });
+test('dispatch: surrogate escapes at the JCS-canonicalizing commands', () => {
+  const bad = ['"\\ud800"', '"\\uD800"', '"\\uDC00"', '"\\uD800A"', '"\\uD800\\ud800"', '"\\ude00\\ud83d"'];
+  for (const v of bad) {
+    assert.deepEqual(parse(dispatch('jcs', `{"value":${v}}`)), { error: 'invalid_input' }, v);
+    assert.deepEqual(parse(dispatch('receipt-id', `{"receipt":{"x":${v}}}`)), { error: 'invalid_input' }, v);
+    assert.deepEqual(parse(dispatch('cost-canon', `{"cost":{"rail_ref":${v}}}`)), { error: 'invalid_input' }, v);
+  }
+  // a well-formed pair escape in either case canonicalizes to the raw character
+  const want = { canonical_hex: Buffer.from('"\u{1F600}"').toString('hex'), byte_len: 6 };
+  assert.deepEqual(parse(dispatch('jcs', '{"value":"\\ud83d\\ude00"}')), want);
+  assert.deepEqual(parse(dispatch('jcs', '{"value":"\\uD83D\\uDE00"}')), want);
+});
 test('dispatch: every command routes and produces output', () => {
   const cases = {
     jcs: '{"value":{"b":1,"a":2}}',

@@ -1,0 +1,1 @@
+{"name": "jcs/lone-low-surrogate-uppercase", "command": "jcs", "input_raw": "{\"value\":\"\\uDC00\"}", "anchor": {"error": "invalid_input"}}
