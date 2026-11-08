@@ -461,6 +461,14 @@ for suffix, raw, verdict in (("false", b"false", MALFORMED), ("true", b"true", O
     text_vec(f"verify-header-b64-{suffix}.json", f"verify/header-b64-{suffix}",
              b'{"alg":"EdDSA","b64":' + raw + b',"kid":"ed-1"}', ed_payload, verdict)
 
+# Nesting depth limit (ADR-6, owner Q-D9): the payload object is depth 1, each
+# nested object or array adds one. Depth 128 is accepted, 129 is malformed.
+# ext (depth 2) holds 126 or 127 nested arrays.
+text_vec("verify-payload-depth-128.json", "verify/payload-depth-128",
+         ED_HDR_BYTES, ext_payload(b"[" * 126 + b"]" * 126), OK)
+text_vec("verify-payload-depth-129.json", "verify/payload-depth-129",
+         ED_HDR_BYTES, ext_payload(b"[" * 127 + b"]" * 127), MALFORMED)
+
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)
