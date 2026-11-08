@@ -6,7 +6,8 @@
  *  2. header_key_material  — header contains ANY of jwk/jku/x5u/x5c/x5t/x5t#S256.
  *  3. unknown_key          — performer_id (from payload) / kid (from header) absent or not in keys.
  *  4. revoked_key          — resolved key status == "revoked".
- *  5. alg_not_allowed      — header alg is none/absent, OR header alg != resolved key alg.
+ *  5. alg_not_allowed      : header alg is none/absent, OR header alg != resolved key alg,
+ *                            OR the key's alg/kty/crv is not a row of the ALGS table.
  *  6. bad_signature        — signature fails over b64url(header).b64url(payload).
  *  7. non_canonical_payload— decode(payload) != JCS(parse(payload)) byte-for-byte.
  *  8. context_mismatch     — policy.expected_binding/expected_method set and != payload's.
@@ -41,6 +42,22 @@ export interface VerifyOutput {
   reason: string;
 }
 
+/**
+ * The algorithm table: the SINGLE owner of {alg -> kty, crv}. Step 5 (key-type
+ * binding), key construction in step 6 and the declared alg set all derive
+ * from it, so "algs we verify" and "algs we declare" cannot drift.
+ */
+export const ALGS = {
+  EdDSA: { kty: 'OKP', crv: 'Ed25519' },
+  ES256: { kty: 'EC', crv: 'P-256' },
+} as const;
+
+type AlgName = keyof typeof ALGS;
+
+function isKnownAlg(alg: unknown): alg is AlgName {
+  return typeof alg === 'string' && Object.prototype.hasOwnProperty.call(ALGS, alg);
+}
+
 const FORBIDDEN_HEADER_KEYS = ['jwk', 'jku', 'x5u', 'x5c', 'x5t', 'x5t#S256'];
 
 function fail(reason: string): VerifyOutput {
@@ -73,13 +90,12 @@ function buildPublicKey(jwk: RegistryJwk, alg: string): KeyObject | null {
   if (x === null || x.length !== 32) return null;
   let jwkFields: Record<string, string>;
   if (alg === 'EdDSA') {
-    jwkFields = { kty: 'OKP', crv: 'Ed25519', x: x.toString('base64url') };
+    jwkFields = { ...ALGS.EdDSA, x: x.toString('base64url') };
   } else if (alg === 'ES256') {
     const y = decodeB64UrlStrict(jwk.y as string);
     if (y === null || y.length !== 32) return null;
     jwkFields = {
-      kty: 'EC',
-      crv: 'P-256',
+      ...ALGS.ES256,
       x: x.toString('base64url'),
       y: y.toString('base64url'),
     };
@@ -193,6 +209,17 @@ export function verify(input: VerifyInput): VerifyOutput {
     headerAlg === 'none' ||
     headerAlg === '' ||
     headerAlg !== jwk.alg
+  ) {
+    return fail('alg_not_allowed');
+  }
+  // The registry key must be the key type its alg requires. An alg outside the
+  // table, and a missing or null kty/crv, fail here, before any key material is
+  // decoded. Runs after step 4 (a revoked key stays revoked_key) and after the
+  // header/registry alg equality above.
+  if (
+    !isKnownAlg(jwk.alg) ||
+    jwk.kty !== ALGS[jwk.alg].kty ||
+    jwk.crv !== ALGS[jwk.alg].crv
   ) {
     return fail('alg_not_allowed');
   }
