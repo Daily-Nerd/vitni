@@ -17,6 +17,21 @@ export interface TextPolicy {
   rejectNonFinite: boolean;
 }
 
+/**
+ * The single UTF-8 decoder for external bytes: fatal, so an invalid sequence
+ * (stray byte, truncated, overlong, encoded surrogate) is `null` and U+FFFD is
+ * never produced. A BOM is kept as a character, not stripped; callers that
+ * reject or strip it do so on the bytes first. Buffer#toString('utf8') must
+ * not decode external bytes anywhere: it replaces silently.
+ */
+export function decodeUtf8Strict(bytes: Uint8Array): string | null {
+  try {
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
 export type StrictParse = { ok: true; value: unknown } | { ok: false };
 
 /**
@@ -33,12 +48,8 @@ export function parseStrict(bytes: Uint8Array, p: TextPolicy): StrictParse {
   if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
     return { ok: false };
   }
-  let text: string;
-  try {
-    text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
-  } catch {
-    return { ok: false };
-  }
+  const text = decodeUtf8Strict(bytes);
+  if (text === null) return { ok: false };
   // Depth first: JSON.parse and the walks below recurse or iterate on the result,
   // so nothing deeper than MAX_DEPTH may reach them.
   if (!withinDepth(text)) return { ok: false };

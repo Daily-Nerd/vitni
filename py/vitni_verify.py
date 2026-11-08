@@ -308,7 +308,10 @@ def hashstring(digest):
 def _cmd_hashstring(inp):
     if inp["algo"] != "sha2-256":
         raise _Reject("algo")
-    return {"hashstr": hashstring(hex_decode_strict(inp["digest_hex"]))}
+    digest = hex_decode_strict(inp["digest_hex"])
+    if len(digest) != 32:  # the header declares 0x20: it never lies about the digest length
+        raise _Reject("digest length")
+    return {"hashstr": hashstring(digest)}
 
 
 def _cmd_digest(inp):

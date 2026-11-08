@@ -26,7 +26,7 @@
 import { digestBytes } from './digest.js';
 import { jcsBytes } from './jcs.js';
 import { decodeStdBase64 } from './decode.js';
-import { parseStrict, withinDepth } from './strict-json.js';
+import { decodeUtf8Strict, parseStrict, withinDepth } from './strict-json.js';
 
 export interface SseInput {
   raw_b64: string;
@@ -40,17 +40,21 @@ export interface SseOutput {
 
 /**
  * Parse raw SSE bytes into an array of dispatched message data strings.
- * Follows WHATWG §9.2 exactly.
+ * Follows WHATWG §9.2 exactly. The whole stream must be valid UTF-8, checked
+ * here before any framing (data line, comment, ignored field, undispatched
+ * tail alike): returns null for an invalid stream, never U+FFFD, matching Go's
+ * SSEDecode.
  */
-function parseSse(raw: Buffer): string[] {
+function parseSse(raw: Buffer): string[] | null {
   // Step 1: Strip leading UTF-8 BOM if present
   let start = 0;
   if (raw.length >= 3 && raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf) {
     start = 3;
   }
 
-  // Convert to string (UTF-8)
-  const text = raw.subarray(start).toString('utf8');
+  // Convert to string (UTF-8, fatal): the one decode of the stream bytes
+  const text = decodeUtf8Strict(raw.subarray(start));
+  if (text === null) return null;
 
   // Step 2: Split into logical lines, normalizing \r\n, lone \r, lone \n
   const lines = splitLines(text);
@@ -144,6 +148,7 @@ export function sseOutputsHash(input: SseInput): SseOutput | { error: string } {
   const raw = decodeStdBase64(input.raw_b64);
   if (raw === null) return { error: 'invalid_input' };
   const messages = parseSse(raw);
+  if (messages === null) return { error: 'invalid_input' };
 
   let committed: Buffer;
 
