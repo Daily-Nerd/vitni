@@ -487,7 +487,7 @@ Only the exact string `"revoked"` in `status` revokes a key. `vectors/verify-key
 
 ### A.3 Unknown members
 
-A verifier MUST ignore registry members it does not know, so a registry can grow without breaking an older verifier (`vectors/verify-extra-members-ignored`). Member names are case-sensitive: `vectors/verify-key-member-case-alg` and `vectors/verify-key-member-case-x` show that a differently-cased name is simply not the member.
+A verifier ignores registry members it does not know, as the input strictness rule in [`conformance/CONTRACT.md`](../conformance/CONTRACT.md#input-strictness-normative) requires, so a registry can grow without breaking an older verifier (`vectors/verify-extra-members-ignored`). Member names are case-sensitive: `vectors/verify-key-member-case-alg` and `vectors/verify-key-member-case-x` show that a differently-cased name is simply not the member.
 
 The members `rpId` and `origins` in the example above are only examples of unknown members. They have no meaning here and none is implied; a verifier ignores them like any other name it does not know.
 

@@ -2,7 +2,7 @@
 // deploy a verifier. It is non-normative: CONTRACT.md section 7 and the
 // vectors own the behavior. These tests keep it from drifting: every vector
 // it cites exists, its example registry is the one a vector verifies, it adds
-// at most one MUST, it restates no table that CONTRACT.md owns, and it carries
+// no RFC 2119 keyword, it restates no table that CONTRACT.md owns, and it carries
 // no attribution.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -61,11 +61,14 @@ test("the example registry is the one a vector verifies", () => {
   assert.deepEqual(JSON.parse(m[1]), vec.input.keys, "the example equals the vector's keys, member for member");
 });
 
-test("S3.2 the appendix adds exactly one MUST, and says so is non-normative", () => {
+test("S3.2 the appendix is non-normative: no RFC 2119 keyword, and the unknown-member rule links to CONTRACT.md", () => {
   const text = appendix();
-  assert.equal([...text.matchAll(/\bMUST\b/g)].length, 1, "exactly one MUST");
+  assert.deepEqual([...text.matchAll(/\b(?:MUST|SHOULD|MAY|REQUIRED)\b/g)].map((m) => m[0]), [], "no RFC 2119 keyword in capitals");
   assert.match(text, /non-normative/i);
   assert.match(text, /CONTRACT\.md/, "points at the normative source");
+  const sentence = text.replace(/\s+/g, " ").match(/A verifier ignores registry members it does not know\b.*?\.(?= |$)/);
+  assert.ok(sentence, "the unknown-member sentence is present, in plain lowercase");
+  assert.match(sentence[0], /\]\([^)]*conformance\/CONTRACT\.md#input-strictness-normative\)/, "that sentence links to the CONTRACT.md input strictness rule");
 });
 
 test("the appendix reserves nothing: no profile, no reserved member names, no future promise", () => {
