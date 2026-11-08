@@ -21,6 +21,7 @@
 import { verify, RegistryJwk } from './verify.js';
 import { jcsBytes } from './jcs.js';
 import { digestBytes } from './digest.js';
+import { decodeB64UrlStrict } from './decode.js';
 
 export interface VerifyChainInput {
   receipts: string[];
@@ -52,7 +53,8 @@ function parsePayload(jws: string): Record<string, unknown> | null {
   const parts = jws.split('.');
   if (parts.length !== 3) return null;
   try {
-    const buf = Buffer.from(parts[1], 'base64url');
+    const buf = decodeB64UrlStrict(parts[1]);
+    if (buf === null) return null;
     const obj = JSON.parse(buf.toString('utf8'));
     if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return null;
     return obj as Record<string, unknown>;

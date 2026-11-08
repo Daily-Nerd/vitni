@@ -16,6 +16,7 @@
  */
 import { createPublicKey, verify as cryptoVerify, KeyObject } from 'node:crypto';
 import { jcsBytes } from './jcs.js';
+import { decodeB64UrlStrict } from './decode.js';
 
 export interface VerifyInput {
   signed_receipt: string;
@@ -47,16 +48,6 @@ function fail(reason: string): VerifyOutput {
 }
 
 /**
- * Decode a base64url segment to a Buffer. Returns null on invalid input.
- * Strict: rejects characters outside the base64url alphabet.
- */
-function b64urlDecode(seg: string): Buffer | null {
-  // base64url alphabet: A-Z a-z 0-9 - _  (no padding)
-  if (!/^[A-Za-z0-9\-_]*$/.test(seg)) return null;
-  return Buffer.from(seg, 'base64url');
-}
-
-/**
  * Decode a Buffer as strict UTF-8. Returns null if it contains invalid UTF-8.
  */
 function strictUtf8(buf: Buffer): string | null {
@@ -69,17 +60,31 @@ function strictUtf8(buf: Buffer): string | null {
 }
 
 /**
- * Build a node KeyObject from a registry JWK. Keep only the standard JWK fields
- * (drop status/alg which node may reject for some key types). Returns null on failure.
+ * Build a node KeyObject from a registry JWK for the given alg. Key coordinates
+ * go through the one strict base64url decoder and must be exactly 32 bytes; the
+ * JWK handed to Node is rebuilt from the RE-ENCODED canonical strings, so Node's
+ * lenient JWK import (padding, std alphabet, trailing bits, extra bytes) never
+ * sees raw registry input. Any key-material problem returns null, which the
+ * caller reports as `bad_signature` (a JWS segment failing the same decoder is
+ * `malformed`: same decoder, different code at the call site).
  */
-function buildPublicKey(jwk: RegistryJwk): KeyObject | null {
-  const jwkFields: Record<string, string> = {
-    kty: jwk.kty,
-    crv: jwk.crv,
-    x: jwk.x,
-  };
-  if (jwk.y !== undefined) {
-    jwkFields.y = jwk.y;
+function buildPublicKey(jwk: RegistryJwk, alg: string): KeyObject | null {
+  const x = decodeB64UrlStrict(jwk.x);
+  if (x === null || x.length !== 32) return null;
+  let jwkFields: Record<string, string>;
+  if (alg === 'EdDSA') {
+    jwkFields = { kty: 'OKP', crv: 'Ed25519', x: x.toString('base64url') };
+  } else if (alg === 'ES256') {
+    const y = decodeB64UrlStrict(jwk.y as string);
+    if (y === null || y.length !== 32) return null;
+    jwkFields = {
+      kty: 'EC',
+      crv: 'P-256',
+      x: x.toString('base64url'),
+      y: y.toString('base64url'),
+    };
+  } else {
+    return null;
   }
   try {
     return createPublicKey({ key: jwkFields, format: 'jwk' });
@@ -123,9 +128,9 @@ export function verify(input: VerifyInput): VerifyOutput {
   if (parts.length !== 3) return fail('malformed');
   const [headerSeg, payloadSeg, sigSeg] = parts;
 
-  const headerBuf = b64urlDecode(headerSeg);
-  const payloadBuf = b64urlDecode(payloadSeg);
-  const sigBuf = b64urlDecode(sigSeg);
+  const headerBuf = decodeB64UrlStrict(headerSeg);
+  const payloadBuf = decodeB64UrlStrict(payloadSeg);
+  const sigBuf = decodeB64UrlStrict(sigSeg);
   if (headerBuf === null || payloadBuf === null || sigBuf === null) {
     return fail('malformed');
   }
@@ -193,7 +198,7 @@ export function verify(input: VerifyInput): VerifyOutput {
   }
 
   // --- Step 6: bad_signature ---
-  const keyObj = buildPublicKey(jwk);
+  const keyObj = buildPublicKey(jwk, headerAlg);
   if (keyObj === null) return fail('bad_signature');
   // signingInput = ASCII b64u(header).b64u(payload)
   const signingInput = Buffer.from(`${headerSeg}.${payloadSeg}`, 'ascii');

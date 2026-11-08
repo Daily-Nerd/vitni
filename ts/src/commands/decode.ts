@@ -36,3 +36,25 @@ export function decodeHex(s: string): Buffer | null {
   if (!/^[0-9a-fA-F]*$/.test(s)) return null;
   return Buffer.from(s, 'hex');
 }
+
+/**
+ * The single base64url decoder for every external byte string: JWS segments
+ * and registry key coordinates alike. Counterpart of Go's DecodeB64URLStrict.
+ *
+ * Accepts exactly one encoding per byte string: alphabet `A-Za-z0-9-_` only, no
+ * padding, no whitespace, length never 1 mod 4 (Node would silently drop the
+ * partial character), and all trailing bits zero (Node masks them; the
+ * re-encode compare rejects them). Returns null on any violation.
+ *
+ * The decoder only decides acceptance; the call site picks the error code:
+ * a failing JWS segment is `malformed`, a failing registry key is
+ * `bad_signature`.
+ */
+export function decodeB64UrlStrict(s: string): Buffer | null {
+  if (typeof s !== 'string') return null;
+  if (!/^[A-Za-z0-9_-]*$/.test(s)) return null;
+  if (s.length % 4 === 1) return null;
+  const buf = Buffer.from(s, 'base64url');
+  if (buf.toString('base64url') !== s) return null;
+  return buf;
+}
