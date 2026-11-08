@@ -41,7 +41,9 @@ async function readStdin(): Promise<Buffer> {
  * stdin byte is parsed, is what makes an unknown command answer
  * unsupported_command whatever the stdin looks like.
  */
-const COMMANDS: Record<string, (input: unknown) => unknown> = {
+type CommandTable = Readonly<Record<string, (input: unknown) => unknown>>;
+
+const COMMANDS: CommandTable = {
   jcs: (i) => jcs(i as Parameters<typeof jcs>[0]),
   hashstring: (i) => hashstring(i as Parameters<typeof hashstring>[0]),
   digest: (i) => digest(i as Parameters<typeof digest>[0]),
@@ -70,9 +72,17 @@ const COMMANDS: Record<string, (input: unknown) => unknown> = {
  *
  * Any gate violation is invalid_input, a command error and never a verdict.
  * The catch-all below is a last resort that no stdin is meant to reach.
+ *
+ * `commands` is a test seam, the only way to reach that catch: production
+ * always uses COMMANDS. Every name in an injected table must also be a name in
+ * the input schema (schema.ts), which stays keyed by the production commands.
  */
-export function dispatch(command: string, stdin: Uint8Array | string): string {
-  if (!Object.prototype.hasOwnProperty.call(COMMANDS, command)) {
+export function dispatch(
+  command: string,
+  stdin: Uint8Array | string,
+  commands: CommandTable = COMMANDS,
+): string {
+  if (!Object.prototype.hasOwnProperty.call(commands, command)) {
     return jcsString({ error: 'unsupported_command' });
   }
   const bytes = typeof stdin === 'string' ? Buffer.from(stdin, 'utf8') : stdin;
@@ -81,13 +91,13 @@ export function dispatch(command: string, stdin: Uint8Array | string): string {
     rejectNonFinite: true,
   });
   const input = parsed.ok ? parsed.value : undefined;
-  if (input === null || typeof input !== 'object' || Array.isArray(input) || !validateInput(command, input)) {
+  if (input === null || typeof input !== 'object' || Array.isArray(input) || !validateInput(command, input as Record<string, unknown>)) {
     return jcsString({ error: 'invalid_input' });
   }
 
   let result: unknown;
   try {
-    result = COMMANDS[command](input);
+    result = commands[command](input);
   } catch {
     result = { error: 'internal_error' };
   }

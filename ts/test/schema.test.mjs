@@ -90,7 +90,3 @@ for (const [command, input, valid, label] of table) {
     assert.equal(validateInput(command, input), valid);
   });
 }
-
-test('validateInput: an unknown command has no schema and is rejected', () => {
-  assert.equal(validateInput('nope', {}), false);
-});

@@ -129,11 +129,11 @@ const SCHEMAS: Record<string, CommandSchema> = {
 };
 
 /**
- * Whether `input` (a parsed stdin object) has the shape `command` requires.
- * A command without a schema is never valid.
+ * Whether `input` has the shape `command` requires. The caller (cli.ts) owns
+ * the two preconditions: `command` is a known command and `input` is the
+ * parsed top-level object.
  */
-export function validateInput(command: string, input: unknown): boolean {
-  if (!Object.prototype.hasOwnProperty.call(SCHEMAS, command) || !isObject(input)) return false;
+export function validateInput(command: string, input: Obj): boolean {
   const schema = SCHEMAS[command];
   return membersOk(input, schema.members) && (schema.deep?.(input) ?? true);
 }
