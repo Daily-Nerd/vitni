@@ -681,6 +681,73 @@ write_input("verify-key-member-case-status.json", "member/verify-key-case-status
              "policy": NO_POLICY},
             {"valid": True, "reason": "ok"})
 
+# ---------------------------------------------------------------------------
+# PR 0b, batch 4: the verify envelope is typed (R0.3, Q1, N8, N10). The WHOLE
+# `keys` tree is typed, not only the entry a receipt resolves to: a wrong JSON
+# type anywhere in it is invalid_input (a command error, never a verdict). A
+# JSON null registry entry is absent (unknown_key). Unknown members anywhere
+# are ignored, so a registry entry may grow (rpId, origins) without breaking a
+# verifier. Every receipt carries a valid signature.
+# ---------------------------------------------------------------------------
+INVALID_INPUT = {"error": "invalid_input"}
+
+
+def envelope(**override):
+    """A valid verify input with top-level members replaced; None leaves the member null."""
+    base = {"signed_receipt": ed_receipt, "keys": reg(), "policy": NO_POLICY}
+    base.update(override)
+    return base
+
+
+def ed_entry_with(**members):
+    return {"srv-ed": {"ed-1": {**reg()["srv-ed"]["ed-1"], **members}}}
+
+
+def neg_verify(fname, name, input_obj):
+    write_input(fname, name, "verify", input_obj, INVALID_INPUT)
+
+
+neg_verify("neg-verify-signed-receipt-number.json", "verify-envelope/signed-receipt-number",
+           envelope(signed_receipt=5))
+for _member in ("x", "y", "alg", "kty", "crv", "status"):
+    neg_verify(f"neg-verify-key-{_member}-number.json", f"verify-envelope/key-{_member}-number",
+               envelope(keys=ed_entry_with(**{_member: 5})))
+neg_verify("neg-verify-key-entry-string.json", "verify-envelope/key-entry-string",
+           envelope(keys={"srv-ed": {"ed-1": "x"}}))
+neg_verify("neg-verify-key-entry-array.json", "verify-envelope/key-entry-array",
+           envelope(keys={"srv-ed": {"ed-1": []}}))
+neg_verify("neg-verify-keys-array.json", "verify-envelope/keys-array", envelope(keys=[]))
+neg_verify("neg-verify-keys-performer-array.json", "verify-envelope/keys-performer-array",
+           envelope(keys={"srv-ed": []}))
+neg_verify("neg-verify-policy-binding-number.json", "verify-envelope/policy-binding-number",
+           envelope(policy={"expected_binding": 5, "expected_method": None}))
+neg_verify("neg-verify-policy-method-number.json", "verify-envelope/policy-method-number",
+           envelope(policy={"expected_binding": None, "expected_method": 5}))
+neg_verify("neg-verify-policy-array.json", "verify-envelope/policy-array", envelope(policy=[]))
+# Q1: the lookup hits srv-ed and would succeed; the bad type is in an unrelated entry
+neg_verify("neg-verify-unrelated-entry-bad-type.json", "verify-envelope/unrelated-entry-bad-type",
+           envelope(keys={**reg(), "other": {"k": {**_ed_entry, "x": 5}}}))
+# N10: a null entry is absent
+write_input("verify-key-entry-null.json", "verify-envelope/key-entry-null", "verify",
+            envelope(keys={"srv-ed": {"ed-1": None}}), {"valid": False, "reason": "unknown_key"})
+write_input("verify-key-performer-null.json", "verify-envelope/key-performer-null", "verify",
+            envelope(keys={"srv-ed": None}), {"valid": False, "reason": "unknown_key"})
+# unknown members are ignored: guards against an over-strict verifier that would
+# break forward-compatible registry growth
+write_input("verify-extra-members-ignored.json", "verify-envelope/extra-members-ignored", "verify",
+            {**envelope(keys=ed_entry_with(rpId="example.com", origins=["https://example.com"])),
+             "extra": {"nested": [1, 2, 3]}, "policy": {**NO_POLICY, "future_member": True}},
+            {"valid": True, "reason": "ok"})
+# verify-chain types the same registry tree and policy
+write_input("neg-verify-chain-keys-array.json", "verify-envelope/chain-keys-array", "verify-chain",
+            {"receipts": [], "keys": [], "policy": None}, INVALID_INPUT)
+write_input("neg-verify-chain-key-x-number.json", "verify-envelope/chain-key-x-number",
+            "verify-chain",
+            {"receipts": [ed_receipt], "keys": ed_entry_with(x=5), "policy": None}, INVALID_INPUT)
+write_input("neg-verify-chain-policy-binding-number.json",
+            "verify-envelope/chain-policy-binding-number", "verify-chain",
+            {"receipts": [], "keys": {}, "policy": {"expected_binding": 5}}, INVALID_INPUT)
+
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)

@@ -1,0 +1,1 @@
+{"name": "verify-envelope/chain-keys-array", "command": "verify-chain", "input": {"receipts": [], "keys": [], "policy": null}, "anchor": {"error": "invalid_input"}}
