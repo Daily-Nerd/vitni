@@ -346,6 +346,45 @@ key_vec("verify-key-es256-x-std-alphabet.json", "verify/key-es256-x-std-alphabet
 key_vec("verify-key-es256-offcurve.json", "verify/key-es256-offcurve", ec_receipt,
         reg_with(ec={"y": b64u((int.from_bytes(ec_y, "big") + 1).to_bytes(32, "big"))}))
 
+# ---------------------------------------------------------------------------
+# PR 0a, batch 3: the algorithm table owns {alg -> kty, crv}. A registry key is
+# usable only when its kty/crv are the ones its alg requires (R0.1, N9, N11).
+# All receipts carry a VALID signature, so alg_not_allowed is decided by the
+# key-type rule and not masked by bad_signature.
+# ---------------------------------------------------------------------------
+NOT_ALLOWED = (False, "alg_not_allowed")
+
+
+def bind_vec(fname, name, signed, keys, verdict=NOT_ALLOWED):
+    write(fname, name, signed, keys, NO_POLICY, *verdict)
+
+
+bind_vec("verify-key-es256-kty-okp.json", "verify/key-es256-kty-okp", ec_receipt,
+         reg_with(ec={"kty": "OKP"}))
+bind_vec("verify-key-es256-crv-p384.json", "verify/key-es256-crv-p384", ec_receipt,
+         reg_with(ec={"crv": "P-384"}))
+bind_vec("verify-key-eddsa-kty-ec.json", "verify/key-eddsa-kty-ec", ed_receipt,
+         reg_with(ed={"kty": "EC"}))
+bind_vec("verify-key-eddsa-crv-ed448.json", "verify/key-eddsa-crv-ed448", ed_receipt,
+         reg_with(ed={"crv": "Ed448"}))
+bind_vec("verify-key-eddsa-kty-missing.json", "verify/key-eddsa-kty-missing", ed_receipt,
+         reg_with(ed={"kty": DELETE}))
+bind_vec("verify-key-eddsa-crv-null.json", "verify/key-eddsa-crv-null", ed_receipt,
+         reg_with(ed={"crv": None}))
+# N11: an alg outside the table is alg_not_allowed even when header and registry
+# agree on it (the signature is junk and irrelevant: the alg check comes first)
+rs256 = ".".join([b64u(b'{"alg":"RS256","kid":"ed-1"}'), b64u(ed_payload), b64u(b"junk" * 16)])
+bind_vec("verify-key-alg-rs256.json", "verify/key-alg-rs256", rs256,
+         reg_with(ed={"alg": "RS256"}))
+# ordering guards: revoked (step 4) beats the key-type rule; the header/registry
+# alg-equality rule and the key-type rule give the same code
+bind_vec("verify-key-revoked-and-mismatched.json", "verify/key-revoked-and-mismatched", ed_receipt,
+         reg_with(ed={"kty": "EC"}, status_ed="revoked"), (False, "revoked_key"))
+bind_vec("verify-key-alg-header-mismatch-and-bad-kty.json",
+         "verify/key-alg-header-mismatch-and-bad-kty",
+         jws({"alg": "ES256", "kid": "ed-1"}, ed_payload, "EdDSA"),
+         reg_with(ed={"kty": "EC"}))
+
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)
