@@ -758,6 +758,28 @@ for _f, _n, _s in (
                "input": {"receipt": _SIGN_RECEIPT, "kid": "ed-1", "private_key_b64": _s},
                "anchor": {"error": "invalid_private_key"}})
 
+# receipt_id_must_be_absent: a receipt that already carries a `receipt_id` KEY is
+# refused by receipt-id and sign, whatever the value. The key being present is the
+# whole test, so null counts. Each case has that as its only defect.
+_ABSENT = {"error": "receipt_id_must_be_absent"}
+_SIGN_KEY_B64 = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+write("neg-receipt-id-present-string.json", {
+    "name": "receipt-id/receipt-id-present-string", "command": "receipt-id",
+    "input": {"receipt": dict(receipt, receipt_id="u" + "A" * 46)}, "anchor": _ABSENT})
+write("neg-receipt-id-present-null.json", {
+    "name": "receipt-id/receipt-id-present-null", "command": "receipt-id",
+    "input": {"receipt": dict(receipt, receipt_id=None)}, "anchor": _ABSENT})
+write("neg-sign-receipt-id-present.json", {
+    "name": "sign/receipt-id-present", "command": "sign",
+    "input": {"receipt": dict(_SIGN_RECEIPT, receipt_id="u" + "A" * 46), "kid": "ed-1",
+              "private_key_b64": _SIGN_KEY_B64},
+    "anchor": _ABSENT})
+# Precedence (CONTRACT.md Input strictness): the stdin gate, rule 3, runs before the
+# command, rule 5. receipt-id rejects a duplicate key over the WHOLE text, so a
+# receipt that repeats `receipt_id` is invalid_input, not receipt_id_must_be_absent.
+_neg("neg-receipt-id-present-dup-key", "receipt-id/receipt-id-present-and-duplicated", "receipt-id",
+     text='{"receipt":{"receipt_id":"a","receipt_id":"b"}}')
+
 # =====================================================================
 # Batch FX. Invariant: one SSE stream maps to one hash or one error, identical
 # in every impl. Invalid UTF-8 ANYWHERE in the decoded raw_b64 stream (data,

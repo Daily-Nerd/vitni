@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -373,6 +374,18 @@ func TestVectors_ReceiptID(t *testing.T) {
 				t.Fatal(err)
 			}
 			canonHex, receiptID, err := vitni.ReceiptID(inp.Receipt)
+			var errAnchor struct {
+				Error string `json:"error"`
+			}
+			if uerr := json.Unmarshal(v.Anchor, &errAnchor); uerr == nil && errAnchor.Error != "" {
+				if errAnchor.Error != "receipt_id_must_be_absent" {
+					t.Fatalf("unexpected error anchor %q for a library vector", errAnchor.Error)
+				}
+				if !errors.Is(err, vitni.ErrReceiptIDMustBeAbsent) {
+					t.Fatalf("ReceiptID error = %v, want ErrReceiptIDMustBeAbsent", err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("ReceiptID error: %v", err)
 			}

@@ -76,7 +76,7 @@ This is the one list of `{"error":"<code>"}` outputs. Every one is a command err
 | `missing_command` | No command argument at all (an empty string is an argument, so `unsupported_command`). | the CLI, before stdin is read | per-implementation CLI tests; not expressible as a vector |
 | `unsupported_command` | The command is not one the verifier knows. Resolved before stdin is parsed. | the CLI | vectors `cli-empty-command`, `neg-cli-unsupported-command`, `neg-cli-unsupported-command-bad-stdin` |
 | `invalid_input` | The stdin text failed the stdin gate, or a member is absent, `null` or of the wrong type, or a command-specific domain rule failed (`hashstring` digest length, `sse-outputs-hash` invalid UTF-8 or bad `mode`, and the like). Includes a number that overflows float64 to infinity, and the non-finite literals `NaN` and `Infinity`. | every command | many vectors, for example `neg-jcs-nonfinite-1e400` and `neg-jcs-nan-literal` |
-| `receipt_id_must_be_absent` | The receipt already carries a `receipt_id` key. | `receipt-id`, `sign` | per-implementation tests; no vector |
+| `receipt_id_must_be_absent` | The receipt already carries a `receipt_id` key. | `receipt-id`, `sign` | vectors `neg-receipt-id-present-string`, `neg-receipt-id-present-null`, `neg-sign-receipt-id-present` |
 | `cost_must_be_string_int` | A `cost` magnitude is a JSON number. | `cost-canon` | vectors |
 | `unsupported_part` | An A2A part has an unknown `kind`, or neither `bytes` nor `uri`. | `a2a-artifact-hash` | vectors |
 | `kid_required` | `kid` is absent or `null`. | `sign` | vector |
