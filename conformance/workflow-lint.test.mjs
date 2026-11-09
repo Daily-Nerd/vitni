@@ -30,6 +30,7 @@ const named = (name) => findNamed(STEPS, name);
 const index = (s) => STEPS.indexOf(s);
 
 const UV = "Install uv (pinned)";
+const PYTHONS = "Set up Pythons (3.10 and 3.13 from the runner cache)";
 const UNIT = "Python verifier unit tests (stdlib only, both supported Pythons)";
 const COMPARE = "Cross-implementation conformance (Go, TS and Python, byte-identical in scope)";
 const CROSS = "Python verifier cross-check against a second implementation";
@@ -58,6 +59,15 @@ test("the unit tests run before the compare, uv is installed (pinned) before bot
   assert.match(uv, /uses: astral-sh\/setup-uv@/);
   assert.match(uv, /version: "[0-9.]+"/);
   assert.ok(index(uv) < index(named(UNIT)) && index(named(UNIT)) < index(named(COMPARE)));
+});
+
+test("both Pythons come from setup-python and uv may not download its own", () => {
+  const py = named(PYTHONS);
+  assert.match(py, /uses: actions\/setup-python@/);
+  assert.match(py, /^\s+3\.10$/m);
+  assert.match(py, /^\s+3\.13$/m);
+  assert.ok(index(py) < index(named(UNIT)), "Pythons are set up before the unit tests");
+  assert.match(WORKFLOW, /^    env:\n(?:      #.*\n)*      UV_PYTHON_DOWNLOADS: never$/m, "job-level UV_PYTHON_DOWNLOADS: never");
 });
 
 test("the compare runs per Python version with PY_VERIFY and requires all three impls through REQUIRE_IMPLS", () => {

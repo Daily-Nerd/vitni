@@ -8,6 +8,11 @@ on:
 jobs:
   cross-impl:
     runs-on: ubuntu-latest
+    env:
+      # uv must use the interpreters set up below and never fetch its own.
+      # A missing version then fails with a clear error instead of a
+      # download that can time out mid-run.
+      UV_PYTHON_DOWNLOADS: never
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +38,13 @@ jobs:
           npm install
           npm run build
           npx c8 --reporter=lcov --reports-dir=coverage npm test
+
+      - name: Set up Pythons (3.10 and 3.13 from the runner cache)
+        uses: actions/setup-python@v5
+        with:
+          python-version: |
+            3.10
+            3.13
 
       - name: Install uv (pinned)
         uses: astral-sh/setup-uv@v6
