@@ -30,7 +30,8 @@ const named = (name) => findNamed(STEPS, name);
 const index = (s) => STEPS.indexOf(s);
 
 const UV = "Install uv (pinned)";
-const PYTHONS = "Set up Pythons (3.10 and 3.13 from the runner cache)";
+const PY310_CACHE = "Restore Python 3.10 from the Actions cache";
+const PYTHONS = "Set up Pythons (3.13 from the runner image, 3.10 from the Actions cache)";
 const UNIT = "Python verifier unit tests (stdlib only, both supported Pythons)";
 const COMPARE = "Cross-implementation conformance (Go, TS and Python, byte-identical in scope)";
 const CROSS = "Python verifier cross-check against a second implementation";
@@ -68,6 +69,14 @@ test("both Pythons come from setup-python and uv may not download its own", () =
   assert.match(py, /^\s+3\.13$/m);
   assert.ok(index(py) < index(named(UNIT)), "Pythons are set up before the unit tests");
   assert.match(WORKFLOW, /^    env:\n(?:      #.*\n)*      UV_PYTHON_DOWNLOADS: never$/m, "job-level UV_PYTHON_DOWNLOADS: never");
+});
+
+test("Python 3.10 is restored from the Actions cache before setup-python looks for it", () => {
+  const cache = named(PY310_CACHE);
+  assert.match(cache, /uses: actions\/cache@/);
+  assert.match(cache, /path: \$\{\{ runner\.tool_cache \}\}\/Python\/3\.10\.\*/);
+  assert.match(cache, /key: .*3\.10.*\$\{\{ env\.ImageOS \}\}/, "the key carries the version and the runner OS");
+  assert.ok(index(cache) < index(named(PYTHONS)), "the cache is restored before setup-python searches the tool cache");
 });
 
 test("the compare runs per Python version with PY_VERIFY and requires all three impls through REQUIRE_IMPLS", () => {

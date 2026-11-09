@@ -39,7 +39,18 @@ jobs:
           npm run build
           npx c8 --reporter=lcov --reports-dir=coverage npm test
 
-      - name: Set up Pythons (3.10 and 3.13 from the runner cache)
+      - name: Restore Python 3.10 from the Actions cache
+        # The runner image ships 3.13 but no longer ships 3.10 (end of life
+        # October 2026), so setup-python would download it on every run.
+        # Keeping the interpreter in the Actions cache limits that download
+        # to a cache miss. ImageOS is in the key so a new runner OS never
+        # restores binaries built for the old one.
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.tool_cache }}/Python/3.10.*
+          key: toolcache-python-3.10-${{ env.ImageOS }}-${{ runner.arch }}-v1
+
+      - name: Set up Pythons (3.13 from the runner image, 3.10 from the Actions cache)
         uses: actions/setup-python@v5
         with:
           python-version: |
