@@ -5,11 +5,13 @@ package vitni
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Daily-Nerd/vitni/go/internal/hashstr"
 	"github.com/gowebpki/jcs"
@@ -17,6 +19,12 @@ import (
 
 // ErrCostMustBeStringInt is returned when a cost magnitude is a JSON number.
 var ErrCostMustBeStringInt = errors.New("cost_must_be_string_int")
+
+// ErrInvalidUTF8 reports an SSE stream that is not valid UTF-8.
+var ErrInvalidUTF8 = errors.New("vitni: SSE stream is not valid UTF-8")
+
+// ErrDigestLength reports a digest that is not exactly 32 bytes.
+var ErrDigestLength = errors.New("vitni: digest must be exactly 32 bytes")
 
 // ErrReceiptIDMustBeAbsent is returned when the receipt already has a receipt_id.
 var ErrReceiptIDMustBeAbsent = errors.New("receipt_id_must_be_absent")
@@ -36,6 +44,10 @@ func HashString(digestHex string) (string, error) {
 	digest, err := hex.DecodeString(digestHex)
 	if err != nil {
 		return "", err
+	}
+	// The header declares 0x20: it never lies about the digest length.
+	if len(digest) != sha256.Size {
+		return "", ErrDigestLength
 	}
 	return hashstr.Encode(digest), nil
 }
@@ -90,6 +102,10 @@ func ReceiptID(receipt json.RawMessage) (string, string, error) {
 // dispatched message data strings in order.
 //
 // Rules implemented:
+//   - The whole stream must be valid UTF-8 (checked here, the one owner of the
+//     stream bytes, before any framing): invalid bytes anywhere, in a data
+//     line, a comment, an ignored field or an undispatched tail, are
+//     ErrInvalidUTF8. Nothing is hashed raw and nothing is replaced.
 //   - Strip a single leading UTF-8 BOM (EF BB BF) if present.
 //   - Normalize line terminators: \r\n, lone \r, lone \n all delimit lines.
 //   - data: field value = text after "data:" and one optional leading space.
@@ -98,6 +114,10 @@ func ReceiptID(receipt json.RawMessage) (string, string, error) {
 //   - Dispatch event on blank line; event with empty data NOT dispatched.
 //   - Trailing event with no blank line NOT dispatched.
 func SSEDecode(raw []byte) ([]string, error) {
+	if !utf8.Valid(raw) {
+		return nil, ErrInvalidUTF8
+	}
+
 	// 1. Strip single leading BOM
 	if bytes.HasPrefix(raw, []byte{0xEF, 0xBB, 0xBF}) {
 		raw = raw[3:]

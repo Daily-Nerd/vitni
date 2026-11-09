@@ -1,0 +1,1 @@
+{"name": "sse/utf8-multibyte", "command": "sse-outputs-hash", "profiles": ["canon:b64-strict"], "input": {"mode": "sse", "raw_b64": "ZGF0YTogw6nigqzwn5iACgo="}, "anchor": {"decoded_hex": "c3a9e282acf09f9880", "outputs_hash": "uEiDfkiaSf9Vywe5m7shd4bsTlJdhSJnzbk6QR0y3H2750A"}}

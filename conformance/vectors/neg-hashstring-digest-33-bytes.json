@@ -1,0 +1,1 @@
+{"name": "hashstring/digest-33-bytes", "command": "hashstring", "profiles": [], "input": {"algo": "sha2-256", "digest_hex": "ababababababababababababababababababababababababababababababababab"}, "anchor": {"error": "invalid_input"}}

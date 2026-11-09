@@ -11,6 +11,7 @@ const DIST = new URL('../dist', import.meta.url).pathname;
 const { digest } = await import(`${DIST}/commands/digest.js`);
 const { hashstring } = await import(`${DIST}/commands/hashstring.js`);
 const { costCanon } = await import(`${DIST}/commands/cost-canon.js`);
+const { verify } = await import(`${DIST}/commands/verify.js`);
 const { sseOutputsHash } = await import(`${DIST}/commands/sse-outputs-hash.js`);
 const { a2aArtifactHash } = await import(`${DIST}/commands/a2a-artifact-hash.js`);
 const { decodeStdBase64, decodeHex } = await import(`${DIST}/commands/decode.js`);
@@ -73,4 +74,45 @@ test('sse-outputs-hash (issue #58): sse-jsonrpc inner result 1e400 rejected, not
 test('a2a inline file bytes: malformed base64 rejected with invalid_input', () => {
   const out = a2aArtifactHash({ artifact: { parts: [{ kind: 'file', file: { bytes: 'aa!!!@@@' } }] } });
   assert.deepEqual(out, { error: 'invalid_input' });
+});
+
+test('sse-outputs-hash: invalid UTF-8 anywhere in the stream is invalid_input in both modes', () => {
+  const streams = [
+    Buffer.from('data: a\xffb\n\n', 'latin1'),
+    Buffer.concat([Buffer.from(': '), Buffer.from([0xff]), Buffer.from('\n\ndata: a\n\n')]),
+    Buffer.concat([Buffer.from('event: '), Buffer.from([0xff]), Buffer.from('\ndata: a\n\n')]),
+    Buffer.concat([Buffer.from('data: a\n\n'), Buffer.from([0xff])]),
+    Buffer.from([...Buffer.from('data: '), 0xe2, 0x82, 0x0a, 0x0a]),
+    Buffer.from([...Buffer.from('data: '), 0xc0, 0x80, 0x0a, 0x0a]),
+    Buffer.from([...Buffer.from('data: '), 0xed, 0xa0, 0x80, 0x0a, 0x0a]),
+    Buffer.from([0xef, 0xbb, 0xbf, ...Buffer.from('data: '), 0xff, 0x0a, 0x0a]),
+  ];
+  for (const raw of streams) {
+    for (const mode of ['sse', 'sse-jsonrpc']) {
+      assert.deepEqual(
+        sseOutputsHash({ mode, raw_b64: raw.toString('base64') }),
+        { error: 'invalid_input' },
+        `${mode}: ${raw.toString('hex')}`
+      );
+    }
+  }
+  const ok = sseOutputsHash({ mode: 'sse', raw_b64: Buffer.from('data: é€\u{1f600}\n\n').toString('base64') });
+  assert.equal(ok.decoded_hex, Buffer.from('é€\u{1f600}').toString('hex'));
+});
+
+test('hashstring: digest_hex must decode to exactly 32 bytes', () => {
+  for (const n of [0, 1, 31, 33, 64]) {
+    assert.deepEqual(hashstring({ algo: 'sha2-256', digest_hex: 'ab'.repeat(n) }), { error: 'invalid_input' }, `${n} bytes`);
+  }
+  assert.ok('hashstr' in hashstring({ algo: 'sha2-256', digest_hex: 'ab'.repeat(32) }));
+});
+
+test('verify: names every object inherits are ordinary absent registry keys (unknown_key)', () => {
+  const header = (kid) => Buffer.from(JSON.stringify({ alg: 'EdDSA', kid })).toString('base64url');
+  const payload = (p) => Buffer.from(JSON.stringify({ performer_id: p })).toString('base64url');
+  const keys = { 'srv-ed': { 'ed-1': { kty: 'OKP', crv: 'Ed25519', x: 'AA', alg: 'EdDSA' } } };
+  for (const name of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf']) {
+    assert.deepEqual(verify({ signed_receipt: `${header(name)}.${payload('srv-ed')}.AA`, keys }), { valid: false, reason: 'unknown_key' }, `kid ${name}`);
+    assert.deepEqual(verify({ signed_receipt: `${header('toString')}.${payload(name)}.AA`, keys }), { valid: false, reason: 'unknown_key' }, `performer ${name}`);
+  }
 });

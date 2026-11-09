@@ -138,7 +138,9 @@ export async function main(
   write: (s: string) => void = (s) => { process.stdout.write(s); },
 ): Promise<void> {
   const command = argv[2];
-  if (!command) {
+  // No argument at all is missing; an empty string is a command nobody implements
+  // and resolves like any other unknown one (CONTRACT.md).
+  if (command === undefined) {
     write(JSON.stringify({ error: 'missing_command' }) + '\n');
     return;
   }

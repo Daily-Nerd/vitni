@@ -73,6 +73,11 @@ test('main: missing command', async () => {
   await main(['node', 'cli'], async () => '', (s) => { out += s; });
   assert.deepEqual(JSON.parse(out), { error: 'missing_command' });
 });
+test('main: an empty command argument is unsupported_command, not missing_command (CONTRACT)', async () => {
+  let out = '';
+  await main(['node', 'cli', ''], async () => '{}', (s) => { out += s; });
+  assert.deepEqual(JSON.parse(out), { error: 'unsupported_command' });
+});
 test('main: stdin read error', async () => {
   let out = '';
   await main(['node', 'cli', 'jcs'], async () => { throw new Error('pipe'); }, (s) => { out += s; });

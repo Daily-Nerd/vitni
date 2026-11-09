@@ -31,7 +31,7 @@ class EveryVector(unittest.TestCase):
                     declared += 1
         self.assertGreater(declared, 150)
         self.assertGreater(declined, 50)
-        self.assertEqual(unsupported, 2)
+        self.assertEqual(unsupported, 3)
 
     def test_no_vector_needs_an_atom_python_does_not_declare(self):
         # a vector that is not declined must be answerable: its gating atoms are declared

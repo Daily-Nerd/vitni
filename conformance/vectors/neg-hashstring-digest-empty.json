@@ -1,0 +1,1 @@
+{"name": "hashstring/digest-empty", "command": "hashstring", "profiles": [], "input": {"algo": "sha2-256", "digest_hex": ""}, "anchor": {"error": "invalid_input"}}

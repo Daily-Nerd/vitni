@@ -38,6 +38,7 @@ export function hashstring(input: HashstringInput): HashstringOutput | { error: 
     return { error: 'invalid_input' };
   }
   const digestBytes = decodeHex(input.digest_hex);
-  if (digestBytes === null) return { error: 'invalid_input' };
+  // The header declares 0x20: it never lies about the digest length.
+  if (digestBytes === null || digestBytes.length !== 32) return { error: 'invalid_input' };
   return { hashstr: encodeHashstring(digestBytes) };
 }

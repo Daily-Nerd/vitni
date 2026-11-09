@@ -767,6 +767,69 @@ del _no_receipt["signed_receipt"]
 write_input("verify-signed-receipt-absent.json", "verify-envelope/signed-receipt-absent", "verify",
             _no_receipt, {"valid": False, "reason": "malformed"})
 
+# ---------------------------------------------------------------------------
+# Batch FX. Invariant: registry lookup answers only for keys the registry
+# actually contains. A kid or performer_id that is a name every object inherits
+# (__proto__, constructor, toString) is an ordinary absent key: unknown_key.
+# ---------------------------------------------------------------------------
+UNKNOWN_KEY = (False, "unknown_key")
+CTX_MISMATCH = (False, "context_mismatch")
+for _fname, _name, _kid in (
+        ("verify-key-proto-name.json", "verify/key-proto-name", "__proto__"),
+        ("verify-key-constructor-name.json", "verify/key-constructor-name", "constructor"),
+        ("verify-key-tostring-name.json", "verify/key-tostring-name", "toString")):
+    write(_fname, _name, jws({"alg": "EdDSA", "kid": _kid}, ed_payload, "EdDSA"),
+          reg(), NO_POLICY, *UNKNOWN_KEY)
+# the performer level: __proto__ as performer_id, and a kid the inherited object has
+write("verify-key-proto-performer.json", "verify/key-proto-performer",
+      jws({"alg": "EdDSA", "kid": "toString"}, jcs(receipt("__proto__")).encode(), "EdDSA"),
+      reg(), NO_POLICY, *UNKNOWN_KEY)
+# and the other way round: a registry that DOES contain the name answers for it
+_own = reg()
+_own["srv-ed"] = {"__proto__": _own["srv-ed"]["ed-1"]}
+write("verify-key-own-proto-name.json", "verify/key-own-proto-name",
+      jws({"alg": "EdDSA", "kid": "__proto__"}, ed_payload, "EdDSA"),
+      _own, NO_POLICY, True, "ok")
+
+# an empty string is a name like any other (CONTRACT step 3 says only "absent or
+# not in keys"): registered under "", it resolves
+_ed_key = reg()["srv-ed"]["ed-1"]
+for _fname, _name, _perf, _kid in (
+        ("verify-empty-kid-performer.json", "verify/empty-kid-performer", "", ""),
+        ("verify-empty-kid.json", "verify/empty-kid", "srv-ed", ""),
+        ("verify-empty-performer.json", "verify/empty-performer", "", "ed-1")):
+    write(_fname, _name,
+          jws({"alg": "EdDSA", "kid": _kid}, jcs(receipt(_perf)).encode(), "EdDSA"),
+          {_perf: {_kid: _ed_key}}, NO_POLICY, *OK)
+# and an empty name the registry does not hold is still unknown_key
+write("verify-empty-kid-unregistered.json", "verify/empty-kid-unregistered",
+      jws({"alg": "EdDSA", "kid": ""}, ed_payload, "EdDSA"), reg(), NO_POLICY, *UNKNOWN_KEY)
+
+# policy: an absent claim never equals an expected value, the empty string included
+_absent_b = receipt("srv-ed")
+del _absent_b["binding"]
+_absent_m = receipt("srv-ed")
+del _absent_m["method"]
+_null_b = receipt("srv-ed")
+_null_b["binding"] = None
+_num_m = receipt("srv-ed")
+_num_m["method"] = 5
+for _fname, _name, _rcpt, _policy, _verdict in (
+        ("verify-policy-binding-absent-expected-empty.json",
+         "verify/policy-binding-absent-expected-empty", _absent_b,
+         {"expected_binding": "", "expected_method": None}, CTX_MISMATCH),
+        ("verify-policy-method-absent-expected-empty.json",
+         "verify/policy-method-absent-expected-empty", _absent_m,
+         {"expected_binding": None, "expected_method": ""}, CTX_MISMATCH),
+        ("verify-policy-binding-null-expected-empty.json",
+         "verify/policy-binding-null-expected-empty", _null_b,
+         {"expected_binding": "", "expected_method": None}, CTX_MISMATCH),
+        ("verify-policy-method-non-string-expected-empty.json",
+         "verify/policy-method-non-string-expected-empty", _num_m,
+         {"expected_binding": None, "expected_method": ""}, CTX_MISMATCH)):
+    write(_fname, _name, jws({"alg": "EdDSA", "kid": "ed-1"}, jcs(_rcpt).encode(), "EdDSA"),
+          reg(), _policy, *_verdict)
+
 print("wrote verify vectors:")
 for p in sorted(OUT.glob("verify-*.json")):
     print(" ", p.name)

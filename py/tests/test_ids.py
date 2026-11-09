@@ -51,6 +51,13 @@ class Hashstring(unittest.TestCase):
             with self.assertRaises(V._Reject, msg=member):
                 V._cmd_hashstring(member)
 
+    def test_digest_hex_must_be_exactly_32_bytes(self):
+        # the multihash header declares 0x20: it never lies about its digest length
+        for n in (0, 1, 31, 33, 64):
+            with self.assertRaises(V._Reject, msg=n):
+                V._cmd_hashstring({"algo": "sha2-256", "digest_hex": "ab" * n})
+        self.assertTrue(V._cmd_hashstring({"algo": "sha2-256", "digest_hex": "ab" * 32})["hashstr"].startswith("uEiC"))
+
     def test_every_hashstring_vector_in_shape(self):
         vecs = vectors("hashstring/") + vectors("member/hashstring-unsupported-algo")
         self.assertGreaterEqual(len(vecs), 3)

@@ -1,0 +1,1 @@
+{"name": "sse/invalid-utf8-in-data", "command": "sse-outputs-hash", "profiles": ["canon:b64-strict"], "input": {"mode": "sse", "raw_b64": "ZGF0YTogYf9iCgo="}, "anchor": {"error": "invalid_input"}}

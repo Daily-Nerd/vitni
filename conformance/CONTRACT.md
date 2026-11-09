@@ -32,7 +32,7 @@ Every conforming verifier MUST:
 
 Every external byte string enters through ONE strict decoder per format, and the CLI judges stdin once, before any command logic. The order is fixed:
 
-1. **Missing command**: no command argument is `{"error":"missing_command"}`.
+1. **Missing command**: no command argument is `{"error":"missing_command"}`. An empty string is an argument: it is an unknown command (rule 2).
 2. **The command resolves first.** An unknown command is `{"error":"unsupported_command"}` whatever the stdin is; stdin is never parsed for it.
 3. **The stdin gate**, the same for EVERY command (`jcs hashstring digest receipt-id sse-outputs-hash cost-canon verify verify-chain a2a-artifact-hash sign keygen`), `verify` and `verify-chain` included. The stdin bytes must be strict UTF-8 text (no overlong forms, no encoded surrogates), without a leading BOM (`EF BB BF`), free of lone-surrogate `\uXXXX` escapes in any key or string (a valid surrogate pair escape is fine), exactly one JSON value followed only by optional ASCII whitespace (so no trailing garbage or NUL), nested at most 128 deep (the top-level object is depth 1), without a number that overflows a float64 to infinity, and the value must be a JSON object. Duplicate object keys are rejected over the whole text for `jcs`, `receipt-id` and `cost-canon`, and are last-wins for every other command. Any violation is `{"error":"invalid_input"}`. Empty stdin is invalid input too: it is not a JSON value.
 4. **Member names and types.** Member names are exact and case-sensitive; a name that differs only in case is an unknown member and is ignored. A required member that is absent or `null`, or any member of the wrong JSON type, is `{"error":"invalid_input"}`. Unknown members are ignored, so the input can grow. The one required member whose domain includes `null` is `jcs` `value`: the key must be present, `null` is a value. For `verify` and `verify-chain` the WHOLE `keys` tree is typed (every performer an object or `null`, every entry an object or `null`, `kty crv x y alg status` each a string, `null` or absent) and `policy` (an object or `null`, `expected_binding` and `expected_method` each a string, `null` or absent), not only the entry a receipt resolves to. A `null` registry entry is absent: `unknown_key`. The members each command reads, their types and which are required are in the table below; what a command does with a member stays in the command.
@@ -104,6 +104,7 @@ Output:
 { "hashstr": "u<base64url-nopad of multihash(varint code || varint len || digest)>" }
 ```
 - v1 algo: `sha2-256` (multihash code `0x12`). Multibase prefix is the literal char `u` (base64url, no padding).
+- `digest_hex` must decode to exactly 32 bytes: the multihash header declares length `0x20`, so any other length (including empty) is `invalid_input`.
 
 ### 3. `digest` — hash raw bytes into a pinned hash-string
 Input:
@@ -139,6 +140,7 @@ Output:
 { "decoded_hex": "<hex of the committed decoded bytes>", "outputs_hash": "u..." }
 ```
 Decoding rules (MUST match design §4.3 exactly):
+- The decoded stream must be valid UTF-8 end to end, judged before any framing: an invalid sequence anywhere (a `data:` line, a comment, an ignored field, an undispatched tail, after a BOM; stray, truncated or overlong bytes, an encoded surrogate) is `invalid_input` in both modes. Nothing is hashed as raw bytes and nothing is replaced with U+FFFD.
 - Parse per WHATWG SSE (html.spec.whatwg.org §9.2):
   - Strip a single leading UTF-8 BOM (`EF BB BF`) if present.
   - Normalize line terminators: `\r\n`, lone `\r`, lone `\n` all delimit lines.
@@ -193,7 +195,7 @@ Output:
    - The header has a `b64` member that is not boolean `true` (`false` and every non-boolean value, `null` included, are malformed; `true` is the same as absent).
    - The payload bytes are not strict JSON text that is exactly one object, by the same rules. A duplicate payload key or a non-finite payload number is not decided here: it is last-wins at parse (or deferred) and fails step 7 as `non_canonical_payload`.
 2. `header_key_material` — header contains ANY of `jwk`, `jku`, `x5u`, `x5c`, `x5t`, `x5t#S256` (key material MUST come from the registry, never the token — §12).
-3. Resolve key: read `performer_id` from the **payload**, `kid` from the **header**. If `performer_id`/`kid` absent or not in `keys` → `unknown_key`.
+3. Resolve key: read `performer_id` from the **payload**, `kid` from the **header**. If `performer_id`/`kid` absent or not in `keys` → `unknown_key`. Lookup answers only for keys the registry contains: a `performer_id` or `kid` such as `__proto__`, `constructor` or `toString` is just a name, absent unless the registry has that exact key.
 4. `revoked_key` — resolved key has `status:"revoked"`.
 5. `alg_not_allowed`: header `alg` is `none`/absent, OR header `alg` != the resolved key's `alg` (no alg-substitution; `none` always rejected), OR the resolved key's `alg` is not a row of the algorithm table, OR its `kty`/`crv` are not the ones that row requires (the key-type binding rule). The table is exactly `EdDSA` requires `kty=OKP`, `crv=Ed25519`, and `ES256` requires `kty=EC`, `crv=P-256`; a missing or `null` `kty`/`crv` fails. This runs after step 4 (a revoked key stays `revoked_key`) and after the header/registry `alg` equality check.
 6. `bad_signature`: the key material is unusable, or the signature does not verify under the resolved key over `b64url(header).b64url(payload)`. Registry `x` (and `y` for EC) go through the same strict base64url decoder as the JWS segments and must decode to exactly 32 bytes; padding, the standard alphabet, whitespace or a newline, non-zero trailing bits, a wrong length, or a point not on the curve is `bad_signature` (a key is never repaired). The same decoder failing on a JWS segment is `malformed` (step 1): the call site, not the decoder, picks the code. ES256 signature is raw R||S, 64 bytes, per JWS; a high-S signature is accepted. Ed25519 is cofactorless (`[S]B == R + [k]A`), compares R by its 32-byte encoding, rejects `S >= L`, and adds no small-order or identity-key rejection: A is accepted if it decodes with `y` reduced mod p (and `x=0` with the sign bit set accepted).

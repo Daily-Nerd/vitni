@@ -398,6 +398,11 @@ func TestRun_ReadsStdinOnlyForRealCommands(t *testing.T) {
 	if got := string(run([]string{"vitni-verify"}, failingReader{})); got != "{\"error\":\"missing_command\"}\n" {
 		t.Errorf("missing command: %q", got)
 	}
+	// An empty command argument is a command nobody implements, not a missing one
+	// (CONTRACT: missing_command is NO argument at all).
+	if got := string(run([]string{"vitni-verify", ""}, strings.NewReader("{}"))); got != "{\"error\":\"unsupported_command\"}\n" {
+		t.Errorf("empty command: %q", got)
+	}
 	if got := string(run([]string{"vitni-verify", "jcs"}, failingReader{})); got != "{\"error\":\"stdin_read_error\"}\n" {
 		t.Errorf("unreadable stdin: %q", got)
 	}

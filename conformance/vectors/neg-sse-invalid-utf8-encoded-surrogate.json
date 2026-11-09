@@ -1,0 +1,1 @@
+{"name": "sse/invalid-utf8-encoded-surrogate", "command": "sse-outputs-hash", "profiles": ["canon:b64-strict"], "input": {"mode": "sse", "raw_b64": "ZGF0YTog7aCACgo="}, "anchor": {"error": "invalid_input"}}

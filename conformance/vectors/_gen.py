@@ -757,3 +757,56 @@ for _f, _n, _s in (
     write(_f, {"name": _n, "command": "sign",
                "input": {"receipt": _SIGN_RECEIPT, "kid": "ed-1", "private_key_b64": _s},
                "anchor": {"error": "invalid_private_key"}})
+
+# =====================================================================
+# Batch FX. Invariant: one SSE stream maps to one hash or one error, identical
+# in every impl. Invalid UTF-8 ANYWHERE in the decoded raw_b64 stream (data,
+# comment, ignored field, an undispatched tail, after a BOM) is invalid_input in
+# both modes. No impl may hash raw bytes or replace them with U+FFFD.
+# =====================================================================
+def _sse_raw(fname, name, mode, raw: bytes, anchor):
+    write(f"{fname}.json", {
+        "name": name, "command": "sse-outputs-hash",
+        "input": {"mode": mode, "raw_b64": base64.b64encode(raw).decode()},
+        "anchor": anchor})
+
+
+_BAD_UTF8 = (
+    ("in-data", b"data: a\xffb\n\n"),
+    ("in-comment", b": \xff\n\ndata: a\n\n"),
+    ("in-ignored-field", b"event: \xff\ndata: a\n\n"),
+    ("in-undispatched-tail", b"data: a\n\n\xff"),
+    ("truncated-sequence", b"data: \xe2\x82\n\n"),
+    ("overlong", b"data: \xc0\x80\n\n"),
+    ("encoded-surrogate", b"data: \xed\xa0\x80\n\n"),
+    ("after-bom", b"\xef\xbb\xbfdata: \xff\n\n"),
+)
+for _case, _raw in _BAD_UTF8:
+    _sse_raw(f"neg-sse-invalid-utf8-{_case}", f"sse/invalid-utf8-{_case}", "sse", _raw, _INVALID)
+for _case, _raw in (
+        ("in-data-not-json", b"data: \xff\n\n"),
+        ("in-result-string", b'data: {"jsonrpc":"2.0","id":1,"result":"\xff"}\n\n'),
+        ("in-comment", b': \xff\n\ndata: {"result":1}\n\n'),
+        ("in-undispatched-tail", b'data: {"result":1}\n\n\xff')):
+    _sse_raw(f"neg-sse-jsonrpc-invalid-utf8-{_case}", f"sse/jsonrpc-invalid-utf8-{_case}",
+             "sse-jsonrpc", _raw, _INVALID)
+# the fix must not reject valid multi-byte text
+_MB = "é€\U0001f600".encode()
+_sse_raw("sse-utf8-multibyte", "sse/utf8-multibyte", "sse", b"data: " + _MB + b"\n\n",
+         {"decoded_hex": _MB.hex(), "outputs_hash": hashstr(_MB)})
+
+# Invariant: a multihash header never lies about its digest length. The header
+# declares 0x20, so digest_hex must decode to exactly 32 bytes.
+for _f, _n, _h in (
+        ("neg-hashstring-digest-31-bytes", "hashstring/digest-31-bytes", "ab" * 31),
+        ("neg-hashstring-digest-33-bytes", "hashstring/digest-33-bytes", "ab" * 33),
+        ("neg-hashstring-digest-64-bytes", "hashstring/digest-64-bytes", "ab" * 64),
+        ("neg-hashstring-digest-empty", "hashstring/digest-empty", "")):
+    write(f"{_f}.json", {"name": _n, "command": "hashstring",
+                         "input": {"algo": "sha2-256", "digest_hex": _h}, "anchor": _INVALID})
+
+# Invariant: command resolution follows CONTRACT.md. An empty command argument
+# is a command that no impl knows: unsupported_command (missing_command is only
+# for NO argument at all). The vector pins it as `command: ""`.
+write("cli-empty-command.json", {"name": "cli/empty-command", "command": "",
+                                 "input_raw": "{}", "anchor": {"error": "unsupported_command"}})
