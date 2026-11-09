@@ -41,8 +41,8 @@ test("CONTRACT.md documents what an implementation has to do", () => {
 
 // The Error vocabulary table is the one list of command-error codes. Every code
 // a vector anchors (anchor.error) must be a row there, so the table cannot drift
-// from the vectors. The reverse is deliberately not checked: some codes are
-// legitimately unpinned (missing_command, stdin_read_error).
+// from the vectors. The reverse (every row is anchored or explicitly exempt) is
+// checked by the tests further down.
 test("every vector-anchored error code is in the CONTRACT.md Error vocabulary table", () => {
   const here = dirname(fileURLToPath(import.meta.url));
 
@@ -71,4 +71,64 @@ test("every vector-anchored error code is in the CONTRACT.md Error vocabulary ta
     [],
     "vector error codes missing from the CONTRACT.md Error vocabulary table",
   );
+});
+
+// The other direction. A table row that no vector anchors is a code two
+// implementations were never compared on (receipt_id_must_be_absent was one for
+// a long time). Every row must be anchored by a vector's anchor.error, or be in
+// this short set of codes that no stdin bytes can produce. The set lives here,
+// not in the table's "Pinned by" prose: prose cannot be parsed reliably and a
+// reason is only worth anything if a test can reject it when it goes stale.
+const UNREACHABLE_FROM_STDIN = new Map([
+  ["missing_command", "no command argument at all; there is no stdin to put a vector's bytes in"],
+  ["unsupported_profile", "a verifier's decline of a vector it does not cover; the harness checks it, no anchor can name it"],
+  ["internal_error", "a verifier bug, unreachable from any stdin bytes by contract"],
+  ["jcs_output_error", "a verifier bug, unreachable from any stdin bytes by contract"],
+]);
+
+function errorVocabulary() {
+  const section = CONTRACT.split(/^## /m).find((s) => s.startsWith("Error vocabulary"));
+  assert.ok(section, "CONTRACT.md has no '## Error vocabulary' section");
+  const rows = new Map(); // code -> "Pinned by" cell
+  for (const line of section.split("\n")) {
+    if (!line.startsWith("|")) continue;
+    const cells = line.split("|");
+    for (const m of (cells[1] ?? "").matchAll(/`([a-z][a-z0-9_]*)`/g)) rows.set(m[1], (cells[4] ?? "").trim());
+  }
+  return rows;
+}
+
+function anchoredErrorCodes() {
+  const dir = join(dirname(fileURLToPath(import.meta.url)), "vectors");
+  const codes = new Set();
+  for (const f of readdirSync(dir).filter((n) => n.endsWith(".json"))) {
+    const code = JSON.parse(readFileSync(join(dir, f), "utf8"))?.anchor?.error;
+    if (typeof code === "string") codes.add(code);
+  }
+  return codes;
+}
+
+test("every Error vocabulary row is anchored by a vector or exempt as unreachable from stdin", () => {
+  const rows = errorVocabulary();
+  const anchored = anchoredErrorCodes();
+  assert.ok(rows.size > 0 && anchored.size > 0, "the scan is vacuous");
+
+  const unpinned = [...rows.keys()].filter((c) => !anchored.has(c) && !UNREACHABLE_FROM_STDIN.has(c));
+  assert.deepEqual(unpinned, [], "table rows that no vector anchors and that are not exempt");
+});
+
+test("the unreachable-from-stdin exemptions are real rows and no vector anchors them", () => {
+  const rows = errorVocabulary();
+  const anchored = anchoredErrorCodes();
+  const notRows = [...UNREACHABLE_FROM_STDIN.keys()].filter((c) => !rows.has(c));
+  assert.deepEqual(notRows, [], "exempt codes that are not rows of the table (stale exemption)");
+  const nowAnchored = [...UNREACHABLE_FROM_STDIN.keys()].filter((c) => anchored.has(c));
+  assert.deepEqual(nowAnchored, [], "exempt codes that a vector now anchors (drop the exemption)");
+});
+
+test("a row that claims no vector pins it is exempt", () => {
+  const stale = [...errorVocabulary()]
+    .filter(([c, pinned]) => /\bno vector\b/i.test(pinned) && !UNREACHABLE_FROM_STDIN.has(c))
+    .map(([c]) => c);
+  assert.deepEqual(stale, [], "rows whose 'Pinned by' cell says no vector but are not exempt");
 });

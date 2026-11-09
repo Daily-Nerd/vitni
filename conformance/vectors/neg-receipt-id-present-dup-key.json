@@ -1,0 +1,1 @@
+{"name": "receipt-id/receipt-id-present-and-duplicated", "command": "receipt-id", "profiles": ["canon:jcs"], "input_raw": "{\"receipt\":{\"receipt_id\":\"a\",\"receipt_id\":\"b\"}}", "anchor": {"error": "invalid_input"}}
