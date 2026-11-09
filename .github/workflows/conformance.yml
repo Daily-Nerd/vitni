@@ -34,16 +34,51 @@ jobs:
           npm run build
           npx c8 --reporter=lcov --reports-dir=coverage npm test
 
-      - name: Cross-implementation conformance (Go ≡ TS, byte-identical)
-        run: node conformance/compare.mjs
-
-      - name: Harness self-tests
-        run: node --test conformance/*.test.mjs
-
       - name: Install uv (pinned)
         uses: astral-sh/setup-uv@v6
         with:
           version: "0.8.15"
+
+      - name: Python verifier unit tests (stdlib only, both supported Pythons)
+        env:
+          VITNI_REQUIRE_NODE: "1"
+        run: |
+          for v in 3.10 3.13; do
+            uv run --no-project --python "$v" python -I -m unittest discover -s py/tests -t py
+          done
+
+      - name: Python verifier coverage (3.13 only)
+        # Reporting only. A separate step so the unit-test step above stays
+        # stdlib-only with no --with; coverage is a measuring tool, not a
+        # dependency of the verifier or of its tests.
+        env:
+          VITNI_REQUIRE_NODE: "1"
+        run: |
+          uv run --no-project --python 3.13 --with coverage coverage run --branch --include=py/vitni_verify.py -m unittest discover -s py/tests -t py
+          uv run --no-project --python 3.13 --with coverage coverage xml -o py/coverage.xml
+
+      - name: Cross-implementation conformance (Go, TS and Python, byte-identical in scope)
+        # One run per Python version. No pipe: the step's status is the
+        # harness's status. REQUIRE_IMPLS makes a missing impl a harness failure.
+        run: |
+          for v in 3.10 3.13; do
+            REQUIRE_IMPLS=go,ts,py \
+            PY_VERIFY="uv run --no-project --python $v python -I py/vitni_verify.py" \
+              node conformance/compare.mjs
+          done
+
+      - name: Python verifier cross-check against a second implementation
+        run: uv run --no-project --python 3.13 --with cryptography==50.0.2 python -I -m unittest discover -s py/tests_cross -t py
+
+      - name: Python verifier imports nothing outside the standard library
+        run: |
+          if grep -nE 'cryptography|ecdsa|nacl' py/vitni_verify.py; then
+            echo "py/vitni_verify.py names a third-party crypto package"
+            exit 1
+          fi
+
+      - name: Harness self-tests
+        run: node --test conformance/*.test.mjs
 
       - name: Profile tagger tests
         run: uv run --no-project python conformance/vectors/test_profiles.py
@@ -87,4 +122,16 @@ jobs:
           slug: Daily-Nerd/vitni
           files: ./ts/coverage/lcov.info
           flags: ts
+          fail_ci_if_error: false
+
+      - name: Upload Python coverage to Codecov
+        # Reporting only, same as Go and TS: no threshold, and a missing
+        # CODECOV_TOKEN never turns CI red.
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: Daily-Nerd/vitni
+          files: ./py/coverage.xml
+          flags: py
           fail_ci_if_error: false

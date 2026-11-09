@@ -1,0 +1,56 @@
+{
+  "upstream": "https://github.com/C2SP/wycheproof",
+  "commit": "d17cc89fa5c8f4f4d378b5385ebf75da5d0926c9",
+  "files": {
+    "ecdsa_secp256r1_sha256_p1363_test.json": {
+      "source": "testvectors_v1/ecdsa_secp256r1_sha256_p1363_test.json",
+      "sha256": "c60de693930e386c3a5472d08081623ef8504decc54b38ac01ec6b2a2575c986",
+      "size": 242550,
+      "tests": 262,
+      "results": {
+        "valid": 173,
+        "invalid": 89
+      },
+      "flags": {
+        "ValidSignature": 9,
+        "RangeCheck": 4,
+        "ModifiedInteger": 1,
+        "IntegerOverflow": 4,
+        "InvalidSignature": 49,
+        "EdgeCaseShamirMultiplication": 1,
+        "SpecialCaseHash": 54,
+        "ArithmeticError": 110,
+        "SmallRandS": 16,
+        "SignatureSize": 12,
+        "ModularInverse": 15,
+        "PointDuplication": 7,
+        "EdgeCasePublicKey": 24
+      }
+    },
+    "ed25519_test.json": {
+      "source": "testvectors_v1/ed25519_test.json",
+      "sha256": "ea80ffebac085e21cb9d3e903e7fa2b448d96702da5b31f061d0b83b430b74b3",
+      "size": 172628,
+      "tests": 210,
+      "results": {
+        "valid": 117,
+        "invalid": 64,
+        "acceptable": 29
+      },
+      "flags": {
+        "Valid": 47,
+        "InvalidSignature": 20,
+        "TruncatedSignature": 3,
+        "SignatureWithGarbage": 5,
+        "CompressedSignature": 4,
+        "InvalidEncoding": 22,
+        "SignatureMalleability": 8,
+        "Ktv": 38,
+        "InvalidKtv": 1,
+        "TinkOverflow": 32,
+        "SmallOrderPublicKey": 8,
+        "MixedOrderPublicKey": 22
+      }
+    }
+  }
+}
