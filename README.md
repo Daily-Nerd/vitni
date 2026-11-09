@@ -11,7 +11,6 @@
   <a href="https://github.com/Daily-Nerd/vitni/actions/workflows/conformance.yml"><img src="https://github.com/Daily-Nerd/vitni/actions/workflows/conformance.yml/badge.svg" alt="conformance"></a>
   <a href="https://codecov.io/gh/Daily-Nerd/vitni"><img src="https://codecov.io/gh/Daily-Nerd/vitni/graph/badge.svg?token=bkJnBEV2yF" alt="codecov"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
-  <img src="https://img.shields.io/badge/conformance-94%2F94-brightgreen" alt="conformance 94/94">
 </p>
 
 ---
@@ -98,7 +97,7 @@ New here? **[docs/QUICKSTART.md](docs/QUICKSTART.md)** takes you from install to
 ## Spec & conformance
 
 - **[docs/DESIGN.md](docs/DESIGN.md)** — the full protocol: receipt object, canonicalization, signing, the verification algorithm, chain semantics, MCP/A2A bindings, threat model.
-- **[Conformance vectors](conformance/vectors/)** — a language-agnostic suite (94 vectors, positive + negative classes); any implementation that passes is interoperable. Both reference implementations are held byte-identical against it in CI.
+- **[Conformance vectors](conformance/vectors/)**: a language-agnostic suite (positive + negative classes; the harness prints the count); any implementation that passes is interoperable. Both reference implementations are held byte-identical against it in CI.
 
 ## License
 

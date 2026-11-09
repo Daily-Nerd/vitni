@@ -1,1 +1,1 @@
-{"name": "verify-envelope/chain-policy-binding-number", "command": "verify-chain", "input": {"receipts": [], "keys": {}, "policy": {"expected_binding": 5}}, "anchor": {"error": "invalid_input"}}
+{"name": "verify-envelope/chain-policy-binding-number", "command": "verify-chain", "profiles": ["canon:b64-strict", "canon:jcs"], "input": {"receipts": [], "keys": {}, "policy": {"expected_binding": 5}}, "anchor": {"error": "invalid_input"}}

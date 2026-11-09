@@ -4,4 +4,6 @@ dist/
 *.log
 .DS_Store
 .claude/
+__pycache__/
+*.pyc
 /go/cmd/vitni-verify/vitni-verify

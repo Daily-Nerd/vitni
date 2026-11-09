@@ -1,1 +1,1 @@
-{"name": "jcs/surrogate-pair-escape-uppercase", "command": "jcs", "input_raw": "{\"value\":\"\\uD83D\\uDE00\"}", "anchor": {"canonical_hex": "22f09f988022", "byte_len": 6}}
+{"name": "jcs/surrogate-pair-escape-uppercase", "command": "jcs", "profiles": ["canon:jcs"], "input_raw": "{\"value\":\"\\uD83D\\uDE00\"}", "anchor": {"canonical_hex": "22f09f988022", "byte_len": 6}}

@@ -1,8 +1,10 @@
-# Vitni Conformance Harness — Verifier Contract v0.1
+# Vitni Conformance Harness: Verifier Contract
 
-Both the **Go** and **TypeScript** verifiers MUST implement this identical CLI contract.
-The harness (`harness/compare.mjs`) runs each vector through **both** binaries and asserts their
-stdout is **byte-identical**. Agreement across two independent language runtimes is the proof of
+All conforming implementations MUST implement this identical CLI contract. The Go and
+TypeScript references are always run; further implementations (a Python verifier, for one)
+register in the harness and run beside them. The harness (`conformance/compare.mjs`) runs each
+vector through every registered implementation and asserts that every implementation in scope
+prints **byte-identical** stdout. Agreement across independent runtimes is the proof of
 the Draft 0.2 §12 normative guarantee. Divergence is a finding (spec leak or impl bug), not a nuisance.
 
 This harness validates the **byte-source layer** of Vitni (§3–§5, §4.3 of the design draft). It does
@@ -18,7 +20,7 @@ vitni-verify <command> < input.json        # input JSON on stdin
 # on malformed input or unsupported command: emit {"error":"<machine-code>"} to stdout, exit 0
 ```
 
-Both verifiers MUST:
+Every conforming verifier MUST:
 - Read the entire stdin as the input JSON object.
 - Emit output as **JCS-canonical JSON** (so the harness can compare bytes directly), UTF-8, single `\n` terminator.
 - Be deterministic. No timestamps, no randomness in output.
@@ -64,6 +66,19 @@ Text policy by site (the contract all implementations follow):
 The embedded row covers every re-parse of JSON text hidden inside another input: a guard at one boundary does not cover a second parse site. The depth limit is the protocol's, never the host parser's: nesting over 128 is rejected even where the host parser would stop calling the text JSON at all. An inner message that is not JSON at all is skipped (see `sse-outputs-hash`). `a2a-artifact-hash` parts are members of the stdin object, so the stdin gate already judges them.
 
 ---
+
+## Profiles, declined commands and coverage
+
+A verifier states what it implements; the harness holds it to that statement. The pieces:
+
+- **Catalog.** `conformance/profiles.json` is the single list of profile atoms (`alg:EdDSA`, `alg:ES256`, `canon:jcs`, `canon:b64-strict`, plus the non-gating `binding:mcp` and `binding:local`). An atom exists only if the catalog lists it; a new algorithm or canonicalization adds one row there and nothing else.
+- **Vector tags.** Every vector carries a `profiles` member: the sorted, unique catalog atoms the vector needs. The generators compute it from the vector's own data (`conformance/vectors/_profiles.py`); it is never written by hand. `cmd:<command>` atoms are derived from the `command` member and are never stored.
+- **The `profiles` command.** `vitni-verify profiles` ignores stdin entirely (junk, empty or closed) and prints one JCS line: the sorted array of the GATING atoms the verifier implements, for Go and TypeScript `["alg:ES256","alg:EdDSA","canon:b64-strict","canon:jcs"]`. It is infrastructure, not a vector command: it appears in no vector, and it is outside the stdin gate. A declaration lists gating atoms only (a non-gating atom can never change a vector's scope) and never a `cmd:` atom.
+- **Scope.** For one vector and one implementation, `missing` is the vector's gating atoms the implementation did not declare. If `missing` is not empty the implementation MUST print exactly `{"error":"unsupported_profile","profile":"<atom>"}` and exit 0, where `<atom>` is one of the missing atoms or `cmd:<command>`. If `missing` is empty it MUST answer, except that an implementation which does not implement a whole command declines every vector of that command with `{"error":"unsupported_profile","profile":"cmd:<command>"}` (checked before any atom, and without reading stdin). A decline is exactly that object: no other member, a `profile` that is a string naming an atom. The harness checks that `profile` is a string and one of the allowed values above (membership only); it does not require a particular one when several apply. A command is declined for all of its vectors or for none.
+- **Distinct codes.** `unsupported_profile` is never `unsupported_command` (a command nobody implements) and never `missing_command`: the harness fails an implementation that declines a vector whose anchor is one of those two CLI errors. An alg outside the algorithm table, in a header or in the registry, is still the verdict `alg_not_allowed` (the key-type binding rule in `verify`, step 5), never a profile decline.
+- **Never silent.** An in-scope vector must be answered, byte-identically to every other answering implementation and matching its anchor. Answering an out-of-scope vector, printing nothing, exiting non-zero or printing anything but the exact decline all fail the run.
+- **Floors.** `conformance/floors.json` maps each registered implementation to a lower bound on the vectors it answers: the literal `"all"` (answered equals the total, used for Go and TypeScript) or a non-negative integer. A floor is a lower bound, so answering more is fine. Floors are checked for the implementations that ran, and an implementation that ran must have one. Which implementations must run is a separate, single list: the environment variable `REQUIRE_IMPLS` (comma separated, for example `go,ts,py`; CI sets it). A listed implementation that did not run is `IMPL-MISSING`, so removing one from a CI run is a failure, not a smaller run; with `REQUIRE_IMPLS` unset or empty, any subset that has floors may run.
+- **The count.** The number of vectors is computed by the harness and printed as `vectors: N`; no document states it.
 
 ## Commands
 
@@ -180,7 +195,7 @@ Output:
 2. `header_key_material` — header contains ANY of `jwk`, `jku`, `x5u`, `x5c`, `x5t`, `x5t#S256` (key material MUST come from the registry, never the token — §12).
 3. Resolve key: read `performer_id` from the **payload**, `kid` from the **header**. If `performer_id`/`kid` absent or not in `keys` → `unknown_key`.
 4. `revoked_key` — resolved key has `status:"revoked"`.
-5. `alg_not_allowed`: header `alg` is `none`/absent, OR header `alg` != the resolved key's `alg` (no alg-substitution; `none` always rejected), OR the resolved key's `alg` is not a row of the algorithm table, OR its `kty`/`crv` are not the ones that row requires. The table is exactly `EdDSA` requires `kty=OKP`, `crv=Ed25519`, and `ES256` requires `kty=EC`, `crv=P-256`; a missing or `null` `kty`/`crv` fails. This runs after step 4 (a revoked key stays `revoked_key`) and after the header/registry `alg` equality check.
+5. `alg_not_allowed`: header `alg` is `none`/absent, OR header `alg` != the resolved key's `alg` (no alg-substitution; `none` always rejected), OR the resolved key's `alg` is not a row of the algorithm table, OR its `kty`/`crv` are not the ones that row requires (the key-type binding rule). The table is exactly `EdDSA` requires `kty=OKP`, `crv=Ed25519`, and `ES256` requires `kty=EC`, `crv=P-256`; a missing or `null` `kty`/`crv` fails. This runs after step 4 (a revoked key stays `revoked_key`) and after the header/registry `alg` equality check.
 6. `bad_signature`: the key material is unusable, or the signature does not verify under the resolved key over `b64url(header).b64url(payload)`. Registry `x` (and `y` for EC) go through the same strict base64url decoder as the JWS segments and must decode to exactly 32 bytes; padding, the standard alphabet, whitespace or a newline, non-zero trailing bits, a wrong length, or a point not on the curve is `bad_signature` (a key is never repaired). The same decoder failing on a JWS segment is `malformed` (step 1): the call site, not the decoder, picks the code. ES256 signature is raw R||S, 64 bytes, per JWS; a high-S signature is accepted. Ed25519 is cofactorless (`[S]B == R + [k]A`), compares R by its 32-byte encoding, rejects `S >= L`, and adds no small-order or identity-key rejection: A is accepted if it decodes with `y` reduced mod p (and `x=0` with the sign bit set accepted).
 7. `non_canonical_payload` — `base64url-decode(payload)` != `JCS(parse(payload))` byte-for-byte (the §3 JWS≡JCS invariant — reject a validly-signed but non-canonical payload).
 8. `context_mismatch` — `policy.expected_binding`/`expected_method` set and != the payload's `binding`/`method`.
@@ -256,10 +271,13 @@ Output:
   - `input_raw`: the exact stdin text, verbatim (duplicate keys, escape text such as `\ud800` as six ASCII characters).
   - `input_raw_b64`: standard base64 of the exact stdin BYTES, for what a JSON string cannot carry (invalid UTF-8, a BOM followed by text, NUL). The harness, the Go CLI test and the TS test decode it to bytes and pipe them unmodified.
   A present-but-empty `input_raw` or `input_raw_b64` is EMPTY stdin, never "absent".
+- `profiles` is the atoms the vector needs (see Profiles above). It sits right after `command`, is computed by the generator, and the harness rejects a vector without it, with an unknown atom, or with a stored `cmd:` atom.
 - The harness captures stdout as bytes and compares bytes. Output that is not strict UTF-8 fails the vector (`NON-UTF8-OUTPUT`) instead of being repaired to U+FFFD.
 - An `error` anchor means a command error for EVERY command, `verify` and `verify-chain` included; a verdict anchor means a `{valid:false}` result.
-- `anchor` is OPTIONAL. When present it is an externally-known-correct expected output (e.g. an RFC 8785 test value or a hand-computed digest). The harness asserts BOTH verifiers match the anchor AND each other.
-- When `anchor` is absent, the harness asserts only that the two verifiers agree with each other (catches ambiguity; does not catch both-wrong-the-same-way — that is what anchors are for).
+- `anchor` is OPTIONAL. When present it is an externally-known-correct expected output (e.g. an RFC 8785 test value or a hand-computed digest). The harness asserts EVERY answering implementation matches the anchor AND each other.
+- When `anchor` is absent, the harness asserts only that at least two implementations answer and agree with each other (catches ambiguity; does not catch both-wrong-the-same-way, which is what anchors are for).
 
 ## Harness output
-`harness/compare.mjs` prints, per vector: `PASS` (both agree, anchor matched if present), `DIVERGE` (verifiers disagree — prints both outputs), or `ANCHOR-FAIL` (agree with each other but not the known-correct anchor). Exit non-zero if any vector is not PASS.
+`conformance/compare.mjs` prints the registered implementations (`impls: go ts`), a coverage matrix (answered over total per vector group and implementation), one line per failure naming the vector or atom, `vectors: N`, and `N/N passed.`. Failure kinds include `DIVERGE` (two answering implementations disagree), `ANCHOR-FAIL`, `NOANCHOR` (an error output with no anchor), `SILENT-ANSWER`, `EMPTY-OUTPUT`, `BADDECLINE`, `NONUNIFORM`, `ORPHAN` (no implementation answered), `DEAD-PROFILE`, `FLOOR-BREACH`, `IMPL-MISSING` and `IMPL-UNSPAWNABLE`. Exit 0 only when there is no failure line; otherwise exit 1.
+
+Implementations come from the environment: `GO_VERIFY` and `TS_VERIFY` (defaults `./bin/vitni-verify-go` and `node ts/dist/cli.js`), and `PY_VERIFY` for the optional Python verifier. When `PY_VERIFY` is set but the process cannot be spawned the run fails; it is never skipped.

@@ -10,6 +10,8 @@ import hashlib
 import json
 import pathlib
 
+import _profiles
+
 OUT = pathlib.Path(__file__).parent
 
 
@@ -24,17 +26,11 @@ def hashstr(content: bytes) -> str:
     return "u" + b64url_nopad(multihash)
 
 
-INPUT_FORMS = ("input", "input_raw", "input_raw_b64")
-
-
 def write(name_file: str, obj: dict) -> None:
     """Write one vector. It pins its stdin in EXACTLY one form: `input` (structured
     JSON), `input_raw` (exact stdin text) or `input_raw_b64` (standard base64 of the
     exact stdin bytes, for what a JSON string cannot carry: invalid UTF-8, BOM)."""
-    forms = [k for k in INPUT_FORMS if k in obj]
-    if len(forms) != 1:
-        raise ValueError(f"{name_file}: exactly one of {INPUT_FORMS} required, found {forms}")
-    (OUT / name_file).write_text(json.dumps(obj) + "\n")
+    _profiles.write(OUT / name_file, obj)
 
 
 def sse_parse(raw: bytes, jsonrpc: bool) -> bytes:
@@ -688,3 +684,76 @@ write("a2a-data-depth-128.json", {
     "name": "a2a/data-depth-128", "command": "a2a-artifact-hash",
     "input_raw": '{"artifact":{"parts":[{"kind":"data","data":' + _a2a_nest + "}]}}",
     "anchor": {"descriptor_hex": _a2a_desc.hex(), "outputs_hash": hashstr(_a2a_desc)}})
+
+
+# =====================================================================
+# Former hand-authored vectors (keygen, seed and std-base64 edge cases). They
+# live here so that deleting conformance/vectors/*.json and rerunning the
+# generators restores every file: no vector is owned by a person.
+# =====================================================================
+# RFC 8032 section 7.1 TEST 1: the Ed25519 secret key (seed) and the public key
+# it derives. The anchor is a published constant, so _gen.py needs no crypto
+# dependency and the anchor is independent of both implementations under test.
+_RFC8032_T1_SEED = bytes.fromhex(
+    "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
+_RFC8032_T1_PUB = bytes.fromhex(
+    "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+_T1_SEED_B64 = base64.b64encode(_RFC8032_T1_SEED).decode()
+write("keygen-derive-valid.json", {
+    "name": "keygen/derive-valid", "command": "keygen",
+    "input": {"seed_b64": _T1_SEED_B64},
+    "anchor": {"jwk": {"alg": "EdDSA", "crv": "Ed25519", "kty": "OKP", "status": "active",
+                       "x": b64url_nopad(_RFC8032_T1_PUB)},
+               "private_key_b64": _T1_SEED_B64}})
+
+# 32 bytes 01..20 as std base64, and the malformed variants of it
+_SEQ32 = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+_SEQ32_NEWLINE = "AQIDBAUGBwgJCgsMDQ4P\nEBESExQVFhcYGRobHB0eHyA="
+_SEQ32_EXCESS_PAD = _SEQ32 + "="
+_SEQ32_TRAILING_BITS = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyB="
+
+
+def _keygen_seed(fname, name, seed, code="invalid_seed"):
+    write(fname, {"name": name, "command": "keygen", "input": {"seed_b64": seed},
+                  "anchor": {"error": code}})
+
+
+_keygen_seed("keygen-seed-embedded-newline.json", "keygen/seed-embedded-newline", _SEQ32_NEWLINE)
+_keygen_seed("keygen-seed-empty-string.json", "keygen/seed-empty-string", "")
+_keygen_seed("keygen-seed-excess-padding.json", "keygen/seed-excess-padding", _SEQ32_EXCESS_PAD)
+_keygen_seed("keygen-seed-malformed-b64.json", "keygen/seed-malformed-b64", "!!!not-base64!!!")
+_keygen_seed("keygen-seed-non-string.json", "keygen/seed-non-string", 123)
+_keygen_seed("keygen-seed-trailing-bits.json", "keygen/seed-nonzero-trailing-bits", _SEQ32_TRAILING_BITS)
+_keygen_seed("keygen-seed-wrong-length.json", "keygen/seed-wrong-length", "AQIDBAUGBwgJCgsMDQ4PEA==")
+write("keygen-unknown-key.json", {
+    "name": "keygen/unknown-key", "command": "keygen",
+    "input": {"seed_b64": _T1_SEED_B64, "kid": "x"}, "anchor": {"error": "invalid_input"}})
+
+write("neg-a2a-embedded-newline-inline-b64.json", {
+    "name": "a2a-artifact-hash/embedded-newline-inline-base64", "command": "a2a-artifact-hash",
+    "input": {"artifact": {"parts": [{"kind": "file", "file": {"bytes": "aGVs\nbG8="}}]}},
+    "anchor": {"error": "invalid_input"}})
+
+for _f, _n, _b in (
+        ("neg-digest-embedded-newline-b64.json", "digest/embedded-newline", "aGVs\nbG8="),
+        ("neg-digest-excess-padding-b64.json", "digest/excess-padding", "aGVsbG8=="),
+        ("neg-digest-trailing-bits-b64.json", "digest/nonzero-trailing-bits", "aGVsbG9")):
+    write(_f, {"name": _n, "command": "digest", "input": {"bytes_b64": _b},
+               "anchor": {"error": "invalid_input"}})
+
+_SIGN_RECEIPT = {
+    "v": "vitni/0.2", "binding": "mcp", "action_ref": None, "performer_id": "srv-ed",
+    "requester_id": None, "method": "mcp:echo",
+    "inputs_hash": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
+    "outputs_hash": "uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA",
+    "cost": {"tokens": "10", "usd_micros": "0", "wall_ms": "3", "rail_ref": None},
+    "status": "OK", "reason": None, "parent_receipt_hash": None,
+    "log_policy": "best_effort", "ts": "2026-05-28T00:00:00Z",
+    "nonce": "uEiDjsMRCmPwcFJr79MiZb7kkJ65B5GSbk0yklZkbeFK4VQ"}
+for _f, _n, _s in (
+        ("neg-sign-seed-embedded-newline.json", "sign/seed-embedded-newline", _SEQ32_NEWLINE),
+        ("neg-sign-seed-excess-padding.json", "sign/seed-excess-padding", _SEQ32_EXCESS_PAD),
+        ("neg-sign-seed-trailing-bits.json", "sign/seed-nonzero-trailing-bits", _SEQ32_TRAILING_BITS)):
+    write(_f, {"name": _n, "command": "sign",
+               "input": {"receipt": _SIGN_RECEIPT, "kid": "ed-1", "private_key_b64": _s},
+               "anchor": {"error": "invalid_private_key"}})

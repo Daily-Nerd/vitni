@@ -1,0 +1,9 @@
+{
+  "atoms": [
+    {"id": "alg:EdDSA", "section": "fixture", "status": "stable", "gating": true},
+    {"id": "alg:ES256", "section": "fixture", "status": "stable", "gating": true},
+    {"id": "canon:jcs", "section": "fixture", "status": "stable", "gating": true},
+    {"id": "canon:b64-strict", "section": "fixture", "status": "stable", "gating": true},
+    {"id": "binding:mcp", "section": "fixture", "status": "stable", "gating": false}
+  ]
+}

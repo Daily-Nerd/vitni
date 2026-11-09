@@ -1,1 +1,1 @@
-{"name": "member/cost-canon-case-cost", "command": "cost-canon", "input_raw": "{\"COST\":{\"tokens\":\"1\",\"usd_micros\":\"0\",\"wall_ms\":\"0\",\"rail_ref\":null}}", "anchor": {"error": "invalid_input"}}
+{"name": "member/cost-canon-case-cost", "command": "cost-canon", "profiles": ["canon:jcs"], "input_raw": "{\"COST\":{\"tokens\":\"1\",\"usd_micros\":\"0\",\"wall_ms\":\"0\",\"rail_ref\":null}}", "anchor": {"error": "invalid_input"}}

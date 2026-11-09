@@ -1,1 +1,1 @@
-{"name": "jcs/high-surrogate-then-bmp-escape", "command": "jcs", "input_raw": "{\"value\":\"\\uD800\\u0041\"}", "anchor": {"error": "invalid_input"}}
+{"name": "jcs/high-surrogate-then-bmp-escape", "command": "jcs", "profiles": ["canon:jcs"], "input_raw": "{\"value\":\"\\uD800\\u0041\"}", "anchor": {"error": "invalid_input"}}

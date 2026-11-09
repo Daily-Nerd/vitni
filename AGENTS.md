@@ -24,9 +24,9 @@ between them. The spec is `docs/DESIGN.md`.
 
 ## Development Commands
 
-- Go tests: `cd go && go test ./...`
+- Go tests: `cd go && go test -count=1 ./...` (the test cache does not see vector files)
 - TS tests: `cd ts && npm install && npm run build && npm test`
-- Cross-impl harness: build both, then `node conformance/compare.mjs` (all vectors must pass — 94 as of this change)
+- Cross-impl harness: build both, then `node conformance/compare.mjs` (all vectors must pass; the harness prints the count)
 - Vector regeneration: `uv run` only — see CONTRIBUTING.md (never pip/bare python)
 
 ## Repository Rules

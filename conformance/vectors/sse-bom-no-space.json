@@ -1,1 +1,1 @@
-{"name": "sse/bom-no-space", "command": "sse-outputs-hash", "input": {"mode": "sse", "raw_b64": "77u/ZGF0YTp4Cgo="}, "anchor": {"decoded_hex": "78", "outputs_hash": "uEiAtcRZCtyawRAFifKn7rDL1yFMPsZA8xNsCJYcXkhpIgQ"}}
+{"name": "sse/bom-no-space", "command": "sse-outputs-hash", "profiles": ["canon:b64-strict"], "input": {"mode": "sse", "raw_b64": "77u/ZGF0YTp4Cgo="}, "anchor": {"decoded_hex": "78", "outputs_hash": "uEiAtcRZCtyawRAFifKn7rDL1yFMPsZA8xNsCJYcXkhpIgQ"}}

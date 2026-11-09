@@ -1,1 +1,1 @@
-{"name": "sse/two-data-one-event", "command": "sse-outputs-hash", "input": {"mode": "sse", "raw_b64": "ZGF0YTogaGVsbG8KZGF0YTogd29ybGQKCg=="}, "anchor": {"decoded_hex": "68656c6c6f0a776f726c64", "outputs_hash": "uEiAmxgph0B21g2ynD-_USmoBZiBBPI718lmmxWEtT3nTuA"}}
+{"name": "sse/two-data-one-event", "command": "sse-outputs-hash", "profiles": ["canon:b64-strict"], "input": {"mode": "sse", "raw_b64": "ZGF0YTogaGVsbG8KZGF0YTogd29ybGQKCg=="}, "anchor": {"decoded_hex": "68656c6c6f0a776f726c64", "outputs_hash": "uEiAmxgph0B21g2ynD-_USmoBZiBBPI718lmmxWEtT3nTuA"}}

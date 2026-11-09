@@ -1,1 +1,1 @@
-{"name": "stdin/cost-canon-invalid-utf8", "command": "cost-canon", "input_raw_b64": "eyJjb3N0Ijp7InRva2VucyI6IjEiLCJ1c2RfbWljcm9zIjoiMCIsIndhbGxfbXMiOiIwIiwicmFpbF9yZWYiOiL/In19", "anchor": {"error": "invalid_input"}}
+{"name": "stdin/cost-canon-invalid-utf8", "command": "cost-canon", "profiles": ["canon:jcs"], "input_raw_b64": "eyJjb3N0Ijp7InRva2VucyI6IjEiLCJ1c2RfbWljcm9zIjoiMCIsIndhbGxfbXMiOiIwIiwicmFpbF9yZWYiOiL/In19", "anchor": {"error": "invalid_input"}}

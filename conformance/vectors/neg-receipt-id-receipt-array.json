@@ -1,1 +1,1 @@
-{"name": "member/receipt-id-receipt-array", "command": "receipt-id", "input_raw": "{\"receipt\":[]}", "anchor": {"error": "invalid_input"}}
+{"name": "member/receipt-id-receipt-array", "command": "receipt-id", "profiles": ["canon:jcs"], "input_raw": "{\"receipt\":[]}", "anchor": {"error": "invalid_input"}}

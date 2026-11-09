@@ -9,6 +9,8 @@ import hashlib
 import json
 import pathlib
 
+import _profiles
+
 OUT = pathlib.Path(__file__).parent
 
 
@@ -50,10 +52,10 @@ def write(fname, name, artifact, error=None):
         descriptor = {"parts": [descriptor_of(p) for p in artifact["parts"]]}
         canon = jcs(descriptor).encode()
         anchor = {"outputs_hash": hashstr(canon), "descriptor_hex": canon.hex()}
-    (OUT / fname).write_text(json.dumps({
+    _profiles.write(OUT / fname, {
         "name": name, "command": "a2a-artifact-hash",
         "input": {"artifact": artifact}, "anchor": anchor,
-    }) + "\n")
+    })
 
 
 # 1. single text part

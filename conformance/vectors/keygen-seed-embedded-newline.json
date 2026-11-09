@@ -1,1 +1,1 @@
-{"name":"keygen/seed-embedded-newline","command":"keygen","input":{"seed_b64":"AQIDBAUGBwgJCgsMDQ4P\nEBESExQVFhcYGRobHB0eHyA="},"anchor":{"error":"invalid_seed"}}
+{"name": "keygen/seed-embedded-newline", "command": "keygen", "profiles": ["alg:EdDSA", "canon:b64-strict"], "input": {"seed_b64": "AQIDBAUGBwgJCgsMDQ4P\nEBESExQVFhcYGRobHB0eHyA="}, "anchor": {"error": "invalid_seed"}}

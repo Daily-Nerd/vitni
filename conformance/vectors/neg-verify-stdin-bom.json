@@ -1,1 +1,1 @@
-{"name": "stdin/verify-bom", "command": "verify", "input_raw_b64": "77u/eyJzaWduZWRfcmVjZWlwdCI6ImEuYi5jIiwia2V5cyI6e30sInBvbGljeSI6bnVsbH0=", "anchor": {"error": "invalid_input"}}
+{"name": "stdin/verify-bom", "command": "verify", "profiles": ["canon:b64-strict", "canon:jcs"], "input_raw_b64": "77u/eyJzaWduZWRfcmVjZWlwdCI6ImEuYi5jIiwia2V5cyI6e30sInBvbGljeSI6bnVsbH0=", "anchor": {"error": "invalid_input"}}

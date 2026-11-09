@@ -1,1 +1,1 @@
-{"name": "verify-envelope/chain-keys-array", "command": "verify-chain", "input": {"receipts": [], "keys": [], "policy": null}, "anchor": {"error": "invalid_input"}}
+{"name": "verify-envelope/chain-keys-array", "command": "verify-chain", "profiles": ["canon:b64-strict", "canon:jcs"], "input": {"receipts": [], "keys": [], "policy": null}, "anchor": {"error": "invalid_input"}}

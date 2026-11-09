@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 
 	"github.com/Daily-Nerd/vitni/go"
 	"github.com/Daily-Nerd/vitni/go/internal/fields"
@@ -59,16 +60,46 @@ var commands = map[string]runner{
 var dupReject = map[string]bool{"jcs": true, "receipt-id": true, "cost-canon": true}
 
 func main() {
-	if len(os.Args) < 2 {
-		os.Stdout.Write(errorLine("missing_command"))
-		return
+	os.Stdout.Write(run(os.Args, os.Stdin))
+}
+
+// run is main without the process globals: it returns the one output line for
+// argv and stdin. stdin is read only for a command that takes input, so a
+// missing command and `profiles` never touch it.
+func run(args []string, stdin io.Reader) []byte {
+	if len(args) < 2 {
+		return errorLine("missing_command")
 	}
-	stdin, err := io.ReadAll(os.Stdin)
+	if args[1] == profilesCommand {
+		return profilesDeclaration()
+	}
+	input, err := io.ReadAll(stdin)
 	if err != nil {
-		os.Stdout.Write(errorLine("stdin_read_error"))
-		return
+		return errorLine("stdin_read_error")
 	}
-	os.Stdout.Write(respond(os.Args[1], stdin))
+	return respond(args[1], input)
+}
+
+// profilesCommand is infrastructure, not a vector command: it prints the
+// conformance profile atoms this verifier implements and ignores stdin, so it
+// sits outside the commands table and its stdin gate.
+const profilesCommand = "profiles"
+
+// profilesDeclaration is the one declaration line: the gating atoms of
+// conformance/profiles.json, sorted by code point, as a JCS array. The alg
+// atoms are derived from the same table Verify dispatches on, so the algs we
+// declare and the algs we verify cannot drift; the two canon atoms are the
+// strict-decoding and JCS behavior this CLI always has. Gating atoms only: a
+// non-gating atom can never change a vector's scope and is not declared.
+func profilesDeclaration() []byte {
+	atoms := []string{"canon:b64-strict", "canon:jcs"}
+	for _, alg := range vitni.SupportedAlgs() {
+		atoms = append(atoms, "alg:"+alg)
+	}
+	sort.Strings(atoms)
+	b, _ := json.Marshal(atoms)
+	canonical, _ := jcs.Transform(b)
+	return append(canonical, '\n')
 }
 
 // respond is the whole CLI pipeline after argv and stdin have been read: it
@@ -83,7 +114,10 @@ func main() {
 //
 // Any gate violation is invalid_input, a command error and never a verdict.
 func respond(command string, stdin []byte) []byte {
-	run, ok := commands[command]
+	if command == profilesCommand {
+		return profilesDeclaration()
+	}
+	runCommand, ok := commands[command]
 	if !ok {
 		return errorLine("unsupported_command")
 	}
@@ -97,7 +131,7 @@ func respond(command string, stdin []byte) []byte {
 	if err != nil {
 		return errorLine("invalid_input")
 	}
-	result, err := run(in, stdin)
+	result, err := runCommand(in, stdin)
 	if err != nil {
 		return errorLine(errorCode(err))
 	}

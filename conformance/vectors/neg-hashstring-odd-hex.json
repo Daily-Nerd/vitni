@@ -1,1 +1,1 @@
-{"name": "hashstring/odd-length-hex", "command": "hashstring", "input": {"algo": "sha2-256", "digest_hex": "abc"}, "anchor": {"error": "invalid_input"}}
+{"name": "hashstring/odd-length-hex", "command": "hashstring", "profiles": [], "input": {"algo": "sha2-256", "digest_hex": "abc"}, "anchor": {"error": "invalid_input"}}

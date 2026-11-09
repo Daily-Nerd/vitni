@@ -1,1 +1,1 @@
-{"name": "stdin/jcs-dup-envelope-member", "command": "jcs", "input_raw": "{\"value\":1,\"value\":2}", "anchor": {"error": "invalid_input"}}
+{"name": "stdin/jcs-dup-envelope-member", "command": "jcs", "profiles": ["canon:jcs"], "input_raw": "{\"value\":1,\"value\":2}", "anchor": {"error": "invalid_input"}}

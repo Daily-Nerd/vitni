@@ -1,1 +1,1 @@
-{"name": "receipt-id/duplicate-key", "command": "receipt-id", "input_raw": "{\"receipt\":{\"v\":\"vitni/0.2\",\"v\":\"x\"}}", "anchor": {"error": "invalid_input"}}
+{"name": "receipt-id/duplicate-key", "command": "receipt-id", "profiles": ["canon:jcs"], "input_raw": "{\"receipt\":{\"v\":\"vitni/0.2\",\"v\":\"x\"}}", "anchor": {"error": "invalid_input"}}

@@ -1,1 +1,1 @@
-{"name": "jcs/sorted-keys", "command": "jcs", "input": {"value": {"b": 1, "a": 2}}, "anchor": {"canonical_hex": "7b2261223a322c2262223a317d", "byte_len": 13}}
+{"name": "jcs/sorted-keys", "command": "jcs", "profiles": ["canon:jcs"], "input": {"value": {"b": 1, "a": 2}}, "anchor": {"canonical_hex": "7b2261223a322c2262223a317d", "byte_len": 13}}

@@ -1,0 +1,10 @@
+{
+  "atoms": [
+    {"id": "alg:EdDSA", "section": "DESIGN.md#3", "status": "stable", "gating": true},
+    {"id": "alg:ES256", "section": "DESIGN.md#3", "status": "stable", "gating": true},
+    {"id": "canon:jcs", "section": "DESIGN.md#4.1", "status": "stable", "gating": true},
+    {"id": "canon:b64-strict", "section": "DESIGN.md#18.1", "status": "stable", "gating": true},
+    {"id": "binding:mcp", "section": "DESIGN.md#13", "status": "stable", "gating": false},
+    {"id": "binding:local", "section": "DESIGN.md#15", "status": "stable", "gating": false}
+  ]
+}

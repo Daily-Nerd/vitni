@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -300,5 +302,103 @@ func TestRespond_NeverInternalError(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// profilesLine is the one declaration this verifier prints: the gating atoms of
+// conformance/profiles.json, sorted by code point, as one JCS array.
+const profilesLine = `["alg:ES256","alg:EdDSA","canon:b64-strict","canon:jcs"]` + "\n"
+
+// failingReader stands for a closed or broken stdin.
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) { return 0, errors.New("closed") }
+
+// TestProfiles_IgnoresStdin pins that `profiles` is infrastructure: whatever is
+// on stdin (junk, empty, an unreadable pipe) the declaration is the same line,
+// never invalid_input and never stdin_read_error.
+func TestProfiles_IgnoresStdin(t *testing.T) {
+	args := []string{"vitni-verify", "profiles"}
+	for _, tc := range []struct {
+		name  string
+		stdin io.Reader
+	}{
+		{"junk", strings.NewReader("\xff\xfe not json")},
+		{"empty", strings.NewReader("")},
+		{"object", strings.NewReader(`{"profiles":["x"]}`)},
+		{"closed", failingReader{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := string(run(args, tc.stdin)); got != profilesLine {
+				t.Errorf("got %q, want %q", got, profilesLine)
+			}
+		})
+	}
+	for _, stdin := range []string{"", ")(", "[]", "{\"a\":1e400}"} {
+		if got := string(respond("profiles", []byte(stdin))); got != profilesLine {
+			t.Errorf("respond stdin %q: got %q", stdin, got)
+		}
+	}
+}
+
+// TestProfiles_DerivedFromTheCatalogAndTheAlgTable pins the single sources of
+// truth: every alg the library verifies is declared, and the declaration is
+// exactly the gating atoms of the shared catalog (no hand-copied list).
+func TestProfiles_DerivedFromTheCatalogAndTheAlgTable(t *testing.T) {
+	line := strings.TrimSuffix(string(profilesDeclaration()), "\n")
+	var declared []string
+	if err := json.Unmarshal([]byte(line), &declared); err != nil {
+		t.Fatalf("not a JSON array: %v", err)
+	}
+	for _, a := range vitni.SupportedAlgs() {
+		found := false
+		for _, d := range declared {
+			found = found || d == "alg:"+a
+		}
+		if !found {
+			t.Errorf("alg %s is verified but not declared", a)
+		}
+	}
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "conformance", "profiles.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalog struct {
+		Atoms []struct {
+			ID     string `json:"id"`
+			Gating bool   `json:"gating"`
+		} `json:"atoms"`
+	}
+	if err := json.Unmarshal(raw, &catalog); err != nil {
+		t.Fatal(err)
+	}
+	var gating []string
+	for _, a := range catalog.Atoms {
+		if a.Gating {
+			gating = append(gating, a.ID)
+		}
+	}
+	sort.Strings(gating)
+	if !reflect.DeepEqual(declared, gating) {
+		t.Errorf("declared %v, catalog gating atoms %v", declared, gating)
+	}
+	for _, d := range declared {
+		if strings.HasPrefix(d, "cmd:") {
+			t.Errorf("%s: cmd atoms are never declared", d)
+		}
+	}
+	if !sort.StringsAreSorted(declared) {
+		t.Errorf("declaration not sorted: %v", declared)
+	}
+}
+
+// TestRun_ReadsStdinOnlyForRealCommands pins that a missing command never
+// reads stdin and that a real command still reports an unreadable stdin.
+func TestRun_ReadsStdinOnlyForRealCommands(t *testing.T) {
+	if got := string(run([]string{"vitni-verify"}, failingReader{})); got != "{\"error\":\"missing_command\"}\n" {
+		t.Errorf("missing command: %q", got)
+	}
+	if got := string(run([]string{"vitni-verify", "jcs"}, failingReader{})); got != "{\"error\":\"stdin_read_error\"}\n" {
+		t.Errorf("unreadable stdin: %q", got)
 	}
 }

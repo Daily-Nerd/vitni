@@ -1,1 +1,1 @@
-{"name": "member/a2a-case-artifact", "command": "a2a-artifact-hash", "input_raw": "{\"ARTIFACT\":{\"parts\":[]}}", "anchor": {"error": "invalid_input"}}
+{"name": "member/a2a-case-artifact", "command": "a2a-artifact-hash", "profiles": ["canon:jcs"], "input_raw": "{\"ARTIFACT\":{\"parts\":[]}}", "anchor": {"error": "invalid_input"}}
