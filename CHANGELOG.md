@@ -4,6 +4,21 @@ All notable changes to vitni are documented here. Format: [Keep a Changelog](htt
 
 > **One version, one changelog.** vitni ships the Go module and the npm package (`@daily-nerd/vitni`) in lockstep under a single version — any change to either implementation bumps it. release-please generates entries here from conventional commits. The `0.2.0`–`0.2.1` entries (the npm-only transition releases) live in git history — `git show v0.2.2:ts/CHANGELOG.md`; unified history resumes from `0.2.2`.
 
+## [0.6.0](https://github.com/Daily-Nerd/vitni/compare/v0.5.3...v0.6.0) (2026-11-09)
+
+
+### Features
+
+* **conformance:** profile catalog, profiles command and an n-impl harness ([#71](https://github.com/Daily-Nerd/vitni/issues/71)) ([8972841](https://github.com/Daily-Nerd/vitni/commit/89728414906962475dc9f8380ad76066f16e3bc0))
+* **py:** add a stdlib-only reference verifier ([#72](https://github.com/Daily-Nerd/vitni/issues/72)) ([7a885eb](https://github.com/Daily-Nerd/vitni/commit/7a885ebc5e7819ed69e89f32a02e1f6c71a4d118))
+
+
+### Bug Fixes
+
+* one strict decoder per input format in go and ts ([#69](https://github.com/Daily-Nerd/vitni/issues/69)) ([f629818](https://github.com/Daily-Nerd/vitni/commit/f629818275fff6cebc53c2ecfe004147b52331ea))
+* reject invalid utf-8 in sse streams and non-32-byte hashstring digests ([#73](https://github.com/Daily-Nerd/vitni/issues/73)) ([5b5eddb](https://github.com/Daily-Nerd/vitni/commit/5b5eddb4b14604f8a902abdebfcdcffede3cd23e))
+* strict stdin gate, exact input typing and surrogate rule for every command ([#77](https://github.com/Daily-Nerd/vitni/issues/77)) ([0c66556](https://github.com/Daily-Nerd/vitni/commit/0c6655695970848109c8a96290cf18979f3dbf7c))
+
 ## [0.5.3](https://github.com/Daily-Nerd/vitni/compare/v0.5.2...v0.5.3) (2026-08-14)
 
 
