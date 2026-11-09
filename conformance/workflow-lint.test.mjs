@@ -30,7 +30,8 @@ const named = (name) => findNamed(STEPS, name);
 const index = (s) => STEPS.indexOf(s);
 
 const UV = "Install uv (pinned)";
-const PY310_CACHE = "Restore Python 3.10 from the Actions cache";
+const IMAGE = "Runner image OS for cache keys";
+const PY310_CACHE ="Restore Python 3.10 from the Actions cache";
 const PYTHONS = "Set up Pythons (3.13 from the runner image, 3.10 from the Actions cache)";
 const UNIT = "Python verifier unit tests (stdlib only, both supported Pythons)";
 const COMPARE = "Cross-implementation conformance (Go, TS and Python, byte-identical in scope)";
@@ -75,7 +76,16 @@ test("Python 3.10 is restored from the Actions cache before setup-python looks f
   const cache = named(PY310_CACHE);
   assert.match(cache, /uses: actions\/cache@/);
   assert.match(cache, /path: \$\{\{ runner\.tool_cache \}\}\/Python\/3\.10\.\*/);
-  assert.match(cache, /key: .*3\.10.*\$\{\{ env\.ImageOS \}\}/, "the key carries the version and the runner OS");
+  // The OS must come from a step output: `env.ImageOS` is not in the workflow
+  // env context and evaluates to empty, which once produced a key that
+  // matched every runner OS.
+  assert.match(cache, /key: .*3\.10.*\$\{\{ steps\.image\.outputs\.os \}\}/, "the key carries the version and the runner OS");
+  assert.doesNotMatch(WORKFLOW, /\$\{\{ env\.ImageOS \}\}/);
+  const image = named(IMAGE);
+  assert.match(image, /id: image/);
+  assert.match(image, /test -n "\$ImageOS"/, "an empty ImageOS fails the job");
+  assert.match(image, /echo "os=\$ImageOS" >> "\$GITHUB_OUTPUT"/);
+  assert.ok(index(image) < index(cache), "the image OS is read before the cache key uses it");
   assert.ok(index(cache) < index(named(PYTHONS)), "the cache is restored before setup-python searches the tool cache");
 });
 
