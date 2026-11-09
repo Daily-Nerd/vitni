@@ -67,6 +67,28 @@ The embedded row covers every re-parse of JSON text hidden inside another input:
 
 ---
 
+## Error vocabulary
+
+This is the one list of `{"error":"<code>"}` outputs. Every one is a command error printed with exit 0, never a verdict. A verdict (`{"valid":false,"reason":...}`) is a different shape and its reasons are defined per command below.
+
+| Code | Meaning | Arises in | Pinned by |
+|---|---|---|---|
+| `missing_command` | No command argument at all (an empty string is an argument, so `unsupported_command`). | the CLI, before stdin is read | per-implementation CLI tests; not expressible as a vector |
+| `unsupported_command` | The command is not one the verifier knows. Resolved before stdin is parsed. | the CLI | vectors `cli-empty-command`, `neg-cli-unsupported-command`, `neg-cli-unsupported-command-bad-stdin` |
+| `invalid_input` | The stdin text failed the stdin gate, or a member is absent, `null` or of the wrong type, or a command-specific domain rule failed (`hashstring` digest length, `sse-outputs-hash` invalid UTF-8 or bad `mode`, and the like). Includes a number that overflows float64 to infinity, and the non-finite literals `NaN` and `Infinity`. | every command | many vectors, for example `neg-jcs-nonfinite-1e400` and `neg-jcs-nan-literal` |
+| `receipt_id_must_be_absent` | The receipt already carries a `receipt_id` key. | `receipt-id`, `sign` | per-implementation tests; no vector |
+| `cost_must_be_string_int` | A `cost` magnitude is a JSON number. | `cost-canon` | vectors |
+| `unsupported_part` | An A2A part has an unknown `kind`, or neither `bytes` nor `uri`. | `a2a-artifact-hash` | vectors |
+| `kid_required` | `kid` is absent or `null`. | `sign` | vector |
+| `invalid_private_key` | `private_key_b64` is absent, `null` or not a usable key. | `sign` | vectors |
+| `invalid_seed` | `seed_b64` is not a string or is not a valid seed. | `keygen` | vectors |
+| `unsupported_profile` | The verifier declines the vector's profile or command; carries a `profile` member (see Profiles below). Never a substitute for `unsupported_command`. | any command, only for a verifier that declares a smaller profile | harness scope checks; no vector anchors it |
+| `internal_error`, `jcs_output_error` | A bug in the verifier. MUST be unreachable from any stdin bytes. | none by design | tests assert they are never produced |
+
+One failure outside the contract: if the process cannot read stdin at all, the Go and TypeScript verifiers print `{"error":"stdin_read_error"}` and the Python verifier prints `{"error":"internal_error"}`. No stdin bytes can cause it, so no vector can reach it, and implementations do not yet agree on the code.
+
+---
+
 ## Profiles, declined commands and coverage
 
 A verifier states what it implements; the harness holds it to that statement. The pieces:
