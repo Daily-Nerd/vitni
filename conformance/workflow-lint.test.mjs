@@ -30,6 +30,9 @@ const named = (name) => findNamed(STEPS, name);
 const index = (s) => STEPS.indexOf(s);
 
 const UV = "Install uv (pinned)";
+const IMAGE = "Runner image OS for cache keys";
+const PY310_CACHE ="Restore Python 3.10 from the Actions cache";
+const PYTHONS = "Set up Pythons (3.13 from the runner image, 3.10 from the Actions cache)";
 const UNIT = "Python verifier unit tests (stdlib only, both supported Pythons)";
 const COMPARE = "Cross-implementation conformance (Go, TS and Python, byte-identical in scope)";
 const CROSS = "Python verifier cross-check against a second implementation";
@@ -58,6 +61,32 @@ test("the unit tests run before the compare, uv is installed (pinned) before bot
   assert.match(uv, /uses: astral-sh\/setup-uv@/);
   assert.match(uv, /version: "[0-9.]+"/);
   assert.ok(index(uv) < index(named(UNIT)) && index(named(UNIT)) < index(named(COMPARE)));
+});
+
+test("both Pythons come from setup-python and uv may not download its own", () => {
+  const py = named(PYTHONS);
+  assert.match(py, /uses: actions\/setup-python@/);
+  assert.match(py, /^\s+3\.10$/m);
+  assert.match(py, /^\s+3\.13$/m);
+  assert.ok(index(py) < index(named(UNIT)), "Pythons are set up before the unit tests");
+  assert.match(WORKFLOW, /^    env:\n(?:      #.*\n)*      UV_PYTHON_DOWNLOADS: never$/m, "job-level UV_PYTHON_DOWNLOADS: never");
+});
+
+test("Python 3.10 is restored from the Actions cache before setup-python looks for it", () => {
+  const cache = named(PY310_CACHE);
+  assert.match(cache, /uses: actions\/cache@/);
+  assert.match(cache, /path: \$\{\{ runner\.tool_cache \}\}\/Python\/3\.10\.\*/);
+  // The OS must come from a step output: `env.ImageOS` is not in the workflow
+  // env context and evaluates to empty, which once produced a key that
+  // matched every runner OS.
+  assert.match(cache, /key: .*3\.10.*\$\{\{ steps\.image\.outputs\.os \}\}/, "the key carries the version and the runner OS");
+  assert.doesNotMatch(WORKFLOW, /\$\{\{ env\.ImageOS \}\}/);
+  const image = named(IMAGE);
+  assert.match(image, /id: image/);
+  assert.match(image, /test -n "\$ImageOS"/, "an empty ImageOS fails the job");
+  assert.match(image, /echo "os=\$ImageOS" >> "\$GITHUB_OUTPUT"/);
+  assert.ok(index(image) < index(cache), "the image OS is read before the cache key uses it");
+  assert.ok(index(cache) < index(named(PYTHONS)), "the cache is restored before setup-python searches the tool cache");
 });
 
 test("the compare runs per Python version with PY_VERIFY and requires all three impls through REQUIRE_IMPLS", () => {

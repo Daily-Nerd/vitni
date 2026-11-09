@@ -8,6 +8,11 @@ on:
 jobs:
   cross-impl:
     runs-on: ubuntu-latest
+    env:
+      # uv must use the interpreters set up below and never fetch its own.
+      # A missing version then fails with a clear error instead of a
+      # download that can time out mid-run.
+      UV_PYTHON_DOWNLOADS: never
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +38,33 @@ jobs:
           npm install
           npm run build
           npx c8 --reporter=lcov --reports-dir=coverage npm test
+
+      - name: Runner image OS for cache keys
+        # ImageOS is a shell variable on the runner, not part of the workflow
+        # env context, so read it here. An empty value fails the job rather
+        # than producing a key that matches every runner OS.
+        id: image
+        run: |
+          test -n "$ImageOS"
+          echo "os=$ImageOS" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Python 3.10 from the Actions cache
+        # The runner image ships 3.13 but no longer ships 3.10 (end of life
+        # October 2026), so setup-python would download it on every run.
+        # Keeping the interpreter in the Actions cache limits that download
+        # to a cache miss. The image OS is in the key so a new runner OS
+        # never restores binaries built for the old one.
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.tool_cache }}/Python/3.10.*
+          key: toolcache-python-3.10-${{ steps.image.outputs.os }}-${{ runner.arch }}-v2
+
+      - name: Set up Pythons (3.13 from the runner image, 3.10 from the Actions cache)
+        uses: actions/setup-python@v5
+        with:
+          python-version: |
+            3.10
+            3.13
 
       - name: Install uv (pinned)
         uses: astral-sh/setup-uv@v6
