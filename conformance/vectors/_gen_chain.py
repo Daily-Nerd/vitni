@@ -180,6 +180,16 @@ ev_leaf_jws, _ = build("srv-ec", "mcp:tool", ep_root_id, "")
 write("chain-empty-performer-valid.json", "chain/empty-performer-valid",
       [ev_leaf_jws, ep_root_jws], True, "ok", EMPTY_REGISTRY)
 
+# 12. repeated receipt [A, A]: the same hop twice. Step 7 (cycle) cannot be reached:
+#     the last hop is the root yet carries a parent hash, so step 4 malformed_chain
+#     fires first. (A duplicated id forces equal parents up the path to the root,
+#     where step 4 fires, short of a SHA-256 collision.) Locks the CONTRACT note
+#     under the verify-chain steps that cycle is unreachable.
+rr_parent_jws, rr_parent_id = build("srv-ed", "mcp:orchestrate", None, None)
+rr_a_jws, _ = build("srv-ec", "mcp:tool", rr_parent_id, "srv-ed")
+write("chain-repeated-receipt.json", "chain/repeated-receipt",
+      [rr_a_jws, rr_a_jws], False, "malformed_chain")
+
 print("wrote chain vectors:")
 for q in sorted(OUT.glob("chain-*.json")):
     print(" ", q.name)

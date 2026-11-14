@@ -46,14 +46,7 @@ test("CONTRACT.md documents what an implementation has to do", () => {
 test("every vector-anchored error code is in the CONTRACT.md Error vocabulary table", () => {
   const here = dirname(fileURLToPath(import.meta.url));
 
-  const section = CONTRACT.split(/^## /m).find((s) => s.startsWith("Error vocabulary"));
-  assert.ok(section, "CONTRACT.md has no '## Error vocabulary' section");
-  const documented = new Set();
-  for (const line of section.split("\n")) {
-    if (!line.startsWith("|")) continue;
-    const firstCell = line.split("|")[1] ?? "";
-    for (const m of firstCell.matchAll(/`([a-z][a-z0-9_]*)`/g)) documented.add(m[1]);
-  }
+  const documented = new Set(errorVocabulary().keys());
   assert.ok(documented.size > 0, "the Error vocabulary table lists no codes");
 
   const dir = join(here, "vectors");
@@ -86,13 +79,19 @@ const UNREACHABLE_FROM_STDIN = new Map([
   ["jcs_output_error", "a verifier bug, unreachable from any stdin bytes by contract"],
 ]);
 
+// The table rows of a "## <title>" section of CONTRACT.md, as arrays of the
+// raw `|`-split cells (index 0 is the empty text before the first pipe). Fails
+// loudly when the section is missing; the header and separator rows are
+// included and are skipped by the callers' code patterns.
+function tableRows(title) {
+  const section = CONTRACT.split(/^## /m).find((s) => s.startsWith(title));
+  assert.ok(section, `CONTRACT.md has no '## ${title}' section`);
+  return section.split("\n").filter((l) => l.startsWith("|")).map((l) => l.split("|"));
+}
+
 function errorVocabulary() {
-  const section = CONTRACT.split(/^## /m).find((s) => s.startsWith("Error vocabulary"));
-  assert.ok(section, "CONTRACT.md has no '## Error vocabulary' section");
   const rows = new Map(); // code -> "Pinned by" cell
-  for (const line of section.split("\n")) {
-    if (!line.startsWith("|")) continue;
-    const cells = line.split("|");
+  for (const cells of tableRows("Error vocabulary")) {
     for (const m of (cells[1] ?? "").matchAll(/`([a-z][a-z0-9_]*)`/g)) rows.set(m[1], (cells[4] ?? "").trim());
   }
   return rows;
@@ -131,4 +130,64 @@ test("a row that claims no vector pins it is exempt", () => {
     .filter(([c, pinned]) => /\bno vector\b/i.test(pinned) && !UNREACHABLE_FROM_STDIN.has(c))
     .map(([c]) => c);
   assert.deepEqual(stale, [], "rows whose 'Pinned by' cell says no vector but are not exempt");
+});
+
+// Verdict reasons. `verify` and `verify-chain` print {"valid":..,"reason":..};
+// the "Verdict reasons" table is the one list of those codes, keyed by command.
+// Same two-way shape as the error gate: every vector's anchor.reason must be a
+// row, and every row must be anchored by a vector or exempt below.
+const UNREACHABLE_VERDICTS = new Map([
+  ["verify-chain/cycle", "steps 4 and 5 fire first on any repeated receipt id; reaching it needs a SHA-256 collision or a payload that contains its own digest"],
+]);
+
+function verdictReasons() {
+  const rows = new Set(); // "command/code"
+  for (const cells of tableRows("Verdict reasons")) {
+    const command = (cells[1] ?? "").trim().match(/^`([a-z][a-z0-9-]*)`$/)?.[1];
+    const code = (cells[2] ?? "").trim().match(/^`([a-z][a-z0-9_]*)`$/)?.[1];
+    if (command && code) rows.add(`${command}/${code}`);
+  }
+  return rows;
+}
+
+function anchoredVerdicts() {
+  const dir = join(dirname(fileURLToPath(import.meta.url)), "vectors");
+  const pinned = new Map(); // "command/code" -> first vector file that anchors it
+  for (const f of readdirSync(dir).filter((n) => n.endsWith(".json")).sort()) {
+    const v = JSON.parse(readFileSync(join(dir, f), "utf8"));
+    if (typeof v?.anchor?.reason !== "string") continue;
+    const key = `${v.command}/${v.anchor.reason}`;
+    if (!pinned.has(key)) pinned.set(key, f);
+  }
+  return pinned;
+}
+
+test("every vector-anchored verdict reason is a row of the Verdict reasons table", () => {
+  const rows = verdictReasons();
+  const pinned = anchoredVerdicts();
+  assert.ok(rows.size > 0, "the Verdict reasons table lists no rows; the scan is vacuous");
+  assert.ok(pinned.size > 0, "found no vector anchor.reason codes; the scan is vacuous");
+  const missing = [...pinned].filter(([k]) => !rows.has(k));
+  assert.deepEqual(
+    missing.map(([k, f]) => `${k} (e.g. vectors/${f})`),
+    [],
+    "vector verdict reasons missing from the CONTRACT.md Verdict reasons table",
+  );
+});
+
+test("every Verdict reasons row is anchored by a vector or exempt as unreachable", () => {
+  const rows = verdictReasons();
+  const pinned = anchoredVerdicts();
+  assert.ok(rows.size > 0 && pinned.size > 0, "the scan is vacuous");
+  const unpinned = [...rows].filter((k) => !pinned.has(k) && !UNREACHABLE_VERDICTS.has(k));
+  assert.deepEqual(unpinned, [], "table rows that no vector anchors and that are not exempt");
+});
+
+test("the unreachable-verdict exemptions are real rows and no vector anchors them", () => {
+  const rows = verdictReasons();
+  const pinned = anchoredVerdicts();
+  const notRows = [...UNREACHABLE_VERDICTS.keys()].filter((k) => !rows.has(k));
+  assert.deepEqual(notRows, [], "exempt reasons that are not rows of the table (stale exemption)");
+  const nowAnchored = [...UNREACHABLE_VERDICTS.keys()].filter((k) => pinned.has(k));
+  assert.deepEqual(nowAnchored, [], "exempt reasons that a vector now anchors (drop the exemption)");
 });
