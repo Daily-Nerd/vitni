@@ -69,7 +69,7 @@ The embedded row covers every re-parse of JSON text hidden inside another input:
 
 ## Error vocabulary
 
-This is the one list of `{"error":"<code>"}` outputs. Every one is a command error printed with exit 0, never a verdict. A verdict (`{"valid":false,"reason":...}`) is a different shape and its reasons are defined per command below.
+This is the one list of `{"error":"<code>"}` outputs. Every one is a command error printed with exit 0, never a verdict. A verdict (`{"valid":false,"reason":...}`) is a different shape and its reasons are listed in the Verdict reasons table below and defined per command.
 
 | Code | Meaning | Arises in | Pinned by |
 |---|---|---|---|
@@ -86,6 +86,33 @@ This is the one list of `{"error":"<code>"}` outputs. Every one is a command err
 | `internal_error`, `jcs_output_error` | A bug in the verifier. MUST be unreachable from any stdin bytes. | none by design | tests assert they are never produced |
 
 One failure outside the contract: if the process cannot read stdin at all, the Go and TypeScript verifiers print `{"error":"stdin_read_error"}` and the Python verifier prints `{"error":"internal_error"}`. No stdin bytes can cause it, so no vector can reach it, and implementations do not yet agree on the code.
+
+---
+
+## Verdict reasons
+
+This is the one list of `{"valid":<bool>,"reason":"<code>"}` reasons. A verdict is a successful run with a yes or no answer, a different shape from the command errors above. The numbered steps under `verify` and `verify-chain` define when each fires; the table names them and gives the step. Only `verify` and `verify-chain` print verdicts. Python declines `verify-chain` by profile.
+
+| Command | Code | Step |
+|---|---|---|
+| `verify` | `malformed` | 1 |
+| `verify` | `header_key_material` | 2 |
+| `verify` | `unknown_key` | 3 |
+| `verify` | `revoked_key` | 4 |
+| `verify` | `alg_not_allowed` | 5 |
+| `verify` | `bad_signature` | 6 |
+| `verify` | `non_canonical_payload` | 7 |
+| `verify` | `context_mismatch` | 8 |
+| `verify` | `ok` | 9 |
+| `verify-chain` | `empty_chain` | 1 |
+| `verify-chain` | `receipt_invalid` | 2 |
+| `verify-chain` | `malformed_chain` | 4 |
+| `verify-chain` | `link_mismatch` | 5 |
+| `verify-chain` | `parent_identity_mismatch` | 6 |
+| `verify-chain` | `cycle` | 7 |
+| `verify-chain` | `ok` | 8 |
+
+Every row is pinned by at least one vector except `verify-chain` `cycle`, which no input reaches (see the note under the `verify-chain` steps). `conformance/contract-grep.test.mjs` checks both directions: a vector may only anchor a listed reason, and a listed reason needs a vector or a stated exemption.
 
 ---
 
@@ -255,6 +282,8 @@ Output:
 8. Else `{ "valid": true, "reason": "ok", "chain_len": n }`.
 
 Any failure → `{ "valid": false, "reason": "<code>", "chain_len": n }`. Output JSON MUST be JCS-canonical.
+
+Step 7 is a defensive check that no input reaches. A receipt id is the digest of the payload bytes, and those bytes include `parent_receipt_hash`. If two hops share an id, step 5 forces their parents to share one too, and so on up to the root, where step 4 fires because one payload cannot be both a root and a non-root. Short of a SHA-256 collision or a payload that contains its own digest, a repeated receipt such as `[A, A]` ends as `malformed_chain`, and the vector `chain/repeated-receipt` pins that.
 
 ### 9. `a2a-artifact-hash` — A2A artifact canonicalization → outputs_hash (design §14)
 A2A does not define artifact-level canonicalization, so Vitni defines it. Input:
