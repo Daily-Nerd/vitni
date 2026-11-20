@@ -79,3 +79,17 @@ test("the npm escape hatch survives and a dispatch must name something to do", (
 test("the release workflow carries no em-dash", () => {
   assert.ok(!WORKFLOW.includes(String.fromCharCode(0x2014)));
 });
+
+// A job with no `if:` runs only when every ANCESTOR succeeded, not just its
+// direct needs. On a go_tag dispatch release-please and tag-go are skipped,
+// so a plain job below go-release is skipped too and the run still ends
+// green. Every job below tag-go must say what it waits for, and `always()`
+// is out because it also runs after a cancel.
+test("jobs below a skippable job gate on their direct needs, not on every ancestor", () => {
+  assert.doesNotMatch(WORKFLOW, /always\(\)/);
+  for (const name of ["go-release", "build-binaries", "release-assets"]) {
+    assert.match(job(name), /^    if: \$\{\{ !cancelled\(\) && /m, `${name} must gate with !cancelled()`);
+  }
+  assert.match(job("build-binaries"), /needs\.go-release\.result == 'success'/);
+  assert.match(job("release-assets"), /needs\.build-binaries\.result == 'success'/);
+});
