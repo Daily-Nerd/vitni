@@ -253,6 +253,7 @@ func TestRespond_NeverInternalError(t *testing.T) {
 		"sse-outputs-hash":  `{"mode":"sse","raw_b64":"ZGF0YTogaGVsbG8KCg=="}`,
 		"cost-canon":        `{"cost":{"tokens":"1","usd_micros":"0","wall_ms":"0","rail_ref":null}}`,
 		"verify":            `{"signed_receipt":"a.b.c","keys":{},"policy":null}`,
+		"verify-batch":      `{"questions":[{"signed_receipt":"a.b.c","keys":{},"policy":null}]}`,
 		"verify-chain":      `{"receipts":[],"keys":{},"policy":null}`,
 		"a2a-artifact-hash": `{"artifact":{"parts":[{"kind":"text","text":"hi"}]}}`,
 		"sign":              `{"receipt":{"v":"vitni/0.2"},"kid":"ed-1","private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}`,
