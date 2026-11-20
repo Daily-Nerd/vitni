@@ -84,6 +84,22 @@ test('main: stdin read error', async () => {
   await main(['node', 'cli', 'jcs'], async () => { throw new Error('pipe'); }, (s) => { out += s; });
   assert.deepEqual(JSON.parse(out), { error: 'stdin_read_error' });
 });
+test('main: an unknown command never reads stdin (CONTRACT rule 2)', async () => {
+  for (const command of ['not-a-command', '', 'JCS', 'jcs ', 'profile', 'constructor', '__proto__', 'toString']) {
+    let out = '';
+    let reads = 0;
+    await main(['node', 'cli', command], async () => { reads++; throw new Error('pipe'); }, (s) => { out += s; });
+    assert.deepEqual(JSON.parse(out), { error: 'unsupported_command' }, command);
+    assert.equal(reads, 0, command);
+  }
+});
+test('main: every real command still reports an unreadable stdin', async () => {
+  for (const command of ['jcs', 'hashstring', 'digest', 'receipt-id', 'sse-outputs-hash', 'cost-canon', 'verify', 'verify-batch', 'verify-chain', 'a2a-artifact-hash', 'sign', 'keygen']) {
+    let out = '';
+    await main(['node', 'cli', command], async () => { throw new Error('pipe'); }, (s) => { out += s; });
+    assert.deepEqual(JSON.parse(out), { error: 'stdin_read_error' }, command);
+  }
+});
 test('main: happy path writes the command output', async () => {
   let out = '';
   await main(['node', 'cli', 'jcs'], async () => '{"value":{"a":1}}', (s) => { out += s; });

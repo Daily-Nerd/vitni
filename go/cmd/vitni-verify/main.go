@@ -73,13 +73,18 @@ func main() {
 
 // run is main without the process globals: it returns the one output line for
 // argv and stdin. stdin is read only for a command that takes input, so a
-// missing command and `profiles` never touch it.
+// missing command, `profiles` and an unknown command never touch it.
 func run(args []string, stdin io.Reader) []byte {
 	if len(args) < 2 {
 		return errorLine("missing_command")
 	}
 	if args[1] == profilesCommand {
 		return profilesDeclaration()
+	}
+	// The command resolves before stdin is touched (CONTRACT rule 2), against the
+	// same table respond dispatches on.
+	if _, ok := commands[args[1]]; !ok {
+		return errorLine("unsupported_command")
 	}
 	input, err := io.ReadAll(stdin)
 	if err != nil {
@@ -113,7 +118,7 @@ func profilesDeclaration() []byte {
 // respond is the whole CLI pipeline after argv and stdin have been read: it
 // returns the one output line (with its trailing newline). Order matters:
 //
-//  1. the command resolves (unknown: unsupported_command, stdin never parsed);
+//  1. the command resolves (unknown: unsupported_command, stdin never read);
 //  2. the stdin gate, ONCE for every command: strict UTF-8, no BOM, no
 //     lone-surrogate escape, exactly one JSON value, depth <= MaxDepth, no
 //     non-finite number, duplicate keys per dupReject, top level an object

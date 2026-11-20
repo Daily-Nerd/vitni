@@ -132,9 +132,72 @@ class LastResort(unittest.TestCase):
             rc, out, err = main_in_process(["jcs"], b'{"value":1}')
         self.assertEqual((rc, out), (0, b'{"error":"internal_error"}\n'))
 
-    def test_reading_stdin_failing_is_internal_error(self):
-        broken = mock.Mock(side_effect=OSError("closed"))
+    def test_a_bug_while_reading_stdin_that_is_not_a_read_failure_is_internal_error(self):
+        broken = mock.Mock(side_effect=RuntimeError("bug"))
         self.assertEqual(V.main_output(["jcs"], broken), b'{"error":"internal_error"}')
+
+
+class StdinReadError(unittest.TestCase):
+    """An unreadable stdin is stdin_read_error for every command that reads it,
+    as in Go and TS. Classified at the read, so a bug elsewhere stays internal_error."""
+    READING = sorted(set(V.COMMANDS) - {"profiles"})
+
+    def test_a_failing_read_is_stdin_read_error_for_every_reading_command(self):
+        for command in self.READING:
+            with self.subTest(command=command):
+                broken = mock.Mock(side_effect=OSError("closed"))
+                self.assertEqual(V.main_output([command], broken), b'{"error":"stdin_read_error"}')
+
+    def test_the_real_reader_maps_a_closed_or_missing_stdin(self):
+        class Closed:
+            @property
+            def buffer(self):
+                raise ValueError("I/O operation on closed file")
+        for stdin in (None, Closed()):
+            with self.subTest(stdin=stdin), mock.patch.object(sys, "stdin", stdin):
+                out = V.main_output(["jcs"], V._read_stdin)
+                self.assertEqual(out, b'{"error":"stdin_read_error"}')
+
+    def test_main_prints_the_line_and_exits_zero(self):
+        class Broken:
+            class buffer:
+                @staticmethod
+                def read():
+                    raise OSError("EIO")
+        for command in self.READING:
+            with self.subTest(command=command), mock.patch.object(sys, "stdin", Broken()):
+                out, err = io.BytesIO(), io.BytesIO()
+                with mock.patch.object(sys, "stdout", io.TextIOWrapper(out, encoding="utf-8", newline="")), \
+                        mock.patch.object(sys, "stderr", io.TextIOWrapper(err, encoding="utf-8", newline="")):
+                    rc = V.main([command])
+                    sys.stdout.flush()
+                    got = (rc, out.getvalue(), err.getvalue())
+                self.assertEqual(got, (0, b'{"error":"stdin_read_error"}\n', b""))
+
+    def test_a_real_process_with_a_write_only_stdin(self):
+        # a write-only fd: read(2) fails with EBADF, an actual unreadable stdin
+        # (a directory fd would kill the interpreter at startup, before this code runs)
+        path = os.path.join(tempfile.gettempdir(), "vitni-stdin-wo-%d" % os.getpid())
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT, 0o600)
+        try:
+            proc = subprocess.run([sys.executable, "-I", str(VERIFIER), "jcs"], stdin=fd, capture_output=True, timeout=60)
+        finally:
+            os.close(fd)
+            os.unlink(path)
+        self.assertEqual((proc.returncode, proc.stdout, proc.stderr), (0, b'{"error":"stdin_read_error"}\n', b""))
+
+    def test_an_unknown_command_never_reads_stdin(self):
+        for command in ("not-a-command", "", "JCS", "jcs ", "profile"):
+            with self.subTest(command=command):
+                broken = mock.Mock(side_effect=OSError("closed"))
+                self.assertEqual(V.main_output([command], broken), b'{"error":"unsupported_command"}')
+                broken.assert_not_called()
+
+    def test_commands_that_never_read_stdin_are_unaffected(self):
+        broken = mock.Mock(side_effect=OSError("closed"))
+        self.assertEqual(V.main_output(["profiles"], broken), PROFILES_LINE.rstrip(b"\n"))
+        self.assertEqual(V.main_output(["keygen"], broken), b'{"error":"unsupported_profile","profile":"cmd:keygen"}')
+        broken.assert_not_called()
 
 
 class Isolation(unittest.TestCase):
