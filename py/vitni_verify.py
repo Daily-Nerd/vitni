@@ -8,7 +8,8 @@ JSON followed by LF, exit code 0 on every handled path. Nothing else goes to
 stdout. A command the CLI does not know is {"error":"unsupported_command"}, no
 command at all is {"error":"missing_command"}.
 
-Declared commands: verify, jcs, digest, hashstring, receipt-id and profiles.
+Declared commands: verify, verify-batch, jcs, digest, hashstring, receipt-id and
+profiles.
 The commands a2a-artifact-hash, cost-canon, keygen, sign, sse-outputs-hash and
 verify-chain exist in the protocol but not here: they answer
 {"error":"unsupported_profile","profile":"cmd:<command>"} without reading stdin.
@@ -642,6 +643,7 @@ _SHAPES = {
     "hashstring": (("algo", str), ("digest_hex", str)),
     "digest": (("bytes_b64", str),),
     "receipt-id": (("receipt", dict),),
+    "verify-batch": (("questions", list),),
 }
 
 
@@ -658,11 +660,29 @@ def _shape_ok(command, obj):
 
 
 def _cmd_verify(obj):
+    """The answer to one verify question, from its parsed JSON value: the verdict,
+    or invalid_input when it is not an object or fails verify's input typing.
+    verify and every verify-batch element go through here."""
+    if not isinstance(obj, dict):
+        return {"error": "invalid_input"}
     return verify(obj.get("signed_receipt"), obj.get("keys"), obj.get("policy"))
+
+
+# Most questions one verify-batch call answers: a count, not a byte size. More
+# is batch_too_large, a different action for the caller than fixing the input.
+MAX_BATCH_QUESTIONS = 65536
+
+
+def _cmd_verify_batch(obj):
+    questions = obj["questions"]
+    if len(questions) > MAX_BATCH_QUESTIONS:
+        return {"error": "batch_too_large"}
+    return {"results": [_cmd_verify(q) for q in questions]}
 
 
 COMMANDS = {
     "verify": _cmd_verify,
+    "verify-batch": _cmd_verify_batch,
     "jcs": _cmd_jcs,
     "digest": _cmd_digest,
     "hashstring": _cmd_hashstring,

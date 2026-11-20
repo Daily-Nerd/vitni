@@ -1,0 +1,1 @@
+{"name": "batch/questions-member-case", "command": "verify-batch", "profiles": ["canon:b64-strict", "canon:jcs"], "input_raw": "{\"Questions\":[]}", "anchor": {"error": "invalid_input"}}

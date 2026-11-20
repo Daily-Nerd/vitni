@@ -18,7 +18,7 @@ test("the workflow runs the harness self-tests and the tagger tests", () => {
 test("the workflow regenerates every vector from nothing and requires a clean tree", () => {
   assert.match(WORKFLOW, /uses: astral-sh\/setup-uv@/);
   assert.match(WORKFLOW, /rm -f conformance\/vectors\/\*\.json/);
-  for (const g of ["_gen.py", "_gen_a2a.py", "_gen_verify.py", "_gen_chain.py"]) {
+  for (const g of ["_gen.py", "_gen_a2a.py", "_gen_verify.py", "_gen_chain.py", "_gen_batch.py"]) {
     assert.ok(WORKFLOW.includes(g), `${g} is not run by the regeneration gate`);
   }
   assert.match(WORKFLOW, /git status --porcelain conformance\/vectors/);

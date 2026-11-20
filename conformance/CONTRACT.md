@@ -34,7 +34,7 @@ Every external byte string enters through ONE strict decoder per format, and the
 
 1. **Missing command**: no command argument is `{"error":"missing_command"}`. An empty string is an argument: it is an unknown command (rule 2).
 2. **The command resolves first.** An unknown command is `{"error":"unsupported_command"}` whatever the stdin is; stdin is never parsed for it.
-3. **The stdin gate**, the same for EVERY command (`jcs hashstring digest receipt-id sse-outputs-hash cost-canon verify verify-chain a2a-artifact-hash sign keygen`), `verify` and `verify-chain` included. The stdin bytes must be strict UTF-8 text (no overlong forms, no encoded surrogates), without a leading BOM (`EF BB BF`), free of lone-surrogate `\uXXXX` escapes in any key or string (a valid surrogate pair escape is fine), exactly one JSON value followed only by optional ASCII whitespace (so no trailing garbage or NUL), nested at most 128 deep (the top-level object is depth 1), without a number that overflows a float64 to infinity, and the value must be a JSON object. Duplicate object keys are rejected over the whole text for `jcs`, `receipt-id` and `cost-canon`, and are last-wins for every other command. Any violation is `{"error":"invalid_input"}`. Empty stdin is invalid input too: it is not a JSON value.
+3. **The stdin gate**, the same for EVERY command (`jcs hashstring digest receipt-id sse-outputs-hash cost-canon verify verify-batch verify-chain a2a-artifact-hash sign keygen`), `verify`, `verify-batch` and `verify-chain` included. The stdin bytes must be strict UTF-8 text (no overlong forms, no encoded surrogates), without a leading BOM (`EF BB BF`), free of lone-surrogate `\uXXXX` escapes in any key or string (a valid surrogate pair escape is fine), exactly one JSON value followed only by optional ASCII whitespace (so no trailing garbage or NUL), nested at most 128 deep (the top-level object is depth 1), without a number that overflows a float64 to infinity, and the value must be a JSON object. Duplicate object keys are rejected over the whole text for `jcs`, `receipt-id` and `cost-canon`, and are last-wins for every other command. Any violation is `{"error":"invalid_input"}`. Empty stdin is invalid input too: it is not a JSON value.
 4. **Member names and types.** Member names are exact and case-sensitive; a name that differs only in case is an unknown member and is ignored. A required member that is absent or `null`, or any member of the wrong JSON type, is `{"error":"invalid_input"}`. Unknown members are ignored, so the input can grow. The one required member whose domain includes `null` is `jcs` `value`: the key must be present, `null` is a value. For `verify` and `verify-chain` the WHOLE `keys` tree is typed (every performer an object or `null`, every entry an object or `null`, `kty crv x y alg status` each a string, `null` or absent) and `policy` (an object or `null`, `expected_binding` and `expected_method` each a string, `null` or absent), not only the entry a receipt resolves to. A `null` registry entry is absent: `unknown_key`. The members each command reads, their types and which are required are in the table below; what a command does with a member stays in the command.
 5. The command runs on input that has passed 3 and 4.
 
@@ -47,6 +47,7 @@ Every external byte string enters through ONE strict decoder per format, and the
 | `sse-outputs-hash` | `raw_b64` string (R), `mode` string (R, `sse` or `sse-jsonrpc`) |
 | `cost-canon` | `cost` object (R) |
 | `verify` | `signed_receipt` string or `null` (absent is `malformed`), `keys` object or `null`, `policy` object or `null` |
+| `verify-batch` | `questions` array (R; absent, `null` or any other type is `invalid_input`). Each element is judged alone as a `verify` input, so a bad element is its own `invalid_input` result and never the batch's |
 | `verify-chain` | `receipts` array of strings or `null` (absent is `empty_chain`), `keys`, `policy` as `verify` |
 | `a2a-artifact-hash` | `artifact` object (R) with `parts` array of objects (R); each part `kind` string or `null`, `file` object or `null` with `bytes`, `uri`, `mimeType`, `name` each string or `null` |
 | `sign` | `receipt` object (R), `kid` string or `null` (absent is `kid_required`), `private_key_b64` string or `null` (absent is `invalid_private_key`) |
@@ -76,6 +77,7 @@ This is the one list of `{"error":"<code>"}` outputs. Every one is a command err
 | `missing_command` | No command argument at all (an empty string is an argument, so `unsupported_command`). | the CLI, before stdin is read | per-implementation CLI tests; not expressible as a vector |
 | `unsupported_command` | The command is not one the verifier knows. Resolved before stdin is parsed. | the CLI | vectors `cli-empty-command`, `neg-cli-unsupported-command`, `neg-cli-unsupported-command-bad-stdin` |
 | `invalid_input` | The stdin text failed the stdin gate, or a member is absent, `null` or of the wrong type, or a command-specific domain rule failed (`hashstring` digest length, `sse-outputs-hash` invalid UTF-8 or bad `mode`, and the like). Includes a number that overflows float64 to infinity, and the non-finite literals `NaN` and `Infinity`. | every command | many vectors, for example `neg-jcs-nonfinite-1e400` and `neg-jcs-nan-literal` |
+| `batch_too_large` | A `verify-batch` call carries more than 65536 questions. Top level only: the caller must split the batch, which is a different action from fixing malformed input (`invalid_input`). | `verify-batch` | vector `neg-batch-too-large` |
 | `receipt_id_must_be_absent` | The receipt already carries a `receipt_id` key. | `receipt-id`, `sign` | vectors `neg-receipt-id-present-string`, `neg-receipt-id-present-null`, `neg-sign-receipt-id-present` |
 | `cost_must_be_string_int` | A `cost` magnitude is a JSON number. | `cost-canon` | vectors |
 | `unsupported_part` | An A2A part has an unknown `kind`, or neither `bytes` nor `uri`. | `a2a-artifact-hash` | vectors |
@@ -91,7 +93,7 @@ One failure outside the contract: if the process cannot read stdin at all, the G
 
 ## Verdict reasons
 
-This is the one list of `{"valid":<bool>,"reason":"<code>"}` reasons. A verdict is a successful run with a yes or no answer, a different shape from the command errors above. The numbered steps under `verify` and `verify-chain` define when each fires; the table names them and gives the step. Only `verify` and `verify-chain` print verdicts. Python declines `verify-chain` by profile.
+This is the one list of `{"valid":<bool>,"reason":"<code>"}` reasons. A verdict is a successful run with a yes or no answer, a different shape from the command errors above. The numbered steps under `verify` and `verify-chain` define when each fires; the table names them and gives the step. Only `verify` and `verify-chain` print verdicts, and `verify-batch` prints `verify`'s, one per question. Python declines `verify-chain` by profile.
 
 | Command | Code | Step |
 |---|---|---|
@@ -309,6 +311,32 @@ Output:
 - A part with neither `bytes` nor `uri`, or an unknown `kind` → error `{"error":"unsupported_part"}`.
 
 `descriptor = { "parts": [ <descriptor_0>, ... ] }`; `descriptor_hex = hex(JCS(descriptor))`; `outputs_hash = multihash(JCS(descriptor))` (pinned hash-string, §4.1). A receipt for an A2A task sets `binding:"a2a"`, `method:"a2a:<skill>"`, and this `outputs_hash`.
+
+### 10. `verify-batch`: many independent `verify` questions in one process
+One process start per receipt dominates the cost of checking many receipts, so this command answers many independent questions in one call. It is not `verify-chain`: it returns one verdict per question, each with its own `keys` and `policy`, and no verdict depends on another. There is no streaming or long-lived mode: one stdin value, one output line, exit 0.
+
+Input:
+```json
+{ "questions": [ { "signed_receipt": "...", "keys": {}, "policy": {} }, ... ] }
+```
+Each element is exactly a `verify` input (section 7). Output:
+```json
+{ "results": [ <result_0>, ... ] }
+```
+`results` has the same length and order as `questions`.
+
+**Per-element rule.** `results[i]` is byte-identical to what `verify` prints for `questions[i]` alone: the verdict `{"reason":"<code>","valid":<bool>}`, or `{"error":"invalid_input"}` when that question alone would be a command error, which includes an element that is not a JSON object. One element never changes another's result. JCS is compositional, so a canonical element nests unchanged inside the canonical output. Implementations MUST get this from one shared code path with `verify`, not from two copies; the harness holds them to it by running every structured `verify` vector as a one-element batch and requiring `results[0]` to equal that vector's `verify` anchor.
+
+**Order of judgement.** The command resolves first (rule 2 of Input strictness). The stdin gate then runs ONCE over the whole text with `verify`'s policy (last-wins duplicate keys, non-finite numbers rejected). Then:
+1. `questions` absent, `null` or not an array is the top-level `{"error":"invalid_input"}`.
+2. More than **65536** elements (`MAX_BATCH_QUESTIONS`) is the top-level `{"error":"batch_too_large"}`. The limit is a count, not a byte size, so the boundary is deterministic: 65536 questions are answered and 65537 are not. It has its own code, not `invalid_input`, because the caller's remedy differs: split the batch, rather than fix malformed input.
+3. Each element is answered alone by the per-element rule.
+
+**Batch-wide faults (the one exception to the per-element rule).** A fault the stdin gate finds on the raw text fails the WHOLE batch with `{"error":"invalid_input"}`, whichever element carries it and however good the others are: a lone-surrogate escape, a non-finite number, nesting over 128, invalid UTF-8, a BOM, trailing garbage. The text is judged once, not per element, so "byte-identical to `verify` alone" does not hold for these inputs. It differs most for depth: the top-level object is depth 1, `questions` is depth 2 and an element is depth 3, so an element sits two levels deeper than a lone `verify` input. A value nested 127 arrays deep in an ignored member is accepted by `verify` alone and rejects the whole batch (the deepest accepted nesting in an element member is 125 arrays). Vectors `neg-batch-lone-surrogate`, `neg-batch-nonfinite`, `neg-batch-depth-129` and `batch-depth-128` pin it.
+
+`batch-max-questions` carries no anchor, because its 65536 results would make the vector file about 2.4 MB; the harness still fails it if any implementation answers it with an error, and `neg-batch-too-large` pins the other side of the boundary.
+
+Python implements this command on top of its `verify()`.
 
 ## Vector file format (`vectors/*.json`)
 ```json

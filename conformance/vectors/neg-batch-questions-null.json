@@ -1,0 +1,1 @@
+{"name": "batch/questions-null", "command": "verify-batch", "profiles": ["canon:b64-strict", "canon:jcs"], "input_raw": "{\"questions\":null}", "anchor": {"error": "invalid_input"}}

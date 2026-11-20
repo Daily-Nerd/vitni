@@ -72,6 +72,9 @@ another project:
   result line says what happened: `{"valid":true}` is verified,
   `{"valid":false}` is failed, and any `{"error":...}` is unable (no judgement
   was made).
+- `verify-batch` answers many independent `verify` questions in one process
+  (`{"questions":[...]}` in, `{"results":[...]}` out, at most 65536 questions);
+  it avoids one process start per receipt. See `conformance/CONTRACT.md`.
 - ES256 is raw R||S (64 bytes), never DER. Commands it does not implement
   (`sign`, `keygen`, `verify-chain`, `sse-outputs-hash`, `a2a-artifact-hash`,
   `cost-canon`) answer `unsupported_profile` without reading stdin.
@@ -88,12 +91,15 @@ uv run --no-project python _gen.py
 uv run --no-project python _gen_a2a.py
 uv run --no-project --with cryptography==50.0.2 --with ecdsa==0.19.2 python _gen_verify.py
 uv run --no-project --with cryptography==50.0.2 --with ecdsa==0.19.2 python _gen_chain.py
+uv run --no-project python _gen_batch.py
 ```
 
-The `cryptography` and `ecdsa` pins are the single place the generator
-dependency versions live; CI runs the same commands. To check that every
-vector is owned by a generator, delete `conformance/vectors/*.json`, rerun the
-four commands, and require an empty `git status --porcelain conformance/vectors`.
+`_gen_batch.py` reads the `verify` vectors back, so it runs after
+`_gen_verify.py`. The `cryptography` and `ecdsa` pins are the single place the
+generator dependency versions live; CI runs the same commands. To check that
+every vector is owned by a generator, delete `conformance/vectors/*.json`,
+rerun the five commands, and require an empty
+`git status --porcelain conformance/vectors`.
 
 Every wire-visible feature needs a vector; a wire feature without a Go≡TS
 vector is scope creep. Wire literals (`v`, the MCP `_meta` key) flip only in
