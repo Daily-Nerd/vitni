@@ -76,8 +76,10 @@ const oneLine = (s) => String(s).replace(/\s+/g, " ").trim();
 // U+FFFD and hide the bug. Output that is not strict UTF-8 fails the vector.
 function spawnImpl(impl, subcommand, stdin, cwd) {
   const [cmd, ...args] = impl.argv;
+  // maxBuffer: the default 1 MiB turns a legitimately large answer (a full
+  // verify-batch of 65536 results is about 2.4 MB) into a spawn error.
   const res = spawnSync(cmd, [...args, subcommand], {
-    cwd, input: stdin, env: { ...process.env, ...(impl.env ?? {}) },
+    cwd, input: stdin, env: { ...process.env, ...(impl.env ?? {}) }, maxBuffer: 64 * 1024 * 1024,
   });
   if (res.error) return { ok: false, spawn: true, err: `spawn: ${res.error.message}` };
   if (res.status !== 0) {
