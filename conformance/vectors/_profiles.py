@@ -7,14 +7,15 @@ atoms are derived by the harness from the `command` member and are never stored.
 
 Rules (design 4.2):
   alg:X            the alg of the registry key that SIGNS each JWS in the vector
-                   (resolve payload.performer_id + header.kid in `keys`); keygen
+                   (resolve payload.performer_id + header.kid in `keys`, or in the
+                   question's own `keys` for verify-batch); keygen
                    and sign produce Ed25519, so they add alg:EdDSA. A JWS that
                    does not decode or resolve adds nothing, and so does a registry
                    alg outside the catalog (that case is the verdict
                    alg_not_allowed, the same on every verifier).
   canon:jcs        command in JCS_COMMANDS, or sse-outputs-hash in mode sse-jsonrpc
   canon:b64-strict the input carries a standard-base64 member, or the command is
-                   verify / verify-chain (segments and key material)
+                   verify / verify-batch / verify-chain (segments and key material)
   binding:X        payload.binding of each decodable JWS, receipt.binding for
                    receipt-id
 """
@@ -28,9 +29,9 @@ ATOMS = {a["id"] for a in CATALOG["atoms"]}
 ALG_ATOMS = {a[len("alg:"):] for a in ATOMS if a.startswith("alg:")}
 
 INPUT_FORMS = ("input", "input_raw", "input_raw_b64")
-JCS_COMMANDS = {"jcs", "receipt-id", "cost-canon", "a2a-artifact-hash", "verify", "verify-chain", "sign"}
+JCS_COMMANDS = {"jcs", "receipt-id", "cost-canon", "a2a-artifact-hash", "verify", "verify-batch", "verify-chain", "sign"}
 B64_MEMBERS = ("bytes_b64", "raw_b64", "seed_b64", "private_key_b64")
-B64_COMMANDS = {"verify", "verify-chain"}
+B64_COMMANDS = {"verify", "verify-batch", "verify-chain"}
 
 
 def _stdin_object(vec: dict) -> dict:
@@ -86,15 +87,23 @@ def _signing_alg(parts, keys):
 
 
 def _jws_inputs(vec: dict, obj: dict):
+    """(jws, keys) for every JWS the vector asks about; each question of a
+    verify-batch carries its own keys."""
     cmd = vec.get("command")
+    keys = obj.get("keys")
     if cmd == "verify":
-        return [obj.get("signed_receipt")]
+        return [(obj.get("signed_receipt"), keys)]
+    if cmd == "verify-batch":
+        qs = obj.get("questions")
+        if not isinstance(qs, list):
+            return []
+        return [(q.get("signed_receipt"), q.get("keys")) for q in qs if isinstance(q, dict)]
     if cmd == "verify-chain":
         r = obj.get("receipts")
-        return list(r) if isinstance(r, list) else []
+        return [(jws, keys) for jws in r] if isinstance(r, list) else []
     if cmd == "sign":
         a = vec.get("anchor")
-        return [a.get("signed_receipt")] if isinstance(a, dict) else []
+        return [(a.get("signed_receipt"), keys)] if isinstance(a, dict) else []
     return []
 
 
@@ -123,8 +132,7 @@ def atoms_for(vec: dict) -> list:
     if cmd in ("keygen", "sign"):
         atoms.add("alg:EdDSA")
 
-    keys = obj.get("keys")
-    for jws in _jws_inputs(vec, obj):
+    for jws, keys in _jws_inputs(vec, obj):
         parts = _jws_parts(jws)
         if parts is None:
             continue

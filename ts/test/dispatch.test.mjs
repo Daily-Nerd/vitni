@@ -44,6 +44,7 @@ test('dispatch: every command routes and produces output', () => {
     'sse-outputs-hash': '{"mode":"sse","raw_b64":"ZGF0YTogaGVsbG8KCg=="}',
     'cost-canon': '{"cost":{"tokens":"1","usd_micros":"0","wall_ms":"0","rail_ref":null}}',
     verify: '{"signed_receipt":"a.b.c","keys":{},"policy":null}',
+    'verify-batch': '{"questions":[{"signed_receipt":"a.b.c","keys":{},"policy":null}]}',
     'verify-chain': '{"receipts":[],"keys":{},"policy":null}',
     'a2a-artifact-hash': '{"artifact":{"parts":[{"kind":"text","text":"hi"}]}}',
     sign: '{"receipt":{"v":"vitni/0.2","binding":"mcp","action_ref":null,"performer_id":"srv","requester_id":null,"method":"mcp:x","inputs_hash":"uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA","outputs_hash":"uEiAs8k26X7CjDiboOyrFueKeGxYeXB-nQl5zBDNik4uYJA","cost":{"tokens":"10","usd_micros":"0","wall_ms":"3","rail_ref":null},"status":"OK","reason":null,"parent_receipt_hash":null,"log_policy":"best_effort","ts":"2026-05-28T00:00:00Z","nonce":"uEiDjsMRCmPwcFJr79MiZb7kkJ65B5GSbk0yklZkbeFK4VQ"},"kid":"ed-1","private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}',
@@ -173,6 +174,7 @@ const BASELINES = {
   'sse-outputs-hash': '{"mode":"sse","raw_b64":"ZGF0YTogaGVsbG8KCg=="}',
   'cost-canon': '{"cost":{"tokens":"1","usd_micros":"0","wall_ms":"0","rail_ref":null}}',
   verify: '{"signed_receipt":"a.b.c","keys":{},"policy":null}',
+  'verify-batch': '{"questions":[{"signed_receipt":"a.b.c","keys":{},"policy":null}]}',
   'verify-chain': '{"receipts":[],"keys":{},"policy":null}',
   'a2a-artifact-hash': '{"artifact":{"parts":[{"kind":"text","text":"hi"}]}}',
   sign: '{"receipt":{"v":"vitni/0.2"},"kid":"ed-1","private_key_b64":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="}',
@@ -201,7 +203,7 @@ const MUTATIONS = {
 
 assert.deepEqual(Object.keys(BASELINES).sort(), [
   'a2a-artifact-hash', 'cost-canon', 'digest', 'hashstring', 'jcs', 'keygen', 'receipt-id',
-  'sign', 'sse-outputs-hash', 'verify', 'verify-chain',
+  'sign', 'sse-outputs-hash', 'verify', 'verify-batch', 'verify-chain',
 ], 'the property test must cover every command');
 
 for (const [command, base] of Object.entries(BASELINES)) {

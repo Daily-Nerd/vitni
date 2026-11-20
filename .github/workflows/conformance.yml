@@ -126,6 +126,7 @@ jobs:
           uv run --no-project python _gen_a2a.py
           uv run --no-project --with cryptography==50.0.2 --with ecdsa==0.19.2 python _gen_verify.py
           uv run --no-project --with cryptography==50.0.2 --with ecdsa==0.19.2 python _gen_chain.py
+          uv run --no-project python _gen_batch.py
           cd ../..
           if [ -n "$(git status --porcelain conformance/vectors)" ]; then
             git status --porcelain conformance/vectors

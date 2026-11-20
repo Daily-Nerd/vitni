@@ -1,0 +1,1 @@
+{"name": "batch/null-members", "command": "verify-batch", "profiles": ["canon:b64-strict", "canon:jcs"], "input": {"questions": [{}, {"signed_receipt": null, "keys": null, "policy": null}, {"keys": {}}]}, "anchor": {"results": [{"reason": "malformed", "valid": false}, {"reason": "malformed", "valid": false}, {"reason": "malformed", "valid": false}]}}

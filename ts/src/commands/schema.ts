@@ -22,7 +22,7 @@
  */
 
 type Obj = Record<string, unknown>;
-type MemberType = 'string' | 'object' | 'string[]' | 'any';
+type MemberType = 'string' | 'object' | 'string[]' | 'array' | 'any';
 
 interface Member {
   name: string;
@@ -46,6 +46,7 @@ function typeOk(v: unknown, type: MemberType): boolean {
     case 'string': return typeof v === 'string';
     case 'object': return isObject(v);
     case 'string[]': return Array.isArray(v) && v.every((x) => typeof x === 'string');
+    case 'array': return Array.isArray(v);
     case 'any': return true;
   }
 }
@@ -117,6 +118,9 @@ const SCHEMAS: Record<string, CommandSchema> = {
     members: [str('signed_receipt'), obj('keys'), obj('policy')],
     deep: (o) => keysTreeOk(o) && policyOk(o),
   },
+  // The questions are NOT typed here: each element is judged alone by
+  // verifyAnswer, so a bad element is its own error and never the batch's.
+  'verify-batch': { members: [{ name: 'questions', type: 'array', required: true }] },
   'verify-chain': {
     members: [{ name: 'receipts', type: 'string[]', required: false }, obj('keys'), obj('policy')],
     deep: (o) => keysTreeOk(o) && policyOk(o),

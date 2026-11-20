@@ -1,0 +1,1 @@
+{"name": "batch/empty", "command": "verify-batch", "profiles": ["canon:b64-strict", "canon:jcs"], "input": {"questions": []}, "anchor": {"results": []}}

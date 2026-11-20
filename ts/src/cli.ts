@@ -15,7 +15,7 @@ import { digest } from './commands/digest.js';
 import { receiptId } from './commands/receipt-id.js';
 import { sseOutputsHash } from './commands/sse-outputs-hash.js';
 import { costCanon } from './commands/cost-canon.js';
-import { verify } from './commands/verify.js';
+import { verifyAnswer, verifyBatch } from './commands/verify-batch.js';
 import { verifyChain } from './commands/verify-chain.js';
 import { a2aArtifactHash } from './commands/a2a-artifact-hash.js';
 import { sign } from './commands/sign.js';
@@ -51,7 +51,8 @@ const COMMANDS: CommandTable = {
   'receipt-id': (i) => receiptId(i as Parameters<typeof receiptId>[0]),
   'sse-outputs-hash': (i) => sseOutputsHash(i as Parameters<typeof sseOutputsHash>[0]),
   'cost-canon': (i) => costCanon(i as Parameters<typeof costCanon>[0]),
-  verify: (i) => verify(i as Parameters<typeof verify>[0]),
+  verify: (i) => verifyAnswer(i),
+  'verify-batch': (i) => verifyBatch(i as Parameters<typeof verifyBatch>[0]),
   'verify-chain': (i) => verifyChain(i as Parameters<typeof verifyChain>[0]),
   'a2a-artifact-hash': (i) => a2aArtifactHash(i as Parameters<typeof a2aArtifactHash>[0]),
   sign: (i) => sign(i as Parameters<typeof sign>[0]),

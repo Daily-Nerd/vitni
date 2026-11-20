@@ -30,7 +30,14 @@ var (
 	errInvalidPrivateKey = errors.New("invalid_private_key")
 	errKidRequired       = errors.New("kid_required")
 	errInvalidSeed       = errors.New("invalid_seed")
+	errBatchTooLarge     = errors.New("batch_too_large")
 )
+
+// maxBatchQuestions is the most questions one verify-batch call answers. It is
+// a count, not a byte size, so the boundary is deterministic. Going over it is
+// batch_too_large: the caller must split the batch, a different action from
+// fixing malformed input.
+const maxBatchQuestions = 65536
 
 // runner runs one command. `in` is the stdin top-level object, decoded ONCE by
 // the gate in respond; `stdin` is the same text for the two commands whose
@@ -48,6 +55,7 @@ var commands = map[string]runner{
 	"sse-outputs-hash":  runSSEOutputsHash,
 	"cost-canon":        runCostCanon,
 	"verify":            runVerify,
+	"verify-batch":      runVerifyBatch,
 	"verify-chain":      runVerifyChain,
 	"a2a-artifact-hash": runA2AArtifactHash,
 	"sign":              runSign,
@@ -174,6 +182,9 @@ func errorCode(err error) string {
 	if errors.Is(err, errInvalidSeed) {
 		return "invalid_seed"
 	}
+	if errors.Is(err, errBatchTooLarge) {
+		return "batch_too_large"
+	}
 	return "invalid_input"
 }
 
@@ -298,20 +309,54 @@ func runCostCanon(in map[string]json.RawMessage, _ []byte) (json.RawMessage, err
 	return json.Marshal(out)
 }
 
-func runVerify(_ map[string]json.RawMessage, stdin []byte) (json.RawMessage, error) {
-	in, err := wire.DecodeVerifyInput(stdin)
+// verifyAnswer is the single owner of "the answer to one verify question": what
+// `verify` prints for one question, from its raw JSON. It is the verdict
+// {"reason","valid"}, or {"error":"invalid_input"} when the question is not an
+// object or fails verify's input validation. verify and verify-batch both call
+// it, so a batch element can never differ from the same question asked alone.
+// The bytes are not yet canonical: JCS is compositional, so the one
+// jcs.Transform in respond canonicalizes a nested answer exactly as it would
+// the answer on its own.
+func verifyAnswer(raw []byte) json.RawMessage {
+	in, err := wire.DecodeVerifyInput(raw)
 	if err != nil {
-		return nil, err
+		answer, _ := json.Marshal(map[string]string{"error": errorCode(err)})
+		return answer
 	}
 	valid, reason := vitni.Verify(in)
-	out := struct {
+	answer, _ := json.Marshal(struct {
 		Valid  bool   `json:"valid"`
 		Reason string `json:"reason"`
-	}{
-		Valid:  valid,
-		Reason: reason,
+	}{Valid: valid, Reason: reason})
+	return answer
+}
+
+func runVerify(_ map[string]json.RawMessage, stdin []byte) (json.RawMessage, error) {
+	return verifyAnswer(stdin), nil
+}
+
+// runVerifyBatch answers many independent verify questions in one call:
+// {"results":[...]}, one verifyAnswer per question, in order. The stdin gate
+// has already judged the whole text, so a text fault anywhere (lone surrogate,
+// non-finite number, nesting over the depth limit) never reaches here and
+// fails the whole batch. What is left is shape: `questions` must be an array
+// (invalid_input) of at most maxBatchQuestions (batch_too_large); an element
+// that is not a valid question gets its own error and touches no other.
+func runVerifyBatch(in map[string]json.RawMessage, _ []byte) (json.RawMessage, error) {
+	var questions []json.RawMessage
+	if err := fields.Required(in, "questions", &questions); err != nil {
+		return nil, err
 	}
-	return json.Marshal(out)
+	if len(questions) > maxBatchQuestions {
+		return nil, errBatchTooLarge
+	}
+	results := make([]json.RawMessage, len(questions))
+	for i, question := range questions {
+		results[i] = verifyAnswer(question)
+	}
+	return json.Marshal(struct {
+		Results []json.RawMessage `json:"results"`
+	}{Results: results})
 }
 
 func runVerifyChain(_ map[string]json.RawMessage, stdin []byte) (json.RawMessage, error) {

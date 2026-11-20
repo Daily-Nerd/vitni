@@ -18,6 +18,7 @@ const res = runSuite({
   catalog: loadJson(DEFAULT_CATALOG),
   floors: loadJson(DEFAULT_FLOORS),
   required: requiredImpls(process.env),
+  batchGuard: true,   // verify-batch results[0] must equal the verify anchor, for every verify vector
 });
 console.log(formatReport(res));
 process.exit(res.ok ? 0 : 1);

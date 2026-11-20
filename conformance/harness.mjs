@@ -76,8 +76,10 @@ const oneLine = (s) => String(s).replace(/\s+/g, " ").trim();
 // U+FFFD and hide the bug. Output that is not strict UTF-8 fails the vector.
 function spawnImpl(impl, subcommand, stdin, cwd) {
   const [cmd, ...args] = impl.argv;
+  // maxBuffer: the default 1 MiB turns a legitimately large answer (a full
+  // verify-batch of 65536 results is about 2.4 MB) into a spawn error.
   const res = spawnSync(cmd, [...args, subcommand], {
-    cwd, input: stdin, env: { ...process.env, ...(impl.env ?? {}) },
+    cwd, input: stdin, env: { ...process.env, ...(impl.env ?? {}) }, maxBuffer: 64 * 1024 * 1024,
   });
   if (res.error) return { ok: false, spawn: true, err: `spawn: ${res.error.message}` };
   if (res.status !== 0) {
@@ -209,7 +211,57 @@ function readDeclaration(impl, cwd, catalogById, failures) {
   return { declared: new Set(list) };
 }
 
-export function runSuite({ impls, vectorsDir = DEFAULT_VECTORS, catalog, floors, required = [], cwd = ROOT }) {
+// JSON with object keys sorted at every level and no whitespace: what JCS prints
+// for the values an anchor holds (strings, booleans, nested objects and arrays).
+function sortedJson(v) {
+  if (Array.isArray(v)) return `[${v.map(sortedJson).join(",")}]`;
+  if (v !== null && typeof v === "object") {
+    return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${sortedJson(v[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(v);
+}
+
+// The verify-batch drift guard. verify-batch promises that results[i] is
+// byte-identical to what `verify` prints for question i alone. Instead of
+// restating that promise in a second set of vectors, derive it: wrap EVERY
+// structured verify vector that has an anchor as a one-element batch and require
+// each impl's results[0] to equal that vector's own verify anchor. A new verify
+// vector is covered the moment it is added; two copies of the single-question
+// path cannot drift apart unnoticed.
+//
+// Vectors pinned as raw stdin are left out on purpose: they probe the stdin gate
+// of a lone verify, and the contract states which of those faults are batch-wide.
+// Scope follows the real vectors: an impl is not asked a vector whose gating atoms
+// it does not declare, and one that declines the whole command with exactly
+// cmd:verify-batch is skipped (the real vectors enforce that a decline is uniform).
+function checkBatchDrift({ impls, vectors, declared, gatingIds, cwd, failures, failedVectors }) {
+  let wrapped = 0;
+  const fail = (name, line) => { failures.push(line); failedVectors.add(name); };
+  for (const entry of vectors) {
+    const { vec, name } = entry;
+    if (entry.bad || vec.command !== "verify" || vec.input === undefined || vec.anchor === undefined) continue;
+    if (!Array.isArray(vec.profiles)) continue;
+    wrapped++;
+    const stdin = Buffer.from(`{"questions":[${JSON.stringify(vec.input)}]}`, "utf8");
+    const expected = `{"results":[${sortedJson(vec.anchor)}]}`;
+    const gating = vec.profiles.filter((a) => gatingIds.has(a));
+    for (const impl of impls) {
+      if (gating.some((a) => !declared.get(impl.name).has(a))) continue;
+      const r = spawnImpl(impl, "verify-batch", stdin, cwd);
+      if (!r.ok) {
+        fail(name, `BATCH-RUNERR ${name} ${impl.name}: ${r.nonUtf8 ? "printed non-UTF-8" : r.err}`);
+        continue;
+      }
+      if (r.out === JSON.stringify({ error: "unsupported_profile", profile: "cmd:verify-batch" })) continue;
+      if (r.out !== expected) {
+        fail(name, `BATCH-DRIFT ${name} ${impl.name}: verify-batch of this vector printed ${oneLine(r.out).slice(0, 160)}, expected ${oneLine(expected).slice(0, 160)}`);
+      }
+    }
+  }
+  if (wrapped === 0) failures.push("BATCH-VACUOUS: the batch drift guard found no structured verify vector with an anchor to wrap");
+}
+
+export function runSuite({ impls, vectorsDir = DEFAULT_VECTORS, catalog, floors, required = [], cwd = ROOT, batchGuard = false }) {
   const failures = [...validateCatalog(catalog)];
   const names = impls.map((i) => i.name);
   for (const name of required) {
@@ -362,6 +414,8 @@ export function runSuite({ impls, vectorsDir = DEFAULT_VECTORS, catalog, floors,
       if (!answeredAtoms[impl.name].has(atom)) failures.push(`DEAD-PROFILE ${impl.name} ${atom}: declared but no vector with it was answered`);
     }
   }
+
+  if (batchGuard) checkBatchDrift({ impls, vectors, declared, gatingIds, cwd, failures, failedVectors: base.failedVectors });
 
   // Floors (S1.18, S1.23): a lower bound on answered vectors.
   failures.push(...validateFloors(floors, names));

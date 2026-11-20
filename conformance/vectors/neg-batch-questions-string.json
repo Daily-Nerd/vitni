@@ -1,0 +1,1 @@
+{"name": "batch/questions-string", "command": "verify-batch", "profiles": ["canon:b64-strict", "canon:jcs"], "input_raw": "{\"questions\":\"x\"}", "anchor": {"error": "invalid_input"}}
