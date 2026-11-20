@@ -65,7 +65,7 @@ test('verify-batch: duplicate keys are last-wins, as for verify', () => {
   );
 });
 
-test('verify-batch: one bad element in the middle never changes the others (per-element catch)', () => {
+test('verify-batch: one bad element in the middle never changes the others', () => {
   const alone = dispatch('verify', '{"signed_receipt":"a.b.c","keys":{},"policy":null}');
   const out = JSON.parse(dispatch('verify-batch', batchOf(
     '{"signed_receipt":"a.b.c","keys":{},"policy":null}', '7',

@@ -7,8 +7,12 @@
  * `verifyAnswer` is the single owner of "the answer to one verify question".
  * The `verify` command and every element of a batch both go through it, so a
  * batch element can never differ from the same question asked alone (the
- * counterpart of Go's verifyAnswer). Its catch is per question: one element
- * that throws must not take the others down with it.
+ * counterpart of Go's verifyAnswer). Isolation is by input: an element that is
+ * not a valid question gets its own invalid_input. There is no per-element
+ * catch. verify never throws on validated input, so a throw is a verifier bug,
+ * and it reaches dispatch's last-resort catch as one internal_error for the
+ * whole call, as in Go and Python. Catching it here would turn a bug into a
+ * per-element answer that only TS gives.
  *
  * The stdin gate has already judged the whole text, so a text fault anywhere
  * (lone surrogate, non-finite number, nesting over the depth limit) never gets
@@ -32,11 +36,7 @@ export function verifyAnswer(question: unknown): unknown {
   if (!validateInput('verify', question as Record<string, unknown>)) {
     return { error: 'invalid_input' };
   }
-  try {
-    return verify(question as VerifyInput);
-  } catch {
-    return { error: 'internal_error' };
-  }
+  return verify(question as VerifyInput);
 }
 
 export function verifyBatch(input: { questions: readonly unknown[] }): unknown {
