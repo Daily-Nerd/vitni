@@ -3,19 +3,50 @@ name: release
 on:
   push:
     branches: [main]
-  # Manual escape hatch: publish a specific tag to npm with provenance.
-  # Used to recover a release whose in-run publish was missed, or to re-publish.
+  # Manual escape hatches. Fill in at least one input; each runs its own job.
+  #   publish_ref: publish a specific tag to npm with provenance (recover a
+  #                release whose in-run publish was missed, or re-publish).
+  #   go_tag:      build and attach the vitni-verify binaries to an existing Go
+  #                release (backfill a tag that shipped without them).
   workflow_dispatch:
     inputs:
       publish_ref:
-        description: "Git tag to build and publish to npm (e.g. v0.2.0)"
-        required: true
+        description: "Git tag to build and publish to npm (e.g. v0.2.0). Leave empty to skip npm."
+        required: false
+        default: ""
+      go_tag:
+        description: "Go release tag to attach vitni-verify binaries to (e.g. go/v0.5.3). Leave empty to skip."
+        required: false
+        default: ""
 
 permissions:
   contents: write
   pull-requests: write
 
+env:
+  # The one Go toolchain pin for the shipped binaries. Exact patch, so the same
+  # version yields the same bytes on every run. Bump it deliberately, in its
+  # own commit: a new toolchain changes every binary hash.
+  GO_VERSION: "1.27.4"
+
 jobs:
+  # 0. A dispatch that names neither input would otherwise skip every job and
+  #    finish green having done nothing. Fail it instead.
+  dispatch-inputs:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require at least one input
+        env:
+          PUBLISH_REF: ${{ github.event.inputs.publish_ref }}
+          GO_TAG: ${{ github.event.inputs.go_tag }}
+        run: |
+          if [ -z "$PUBLISH_REF" ] && [ -z "$GO_TAG" ]; then
+            echo "::error::set publish_ref (npm) and/or go_tag (Go binaries); nothing to do otherwise"
+            exit 1
+          fi
+
   # 1. Maintain the release PR. On its merge, cut the npm (ts) tag v<version> +
   #    GitHub Release. The Go module tag is minted separately (job 3).
   #    Only runs on push to main; skipped on manual dispatch.
@@ -32,12 +63,12 @@ jobs:
 
   # 2. Publish the npm package.
   #    Fires automatically when a release is cut, OR manually via workflow_dispatch
-  #    against a given tag. Auth is OIDC trusted publishing (no NPM_TOKEN) —
+  #    against a given tag. Auth is OIDC trusted publishing (no NPM_TOKEN);
   #    provenance is attested. Requires a trusted publisher registered on npm
   #    for this repo + this workflow file.
   publish-npm:
     needs: release-please
-    if: ${{ always() && (needs.release-please.outputs.releases_created == 'true' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ always() && (needs.release-please.outputs.releases_created == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ref != '')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -71,7 +102,7 @@ jobs:
 
   # 3. Mint the matching Go module tag. A Go release is just a tag (no version
   #    file, no publish), so the workflow creates go/v<version> on the same commit
-  #    release-please tagged as v<version> — keeping the Go module and the npm
+  #    release-please tagged as v<version>: keeping the Go module and the npm
   #    package in lockstep. release-please's go release-type can't be given a
   #    component name, so it can't emit the go/ tag prefix itself (it collided
   #    with the ts v* tag); minting it here is deterministic.
@@ -81,19 +112,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Tag and release the Go module
+        id: tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Single repo version lives in ts/package.json (bumped by release-please
-          # extra-files). Read it from the released commit — no output-key coupling.
+          # extra-files). Read it from the released commit: no output-key coupling.
           VERSION=$(node -p "require('./ts/package.json').version")
           tag="go/v${VERSION}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "$tag" "${GITHUB_SHA}"
@@ -101,3 +136,199 @@ jobs:
           gh release create "$tag" \
             --title "$tag" \
             --notes "Go module release tracking @daily-nerd/vitni@${VERSION}. Changelog: CHANGELOG.md."
+
+  # 4. Resolve which Go release gets binaries, once, for the jobs below. The tag
+  #    name is the single source of the version: from tag-go on a release, from
+  #    the go_tag input on a backfill dispatch. The tag is validated here because
+  #    every later step interpolates it. The target list also lives only here.
+  go-release:
+    needs: tag-go
+    if: ${{ always() && (needs.tag-go.result == 'success' || (github.event_name == 'workflow_dispatch' && github.event.inputs.go_tag != '')) }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+      targets: ${{ steps.resolve.outputs.targets }}
+    steps:
+      - name: Resolve tag, version and targets
+        id: resolve
+        env:
+          EVENT: ${{ github.event_name }}
+          DISPATCH_TAG: ${{ github.event.inputs.go_tag }}
+          RELEASED_TAG: ${{ needs.tag-go.outputs.tag }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then tag="$DISPATCH_TAG"; else tag="$RELEASED_TAG"; fi
+          if ! printf '%s' "$tag" | grep -Eq '^go/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::not a Go release tag (want go/vX.Y.Z): '$tag'"
+            exit 1
+          fi
+          {
+            echo "tag=${tag}"
+            echo "version=${tag#go/v}"
+            echo 'targets=[{"goos":"linux","goarch":"amd64"},{"goos":"darwin","goarch":"arm64"}]'
+          } >> "$GITHUB_OUTPUT"
+
+  # 5. Build one target per leg from the tagged commit. Invariant: the same
+  #    source and toolchain give the same bytes, so each target is built twice
+  #    with separate build caches and the job fails if the hashes differ. The
+  #    binary is attested here, where it was produced; the aggregate job below
+  #    never rebuilds anything, so what is attested is what is published.
+  build-binaries:
+    needs: go-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # mint the OIDC token the attestation is signed with
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.go-release.outputs.targets) }}
+    env:
+      GOTOOLCHAIN: local # never let go.mod trigger a different toolchain download
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      VERSION: ${{ needs.go-release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.go-release.outputs.tag }}
+
+      - name: Tag matches the package version
+        run: |
+          have=$(node -p "require('./ts/package.json').version")
+          if [ "$have" != "$VERSION" ]; then
+            echo "::error::tag says $VERSION but ts/package.json at the tag says $have"
+            exit 1
+          fi
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false # a restored build cache would blur what the double build proves
+
+      - name: Toolchain is exactly the pinned version
+        run: |
+          got=$(go env GOVERSION)
+          if [ "$got" != "go${GO_VERSION}" ]; then
+            echo "::error::toolchain is $got, pinned go${GO_VERSION}"
+            exit 1
+          fi
+
+      - name: Build twice and require identical bytes
+        run: |
+          name="vitni-verify_${VERSION}_${GOOS}_${GOARCH}"
+          mkdir -p dist build1 build2
+          for n in 1 2; do
+            (cd go && GOCACHE="$RUNNER_TEMP/gocache$n" CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+              -ldflags='-s -w -buildid=' -o "$GITHUB_WORKSPACE/build$n/$name" ./cmd/vitni-verify)
+          done
+          h1=$(sha256sum "build1/$name" | cut -d' ' -f1)
+          h2=$(sha256sum "build2/$name" | cut -d' ' -f1)
+          echo "build 1: $h1"
+          echo "build 2: $h2"
+          if [ "$h1" != "$h2" ]; then
+            echo "::error::two builds of $name differ, the build is not reproducible"
+            exit 1
+          fi
+          cp "build1/$name" "dist/$name"
+          echo "BINARY=$name" >> "$GITHUB_ENV"
+
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/${{ env.BINARY }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bin-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/${{ env.BINARY }}
+          if-no-files-found: error
+          retention-days: 7
+
+  # 6. Combine the legs into one release. Done in a single job after every leg
+  #    so SHA256SUMS is written once, from the complete set, with no race
+  #    between matrix legs. Only contents: write; nothing is built or signed.
+  #
+  #    No overwrite flag on upload. The bytes are reproducible, so a re-run of
+  #    an already published release must produce identical files: those are
+  #    skipped. A file that exists with different bytes fails the job, because
+  #    a published hash that silently changes is exactly what this release
+  #    exists to prevent. If an asset is truly wrong, delete it by hand and
+  #    re-run the dispatch.
+  release-assets:
+    needs: [go-release, build-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.go-release.outputs.tag }}
+      VERSION: ${{ needs.go-release.outputs.version }}
+      TARGETS: ${{ needs.go-release.outputs.targets }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bin-*
+          merge-multiple: true
+          path: dist
+
+      - name: Exactly the expected binaries are present
+        run: |
+          jq -r --arg v "$VERSION" '.[] | "vitni-verify_\($v)_\(.goos)_\(.goarch)"' <<<"$TARGETS" | LC_ALL=C sort > expected.txt
+          (cd dist && printf '%s\n' *) | LC_ALL=C sort > actual.txt
+          diff expected.txt actual.txt
+
+      - name: Write SHA256SUMS
+        run: |
+          cd dist
+          LC_ALL=C sha256sum vitni-verify_* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attach to the release without overwriting
+        run: |
+          gh release view "$TAG" > /dev/null
+          gh release view "$TAG" --json assets --jq '.assets[].name' > existing.txt
+          mkdir existing
+          new=()
+          for f in dist/*; do
+            n=$(basename "$f")
+            if grep -Fxq "$n" existing.txt; then
+              gh release download "$TAG" --pattern "$n" --dir existing
+              if ! cmp -s "$f" "existing/$n"; then
+                echo "::error::$n is already on $TAG with different bytes; refusing to overwrite"
+                exit 1
+              fi
+              echo "$n already attached and identical"
+            else
+              new+=("$f")
+            fi
+          done
+          if [ "${#new[@]}" -gt 0 ]; then
+            gh release upload "$TAG" "${new[@]}"
+          fi
+
+      - name: Add verification instructions to the release notes
+        run: |
+          marker='<!-- vitni-verify-binaries -->'
+          body=$(gh release view "$TAG" --json body --jq .body)
+          if printf '%s' "$body" | grep -Fq "$marker"; then
+            echo "notes already carry the verification section"
+            exit 0
+          fi
+          {
+            printf '%s\n\n' "$body"
+            printf '%s\n' "$marker"
+            printf '%s\n\n' '## vitni-verify binaries'
+            printf '%s\n\n' "Static builds for linux/amd64 and darwin/arm64, built from this tag with Go ${GO_VERSION} by the release workflow. Rebuilding from the tag with that toolchain gives the same bytes: CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-s -w -buildid=' ./cmd/vitni-verify, run in go/."
+            printf '%s\n\n' 'Verify a file against its line in SHA256SUMS:'
+            printf '%s\n' '```sh'
+            printf '%s\n' "grep ' <file>\$' SHA256SUMS | shasum -a 256 -c -"
+            printf '%s\n\n' '```'
+            printf '%s\n\n' 'Or verify the build provenance, which shows the file was built by this workflow from the tagged commit:'
+            printf '%s\n' '```sh'
+            printf '%s\n' 'gh attestation verify <file> --repo Daily-Nerd/vitni'
+            printf '%s\n' '```'
+          } > notes.md
+          gh release edit "$TAG" --notes-file notes.md
