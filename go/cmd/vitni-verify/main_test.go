@@ -408,3 +408,32 @@ func TestRun_ReadsStdinOnlyForRealCommands(t *testing.T) {
 		t.Errorf("unreadable stdin: %q", got)
 	}
 }
+
+// countingReader records whether stdin was touched at all.
+type countingReader struct{ reads int }
+
+func (c *countingReader) Read([]byte) (int, error) {
+	c.reads++
+	return 0, errors.New("closed")
+}
+
+// TestRun_UnknownCommandNeverReadsStdin pins CONTRACT rule 2: an unknown command
+// (the empty string included) is unsupported_command without a single read, so
+// an unreadable stdin cannot change the answer. Every table command still
+// reports an unreadable stdin as stdin_read_error.
+func TestRun_UnknownCommandNeverReadsStdin(t *testing.T) {
+	for _, command := range []string{"not-a-command", "", "JCS", "jcs ", "profile"} {
+		r := &countingReader{}
+		if got := string(run([]string{"vitni-verify", command}, r)); got != "{\"error\":\"unsupported_command\"}\n" {
+			t.Errorf("command %q: got %q", command, got)
+		}
+		if r.reads != 0 {
+			t.Errorf("command %q: stdin was read %d time(s)", command, r.reads)
+		}
+	}
+	for command := range commands {
+		if got := string(run([]string{"vitni-verify", command}, failingReader{})); got != "{\"error\":\"stdin_read_error\"}\n" {
+			t.Errorf("command %q: got %q", command, got)
+		}
+	}
+}

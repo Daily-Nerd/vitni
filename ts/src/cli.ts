@@ -60,6 +60,14 @@ const COMMANDS: CommandTable = {
 };
 
 /**
+ * Whether `command` is in the table. The one lookup, used by main (to decide
+ * whether stdin is read at all) and by dispatch, so the two cannot drift.
+ */
+function isCommand(command: string, commands: CommandTable = COMMANDS): boolean {
+  return Object.prototype.hasOwnProperty.call(commands, command);
+}
+
+/**
  * `profiles` is infrastructure, not a vector command: it prints the conformance
  * profile atoms this verifier implements and ignores stdin, so it sits outside
  * COMMANDS and its stdin gate.
@@ -84,7 +92,7 @@ function profilesDeclaration(): string {
  * string (no trailing newline). Pure and side-effect-free so it is unit-testable
  * independently of stdin/argv wiring. Counterpart of Go's `respond`. Order:
  *
- *  1. the command resolves (unknown: unsupported_command, stdin never parsed);
+ *  1. the command resolves (unknown: unsupported_command, stdin never read);
  *  2. the stdin gate, ONCE for every command (parseStrict): strict UTF-8, no
  *     BOM, no lone-surrogate escape, exactly one JSON value, depth <= MAX_DEPTH,
  *     no non-finite number, duplicate keys per DUP_REJECT_COMMANDS, and the top
@@ -105,7 +113,7 @@ export function dispatch(
   commands: CommandTable = COMMANDS,
 ): string {
   if (command === PROFILES_COMMAND) return profilesDeclaration();
-  if (!Object.prototype.hasOwnProperty.call(commands, command)) {
+  if (!isCommand(command, commands)) {
     return jcsString({ error: 'unsupported_command' });
   }
   const bytes = typeof stdin === 'string' ? Buffer.from(stdin, 'utf8') : stdin;
@@ -147,6 +155,11 @@ export async function main(
   }
   if (command === PROFILES_COMMAND) {
     write(profilesDeclaration() + '\n');
+    return;
+  }
+  // The command resolves before stdin is touched (CONTRACT rule 2).
+  if (!isCommand(command)) {
+    write(jcsString({ error: 'unsupported_command' }) + '\n');
     return;
   }
   let raw: Uint8Array | string;

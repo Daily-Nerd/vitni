@@ -702,7 +702,12 @@ def dispatch(command, read_stdin):
     if command == "profiles":
         return jcs(list(PROFILES))
     try:
-        obj = parse_json(read_stdin(), dup="reject" if command in _DUP_REJECT else "last", nonfinite="reject")
+        raw = read_stdin()
+    except OSError:
+        # Only the read itself: the bytes were never seen, so no verdict exists.
+        return jcs({"error": "stdin_read_error"})
+    try:
+        obj = parse_json(raw, dup="reject" if command in _DUP_REJECT else "last", nonfinite="reject")
     except _Reject:
         return jcs({"error": "invalid_input"})
     if not isinstance(obj, dict) or (command != "verify" and not _shape_ok(command, obj)):
@@ -726,9 +731,20 @@ def main_output(argv, read_stdin):
         return b'{"error":"internal_error"}'
 
 
+def _read_stdin():
+    """All of stdin as bytes. A stdin that cannot be read (closed or absent, or
+    a read that fails) raises OSError, which dispatch reports as stdin_read_error."""
+    if sys.stdin is None:
+        raise OSError("stdin is closed")
+    try:
+        return sys.stdin.buffer.read()
+    except ValueError as exc:  # closed file object
+        raise OSError(str(exc)) from exc
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
-    out = main_output(argv, lambda: sys.stdin.buffer.read())
+    out = main_output(argv, _read_stdin)
     sys.stdout.buffer.write(out + b"\n")
     sys.stdout.buffer.flush()
     return 0
