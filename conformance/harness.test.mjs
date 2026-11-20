@@ -30,7 +30,7 @@ const BASE = [
 ];
 
 // impl: [name, mode, {declared?, env?}]
-function suite(vectors, impls, { floors, catalog = CATALOG, required } = {}) {
+function suite(vectors, impls, { floors, catalog = CATALOG, required, batchGuard } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "vitni-harness-"));
   for (const v of vectors) writeFileSync(join(dir, `${v.name}.json`), JSON.stringify(v));
   const list = impls.map(([name, mode = "echo-anchor", cfg = {}]) => ({
@@ -43,7 +43,7 @@ function suite(vectors, impls, { floors, catalog = CATALOG, required } = {}) {
     },
   }));
   const fl = floors ?? Object.fromEntries(impls.map(([n]) => [n, "all"]));
-  return { dir, ...runSuite({ impls: list, vectorsDir: dir, catalog, floors: fl, required }) };
+  return { dir, ...runSuite({ impls: list, vectorsDir: dir, catalog, floors: fl, required, batchGuard }) };
 }
 
 function assertFails(res, re, msg) {
@@ -309,6 +309,63 @@ test("S1.25 the report prints the vector count, computed from the directory", ()
   assert.match(text, new RegExp(`^vectors: ${n}$`, "m"));
   assert.match(text, /^impls: a b$/m);
   assert.match(text, new RegExp(`^${n}/${n} passed\\.$`, "m"));
+});
+
+// The verify-batch drift guard: every structured verify vector, wrapped as a
+// one-element batch, must give results[0] equal to that vector's verify anchor,
+// for every impl that answers. The fake's FAKE_BATCH mode scripts what it prints:
+// honest (the canonical anchor), drift (a different result) or silent (garbage).
+const batchOn = (mode) => ["b", "echo-anchor", { env: { FAKE_BATCH: mode } }];
+
+test("batch guard: honest impls answering the derived one-element batches pass", () => {
+  const r = suite(BASE, [["a", "echo-anchor", { env: { FAKE_BATCH: "honest" } }], batchOn("honest")], { batchGuard: true });
+  assert.deepEqual(r.failures, []);
+});
+
+test("batch guard: an impl whose batch element differs from its verify anchor is named", () => {
+  const r = suite(BASE, [["a", "echo-anchor", { env: { FAKE_BATCH: "honest" } }], batchOn("drift")], { batchGuard: true });
+  assertFails(r, /BATCH-DRIFT ed1 b/);
+  assertFails(r, /BATCH-DRIFT es1 b/);
+  assert.ok(!r.failures.some((l) => /BATCH-DRIFT \w+ a\b/.test(l)), "the honest impl is not named");
+});
+
+test("batch guard: a batch that exits non-zero or prints nothing is a failure, not a skip", () => {
+  const r = suite(BASE, [["a", "echo-anchor", { env: { FAKE_BATCH: "honest" } }], batchOn("crash")], { batchGuard: true });
+  assertFails(r, /BATCH-RUNERR ed1 b/);
+  const s = suite(BASE, [["a", "echo-anchor", { env: { FAKE_BATCH: "honest" } }], batchOn("silent")], { batchGuard: true });
+  assertFails(s, /BATCH-DRIFT ed1 b/);
+});
+
+test("batch guard: an impl that declines the whole verify-batch command is skipped, not failed", () => {
+  const r = suite(BASE, [["a", "echo-anchor", { env: { FAKE_BATCH: "honest" } }],
+    ["b", "echo-anchor", { env: { FAKE_BATCH: "honest", FAKE_DECLINE_CMDS: "verify-batch" } }]], { batchGuard: true });
+  assert.deepEqual(r.failures, []);
+});
+
+test("batch guard: an impl that declines with any other profile is a failure", () => {
+  const r = suite(BASE, [["a", "echo-anchor", { env: { FAKE_BATCH: "honest" } }], batchOn("decline-other")], { batchGuard: true });
+  assertFails(r, /BATCH-DRIFT ed1 b/);
+});
+
+test("batch guard: a vector whose atom the impl does not declare is not asked of it", () => {
+  const r = suite(BASE, [["a", "echo-anchor", { env: { FAKE_BATCH: "honest" } }],
+    ["b", "echo-anchor", { declared: ["alg:EdDSA", "canon:b64-strict", "canon:jcs"], env: { FAKE_BATCH: "drift" } }]],
+  { batchGuard: true, floors: { a: "all", b: 3 } });
+  assertFails(r, /BATCH-DRIFT ed1 b/);
+  assert.ok(!r.failures.some((l) => /BATCH-DRIFT es1 b/.test(l)), "es1 needs alg:ES256, which b does not declare");
+});
+
+test("batch guard: a suite with nothing to wrap is vacuous and fails", () => {
+  const noVerify = BASE.filter((v) => v.command !== "verify").concat([
+    vec("ed2", "jcs", ["alg:EdDSA", "alg:ES256", "canon:b64-strict"], { canonical_hex: "31" }),
+  ]);
+  const r = suite(noVerify, TWO, { batchGuard: true });
+  assertFails(r, /BATCH-VACUOUS/);
+});
+
+test("batch guard: it is off unless asked for", () => {
+  const r = suite(BASE, [["a"], ["b", "echo-anchor", { env: { FAKE_BATCH: "drift" } }]]);
+  assert.deepEqual(r.failures, []);
 });
 
 test("the report names every failure line and the matrix", () => {

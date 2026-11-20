@@ -12,6 +12,7 @@
 //   FAKE_DECLINE_CMDS    comma list: commands declined with cmd:<command>
 //   FAKE_DECLINE_VECTOR  one vector name declined with cmd:<its command> only
 //   FAKE_FORCE_DECLINE   an atom: every vector is declined naming it, in scope or not
+//   FAKE_BATCH           how it answers verify-batch (see below); unset: not scripted
 //
 // Modes:
 //   echo-anchor        honest: answers in-scope vectors, declines out-of-scope
@@ -55,6 +56,37 @@ function stdinBytes(v) {
   if (v.input_raw !== undefined) return Buffer.from(v.input_raw, "utf8");
   return Buffer.from(JSON.stringify(v.input), "utf8");
 }
+// verify-batch, scripted by FAKE_BATCH (the harness's drift guard asks it for
+// derived one-element batches no vector file carries). The question is matched
+// to a verify vector by its input and answered from that vector's anchor:
+//   honest         {"results":[<the anchor, keys sorted>]}
+//   drift          the same with one extra member (the bytes differ)
+//   silent         {"results":[]}
+//   decline-other  an exact decline naming a profile other than cmd:verify-batch
+//   crash          exits 3
+if (sub === "verify-batch" && process.env.FAKE_BATCH) {
+  const batchMode = process.env.FAKE_BATCH;
+  if ((process.env.FAKE_DECLINE_CMDS ?? "").split(",").includes(sub)) {
+    out(JSON.stringify({ error: "unsupported_profile", profile: `cmd:${sub}` }));
+    process.exit(0);
+  }
+  if (batchMode === "crash") { process.stderr.write("boom\n"); process.exit(3); }
+  if (batchMode === "decline-other") { out(JSON.stringify({ error: "unsupported_profile", profile: "canon:jcs" })); process.exit(0); }
+  if (batchMode === "silent") { out(JSON.stringify({ results: [] })); process.exit(0); }
+  const sorted = (o) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : 1)));
+  const question = JSON.stringify(JSON.parse(stdin.toString("utf8")).questions[0]);
+  for (const f of readdirSync(process.env.FAKE_VECTORS)) {
+    if (!f.endsWith(".json") || f.startsWith("_")) continue;
+    const v = JSON.parse(readFileSync(join(process.env.FAKE_VECTORS, f), "utf8"));
+    if (v.command === "verify" && v.input !== undefined && JSON.stringify(v.input) === question) {
+      out(JSON.stringify({ results: [sorted(batchMode === "drift" ? { ...v.anchor, extra: 1 } : v.anchor)] }));
+      process.exit(0);
+    }
+  }
+  out(JSON.stringify({ error: "invalid_input" }));
+  process.exit(0);
+}
+
 let vec = null;
 for (const f of readdirSync(process.env.FAKE_VECTORS)) {
   if (!f.endsWith(".json") || f.startsWith("_")) continue;
