@@ -4,6 +4,13 @@ All notable changes to vitni are documented here. Format: [Keep a Changelog](htt
 
 > **One version, one changelog.** vitni ships the Go module and the npm package (`@daily-nerd/vitni`) in lockstep under a single version — any change to either implementation bumps it. release-please generates entries here from conventional commits. The `0.2.0`–`0.2.1` entries (the npm-only transition releases) live in git history — `git show v0.2.2:ts/CHANGELOG.md`; unified history resumes from `0.2.2`.
 
+## [0.7.1](https://github.com/Daily-Nerd/vitni/compare/v0.7.0...v0.7.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* **ci:** gate the binary jobs on their direct needs so a go_tag dispatch runs them ([#93](https://github.com/Daily-Nerd/vitni/issues/93)) ([a91839a](https://github.com/Daily-Nerd/vitni/commit/a91839a2e083c25b9afb68378dd4e0a235d03237)), closes [#92](https://github.com/Daily-Nerd/vitni/issues/92)
+
 ## [0.7.0](https://github.com/Daily-Nerd/vitni/compare/v0.6.0...v0.7.0) (2026-11-20)
 
 
