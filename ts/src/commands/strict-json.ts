@@ -40,8 +40,8 @@ export type StrictParse = { ok: true; value: unknown } | { ok: false };
  *
  * Node 18 is the engine floor, so String.prototype.isWellFormed (Node 20) is not
  * used. JSON.parse turns a lone `\ud800` escape into a lone UTF-16 surrogate
- * with no error, and `/[\uD800-\uDFFF]/u` matches ONLY lone surrogates (a valid
- * pair is one code point under the `u` flag), so that is the detector.
+ * with no error, so the escapes are judged in the raw text by `scanText`
+ * (strict UTF-8 decoding has already rejected every raw surrogate code unit).
  */
 export function parseStrict(bytes: Uint8Array, p: TextPolicy): StrictParse {
   // Explicit BOM check: do not rely on TextDecoder BOM handling.
@@ -50,18 +50,17 @@ export function parseStrict(bytes: Uint8Array, p: TextPolicy): StrictParse {
   }
   const text = decodeUtf8Strict(bytes);
   if (text === null) return { ok: false };
-  // Depth first: JSON.parse and the walks below recurse or iterate on the result,
-  // so nothing deeper than MAX_DEPTH may reach them.
-  if (!withinDepth(text)) return { ok: false };
+  // One raw pass before JSON.parse: depth (nothing deeper than MAX_DEPTH may
+  // reach the parser or later recursion), lone-surrogate escapes, and, per
+  // policy, non-finite numbers. No walk over the parsed value is needed.
+  if (!scanText(text, { surrogates: true, nonFinite: p.rejectNonFinite })) return { ok: false };
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch {
     return { ok: false };
   }
-  if (hasLoneSurrogate(value)) return { ok: false };
   if (p.rejectDuplicates && hasDuplicateKeys(text)) return { ok: false };
-  if (p.rejectNonFinite && hasNonFinite(value)) return { ok: false };
   return { ok: true, value };
 }
 
@@ -80,62 +79,107 @@ export function decodeJsonObject(bytes: Uint8Array): Record<string, unknown> | n
   return v as Record<string, unknown>;
 }
 
-/**
- * Whether a parsed value contains a number that overflowed to +-Infinity.
- * JSON.parse admits 1e400 as Infinity; serializing it would emit the bytes
- * "null", silent corruption that collides with a genuine null. Recursion is
- * bounded: callers run it only on values parseStrict already depth-limited.
- */
-export function hasNonFinite(v: unknown): boolean {
-  if (typeof v === 'number') return !Number.isFinite(v);
-  if (Array.isArray(v)) return v.some(hasNonFinite);
-  if (v !== null && typeof v === 'object') return Object.values(v).some(hasNonFinite);
-  return false;
+export interface ScanOptions {
+  /** Reject a lone surrogate `\uXXXX` escape in any key or string value. */
+  surrogates: boolean;
+  /** Reject a number token whose value is not finite (1e400, -1e400). */
+  nonFinite: boolean;
+}
+
+const NO_CHECKS: ScanOptions = { surrogates: false, nonFinite: false };
+
+const isDigit = (c: number): boolean => c >= 0x30 && c <= 0x39;
+// Characters of a JSON number token: digits, '.', 'e', 'E', '+', '-'.
+const isNumberChar = (c: number): boolean =>
+  isDigit(c) || c === 0x2e || c === 0x65 || c === 0x45 || c === 0x2b || c === 0x2d;
+
+/** Value of a hex digit, or -1. Case-insensitive. */
+function hexValue(c: number): number {
+  if (c >= 0x30 && c <= 0x39) return c - 0x30;
+  if (c >= 0x61 && c <= 0x66) return c - 0x61 + 10;
+  if (c >= 0x41 && c <= 0x46) return c - 0x41 + 10;
+  return -1;
 }
 
 /**
- * One raw scan with string state; text is not yet known to be valid JSON. It
- * needs no syntactically valid input, so a site that skips text that is not JSON
- * at all can run it first: nesting over MAX_DEPTH is rejected, never "skipped".
+ * The one raw scan of the gate, with string state. It returns true when the
+ * text passes every enabled check. The text is NOT yet known to be valid JSON,
+ * so every answer it gives on invalid text must be harmless: a `false` there is
+ * a reject the caller (JSON.parse) would have made anyway, a `true` is followed
+ * by JSON.parse. The checks:
+ *
+ *  - depth (always): nesting over MAX_DEPTH is rejected, never "skipped".
+ *    Needs no valid input, so a site that skips text that is not JSON at all
+ *    can run it first (sse-jsonrpc). With both options off it judges nothing
+ *    else, whatever the text.
+ *  - surrogates: the strict UTF-8 decode already rejected raw surrogate code
+ *    units, so only escapes matter. In a string (key or value) a high escape
+ *    (D800-DBFF) must be followed immediately by a low escape (DC00-DFFF), and a
+ *    low escape must follow a high one. `\\ud800` is an escaped backslash and a
+ *    `u`, not an escape. Hex is case-insensitive. A `\u` not followed by four
+ *    hex digits is invalid JSON and is rejected here.
+ *  - nonFinite: a number token starts at '-' or a digit outside a string and
+ *    runs over the characters of a JSON number; it is rejected when
+ *    `Number(token)` is not finite. true/false/null start with a letter, so
+ *    their 'e' never starts a token.
  */
-export function withinDepth(text: string): boolean {
+export function scanText(text: string, opts: ScanOptions): boolean {
+  const { surrogates, nonFinite } = opts;
+  const n = text.length;
   let depth = 0;
   let inString = false;
-  for (let i = 0; i < text.length; i++) {
+  let high = false; // inside a string, the previous item was a high-surrogate escape
+  for (let i = 0; i < n; i++) {
     const c = text.charCodeAt(i);
     if (inString) {
-      if (c === 0x5c) i++; // backslash: skip the escaped character
-      else if (c === 0x22) inString = false;
+      if (c === 0x5c) {
+        // backslash: the escaped character is never a quote or an escape start
+        if (surrogates && text.charCodeAt(i + 1) === 0x75) {
+          const h0 = hexValue(text.charCodeAt(i + 2));
+          const h1 = hexValue(text.charCodeAt(i + 3));
+          const h2 = hexValue(text.charCodeAt(i + 4));
+          const h3 = hexValue(text.charCodeAt(i + 5));
+          if ((h0 | h1 | h2 | h3) < 0) return false; // invalid JSON
+          const unit = (h0 << 12) | (h1 << 8) | (h2 << 4) | h3;
+          if (unit >= 0xd800 && unit <= 0xdbff) {
+            if (high) return false; // high followed by high
+            high = true;
+          } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+            if (!high) return false; // low without a high before it
+            high = false;
+          } else if (high) {
+            return false; // high followed by a non-low escape
+          }
+          i += 5;
+        } else {
+          if (high) return false; // high followed by another escape
+          i++;
+        }
+      } else if (c === 0x22) {
+        if (high) return false; // high at the end of the string
+        inString = false;
+      } else if (high) {
+        return false; // high followed by an ordinary character
+      }
     } else if (c === 0x22) {
       inString = true;
     } else if (c === 0x7b || c === 0x5b) {
       if (++depth > MAX_DEPTH) return false;
     } else if (c === 0x7d || c === 0x5d) {
       depth--;
+    } else if (nonFinite && (c === 0x2d || isDigit(c))) {
+      let j = i + 1;
+      while (j < n && isNumberChar(text.charCodeAt(j))) j++;
+      if (!Number.isFinite(Number(text.slice(i, j)))) return false;
+      i = j - 1;
     }
   }
   return true;
 }
 
-const LONE_SURROGATE = /[\uD800-\uDFFF]/u;
-
-/** Iterative walk over every key and string value (depth already bounded). */
-function hasLoneSurrogate(root: unknown): boolean {
-  const stack: unknown[] = [root];
-  while (stack.length > 0) {
-    const v = stack.pop();
-    if (typeof v === 'string') {
-      if (LONE_SURROGATE.test(v)) return true;
-    } else if (Array.isArray(v)) {
-      for (const x of v) stack.push(x);
-    } else if (v !== null && typeof v === 'object') {
-      for (const [k, x] of Object.entries(v)) {
-        if (LONE_SURROGATE.test(k)) return true;
-        stack.push(x);
-      }
-    }
-  }
-  return false;
+/** Depth only: see `scanText`. */
+export function withinDepth(text: string): boolean {
+  return scanText(text, NO_CHECKS);
 }
 
 /**
