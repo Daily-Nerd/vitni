@@ -26,6 +26,8 @@ Every conforming verifier MUST:
 - Be deterministic. No timestamps, no randomness in output.
 - Never print logs/banners to stdout (use stderr if needed).
 
+**Input size.** Verifiers impose no limit on the size of stdin. The contract's only resource limits are the nesting depth (128, the stdin gate below) and the `verify-batch` question count (65536). Memory use grows with the size and shape of the input, several times the input size in every implementation. A caller that relays receipts from an untrusted source MUST bound their size before it builds the input: the caller already holds those bytes, and a receipt is about 1 to 3 KB, so a per-receipt cap such as 64 KB rejects nothing legitimate. A byte limit in the stdin gate is deferred until it can be set together with the `verify-batch` question count, because a cap that admits a legal maximum batch (about 300 MB with production-size receipts) would not bound memory.
+
 ---
 
 ## Input strictness (normative)
