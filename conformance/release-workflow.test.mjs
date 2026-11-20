@@ -93,3 +93,32 @@ test("jobs below a skippable job gate on their direct needs, not on every ancest
   assert.match(job("build-binaries"), /needs\.go-release\.result == 'success'/);
   assert.match(job("release-assets"), /needs\.build-binaries\.result == 'success'/);
 });
+
+// A release PR opened with the default GITHUB_TOKEN has its pull_request runs
+// held for approval, so CI never runs on it and the held runs fail with zero
+// jobs once it merges. The release bot must use a GitHub App token, with no
+// fallback to GITHUB_TOKEN, and the action that mints it is pinned by sha.
+test("release-please opens its PR with a GitHub App token, not GITHUB_TOKEN", () => {
+  const r = job("release-please");
+  const mint = r.indexOf("uses: actions/create-github-app-token@");
+  const rp = r.indexOf("uses: googleapis/release-please-action@");
+  assert.ok(mint !== -1, "the app-token step must exist in the release-please job");
+  assert.ok(rp !== -1);
+  assert.ok(mint < rp, "the token must be minted before release-please runs");
+  const mintStep = r.slice(mint, rp);
+  assert.match(mintStep, /app-id: \$\{\{ vars\.APP_ID \}\}/);
+  assert.match(mintStep, /private-key: \$\{\{ secrets\.APP_PRIVATE_KEY \}\}/);
+  assert.match(mintStep + r.slice(0, mint), /^\s+id: app-token$/m);
+  assert.match(r.slice(rp), /token: \$\{\{ steps\.app-token\.outputs\.token \}\}/);
+  assert.doesNotMatch(r, /GITHUB_TOKEN/, "no GITHUB_TOKEN in the release-please job, so no fallback");
+  assert.doesNotMatch(r, /\|\|/, "no `||` fallback expression in the release-please job");
+});
+
+test("the app-token action is pinned by a full commit sha", () => {
+  assert.match(WORKFLOW, /uses: actions\/create-github-app-token@[0-9a-f]{40}(\s+# v\d+\.\d+\.\d+)?$/m);
+  assert.doesNotMatch(WORKFLOW, /create-github-app-token@v/);
+});
+
+test("the release-please job needs nothing from GITHUB_TOKEN, so it holds no permissions", () => {
+  assert.match(job("release-please"), /^    permissions: \{\}$/m);
+});

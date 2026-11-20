@@ -55,11 +55,27 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       releases_created: ${{ steps.rp.outputs.releases_created }}
+    # The App token does every write, so GITHUB_TOKEN gets no scopes here.
+    permissions: {}
     steps:
+      # A release PR opened with the default GITHUB_TOKEN has its pull_request
+      # runs held for approval. Nobody approves them, so CI never runs on the
+      # release PR, and once it merges the held runs fail with zero jobs. A
+      # GitHub App installation token is not held that way, and commits made
+      # through the API with it are signed by GitHub. There is no fallback to
+      # GITHUB_TOKEN on purpose: a missing APP_ID or APP_PRIVATE_KEY must fail
+      # this step, not quietly bring the held runs back. Pinned by sha, unlike the
+      # tag pins elsewhere in this file, because this action handles a private key.
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - uses: googleapis/release-please-action@v4
         id: rp
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
   # 2. Publish the npm package.
   #    Fires automatically when a release is cut, OR manually via workflow_dispatch
