@@ -68,7 +68,7 @@ jobs:
   #    for this repo + this workflow file.
   publish-npm:
     needs: release-please
-    if: ${{ always() && (needs.release-please.outputs.releases_created == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ref != '')) }}
+    if: ${{ !cancelled() && (needs.release-please.outputs.releases_created == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ref != '')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -143,7 +143,7 @@ jobs:
   #    every later step interpolates it. The target list also lives only here.
   go-release:
     needs: tag-go
-    if: ${{ always() && (needs.tag-go.result == 'success' || (github.event_name == 'workflow_dispatch' && github.event.inputs.go_tag != '')) }}
+    if: ${{ !cancelled() && (needs.tag-go.result == 'success' || (github.event_name == 'workflow_dispatch' && github.event.inputs.go_tag != '')) }}
     runs-on: ubuntu-latest
     permissions: {}
     outputs:
@@ -176,6 +176,7 @@ jobs:
   #    never rebuilds anything, so what is attested is what is published.
   build-binaries:
     needs: go-release
+    if: ${{ !cancelled() && needs.go-release.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -258,6 +259,7 @@ jobs:
   #    re-run the dispatch.
   release-assets:
     needs: [go-release, build-binaries]
+    if: ${{ !cancelled() && needs.go-release.result == 'success' && needs.build-binaries.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
